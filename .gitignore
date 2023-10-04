@@ -2,3 +2,5 @@
 *.jpg
 
 *.raw
+
+src/__pycache__/
