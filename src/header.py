@@ -1,90 +1,92 @@
 from enum import Enum
+import re
+
+class SampleType(Enum):
+        UNSIGNED_INTEGER = 0
+        SIGNED_INTEGER = 1
+
+class LargeDFlag(Enum):
+    SMALL_D = 0 # <=16 bit
+    LARGE_D = 1 # >16 bit
+
+class SampleEncodingOrder(Enum):
+    BI  = 0
+    BSQ = 1
+
+class EntropyCoderType(Enum):
+    SAMPLE_ADAPTIVE = 0
+    HYBRID = 1
+    BLOCK_ADAPTIVE = 2
+
+class QuantizerFidelityControlMethod(Enum):
+    LOSSLESS = 0
+    ABSOLUTE_ONLY = 1
+    RELATIVE_ONLY = 2
+    ABSOLUTE_AND_RELATIVE = 3
+
+class SampleRepresentativeFlag(Enum):
+    NOT_INCLUDED = 0 # phi = psi = 0 for all bands
+    INCLUDED = 1
+
+class PredictionMode(Enum):
+    FULL = 0
+    REDUCED = 1
+
+class WeightExponentOffsetFlag(Enum):
+    ALL_ZERO = 0
+    NOT_ALL_ZERO = 1
+
+class LocalSumType(Enum):
+    WIDE_NEIGHBOR_ORIENTED = 0
+    NARROW_NEIGHBOR_ORIENTED = 1
+    WIDE_COLUMN_ORIENTED = 2
+    NARROW_COLUMN_ORIENTED = 3
+
+class WeightExponentOffsetTableFlag(Enum):
+    NOT_INCLUDED = 0
+    INCLUDED = 1
+
+class WeightInitMethod(Enum):
+    DEFAULT = 0
+    CUSTOM = 1
+
+class WeightInitTableFlag(Enum):
+    NOT_INCLUDED = 0
+    INCLUDED = 1
+
+class PeriodicErrorUpdatingFlag(Enum):
+    NOT_USED = 0
+    USED = 1
+
+class ErrorLimitAssignmentMethod(Enum):
+    BAND_INDEPENDENT = 0
+    BAND_DEPENDENT = 1
+
+class BandVaryingDampingFlag(Enum):
+    BAND_INDEPENDENT = 0
+    BAND_DEPENDENT = 1
+
+class DampingTableFlag(Enum):
+    NOT_INCLUDED = 0
+    INCLUDED = 1
+
+class BandVaryingOffsetFlag(Enum):
+    BAND_INDEPENDENT = 0
+    BAND_DEPENDENT = 1
+
+class OffsetTableFlag(Enum):
+    NOT_INCLUDED = 0
+    INCLUDED = 1
+
+class AccumulatorInitTableFlag(Enum):
+    NOT_INCLUDED = 0
+    INCLUDED = 1
+
 
 class Header:
     """
     Header class for storing image metadata and configuration options.
     """
-
-    class SampleType(Enum):
-        UNSIGNED_INTEGER = 0
-        SIGNED_INTEGER = 1
-
-    class LargeDFlag(Enum):
-        SMALL_D = 0 # <=16 bit
-        LARGE_D = 1 # >16 bit
-
-    class SampleEncodingOrder(Enum):
-        BI  = 0
-        BSQ = 1
-
-    class EntropyCoderType(Enum):
-        SAMPLE_ADAPTIVE = 0
-        HYBRID = 1
-        BLOCK_ADAPTIVE = 2
-
-    class QuantizerFidelityControlMethod(Enum):
-        LOSSLESS = 0
-        ABSOLUTE_ONLY = 1
-        RELATIVE_ONLY = 2
-        ABSOLUTE_AND_RELATIVE = 3
-
-    class SampleRepresentativeFlag(Enum):
-        NOT_INCLUDED = 0 # phi = psi = 0 for all bands
-        INCLUDED = 1
-
-    class PredictionMode(Enum):
-        FULL = 0
-        REDUCED = 1
-
-    class WeightExponentOffsetFlag(Enum):
-        ALL_ZERO = 0
-        NOT_ALL_ZERO = 1
-
-    class LocalSumType(Enum):
-        WIDE_NEIGHBOR_ORIENTED = 0
-        NARROW_NEIGHBOR_ORIENTED = 1
-        WIDE_COLUMN_ORIENTED = 2
-        NARROW_COLUMN_ORIENTED = 3
-
-    class WeightExponentOffsetTableFlag(Enum):
-        NOT_INCLUDED = 0
-        INCLUDED = 1
-
-    class WeightInitMethod(Enum):
-        DEFAULT = 0
-        CUSTOM = 1
-
-    class WeightInitTableFlag(Enum):
-        NOT_INCLUDED = 0
-        INCLUDED = 1
-
-    class PeriodicErrorUpdatingFlag(Enum):
-        NOT_USED = 0
-        USED = 1
-
-    class ErrorLimitAssignmentMethod(Enum):
-        BAND_INDEPENDENT = 0
-        BAND_DEPENDENT = 1
-
-    class BandVaryingDampingFlag(Enum):
-        BAND_INDEPENDENT = 0
-        BAND_DEPENDENT = 1
-
-    class DampingTableFlag(Enum):
-        NOT_INCLUDED = 0
-        INCLUDED = 1
-
-    class BandVaryingOffsetFlag(Enum):
-        BAND_INDEPENDENT = 0
-        BAND_DEPENDENT = 1
-
-    class OffsetTableFlag(Enum):
-        NOT_INCLUDED = 0
-        INCLUDED = 1
-
-    class AccumulatorInitTableFlag(Enum):
-        NOT_INCLUDED = 0
-        INCLUDED = 1
 
     ################
     # Image metadata
@@ -162,3 +164,20 @@ class Header:
 
     # Block-adaptive entropy coder
     # TODO: Support block-adaptive entropy coder
+
+
+    def __init__(self, image_name):
+        self.set_config_according_to_image_name(image_name)
+        
+    def set_config_according_to_image_name(self, image_name):
+        # TODO: Actually learn regex and do this properly
+        self.x_size = int(re.findall('x(.*).raw', image_name)[0].split("x")[-1]) 
+        self.y_size = int(re.findall('x(.+)x', image_name)[0])
+        self.z_size = int(re.findall('-(.+)x', re.findall('-(.+)x', image_name)[0])[0])
+        format = re.findall('-(.*)-', image_name)[0]
+        self.sample_type = SampleType.UNSIGNED_INTEGER if format[0] == 'u' else SampleType.SIGNED_INTEGER
+        self.large_d_flag = LargeDFlag.SMALL_D if int(format[1:3]) <= 16 else LargeDFlag.LARGE_D
+        self.dynamic_range = int(format[1:3]) % 16
+        if format[3:5] != 'be':
+            exit("Only big endian is supported")
+    
