@@ -108,7 +108,7 @@ class CCSDS123():
     
     def __init_predictor_arrays(self):
         image_shape = self.image_sample.shape
-        self.local_difference_vector = np.empty(image_shape, dtype=np.int32)
+        self.local_sum = np.empty(image_shape, dtype=np.int32)
 
         num_local_difference_values = self.header.prediction_bands_num
         if self.header.prediction_mode == hd.PredictionMode.FULL:
@@ -169,14 +169,69 @@ class CCSDS123():
                 - self.sample_representative_part_4) \
                 / self.sample_representative_part_5)
             
-        self.sample_representative = int(self.double_resolution_sample_representative[y, x, z] / 2)
+        self.sample_representative[y, x, z] = int(self.double_resolution_sample_representative[y, x, z] / 2)
 
     
     def __calculate_local_sum(self, x, y, z, t):
-        local_sum = 0
-        for i in range(self.header.prediction_bands_num):
-            local_sum += self.local_difference_vector[i, z, y, x]
-        return local_sum
+        if self.header.local_sum_type == hd.LocalSumType.WIDE_NEIGHBOR_ORIENTED:
+            if y > 0 and 0 < x and x < self.header.x_size - 1:
+                self.local_sum[y, x, z] = \
+                    self.sample_representative[y    , x - 1, z] + \
+                    self.sample_representative[y - 1, x - 1, z] + \
+                    self.sample_representative[y - 1, x    , z] + \
+                    self.sample_representative[y - 1, x + 1, z]
+            elif y == 0 and x > 0:
+                self.local_sum[y, x, z] = \
+                    self.sample_representative[y    , x - 1, z] * 4
+            elif y > 0 and x == 0:
+                self.local_sum[y, x, z] = ( \
+                    self.sample_representative[y - 1, x    , z] + \
+                    self.sample_representative[y - 1, x + 1, z]) * 2
+            elif y > 0 and x == self.header.x_size - 1:
+                 self.local_sum[y, x, z] = \
+                    self.sample_representative[y    , x - 1, z] + \
+                    self.sample_representative[y - 1, x - 1, z] + \
+                    self.sample_representative[y - 1, x    , z] * 2
+                
+        elif self.header.local_sum_type == hd.LocalSumType.NARROW_NEIGHBOR_ORIENTED:
+            if y > 0 and 0 < x and x < self.header.x_size - 1:
+                self.local_sum[y, x, z] = \
+                    self.sample_representative[y - 1, x - 1, z] + \
+                    self.sample_representative[y - 1, x    , z] * 2 + \
+                    self.sample_representative[y - 1, x + 1, z]
+            elif y == 0 and x > 0 and z > 0:
+                self.local_sum[y, x, z] = \
+                    self.sample_representative[y    , x - 1, z - 1] * 4
+            elif y > 0 and x == 0:
+                self.local_sum[y, x, z] = ( \
+                    self.sample_representative[y - 1, x    , z] + \
+                    self.sample_representative[y - 1, x + 1, z]) * 2
+            elif y > 0 and x == self.header.x_size - 1:
+                 self.local_sum[y, x, z] = ( \
+                    self.sample_representative[y - 1, x - 1, z] + \
+                    self.sample_representative[y - 1, x    , z]) * 2
+            elif y == 0 and x > 0 and z == 0:
+                self.local_sum[y, x, z] = \
+                    self.middle_sample_value * 4
+
+        elif self.header.local_sum_type == hd.LocalSumType.WIDE_COLUMN_ORIENTED:
+            if y > 0:
+                self.local_sum[y, x, z] = \
+                    self.sample_representative[y - 1, x    , z] * 4
+            elif y == 0 and x > 0:
+                self.local_sum[y, x, z] = \
+                    self.sample_representative[y    , x - 1, z] * 4
+                
+        elif self.header.local_sum_type == hd.LocalSumType.NARROW_COLUMN_ORIENTED:
+            if y > 0:
+                self.local_sum[y, x, z] = \
+                    self.sample_representative[y - 1, x    , z] * 4
+            elif y == 0 and x > 0 and z > 0:
+                self.local_sum[y, x, z] = \
+                    self.sample_representative[y    , x - 1, z - 1] * 4
+            elif y == 0 and x > 0 and z == 0:
+                self.local_sum[y, x, z] = \
+                    self.middle_sample_value * 4
 
     def predictor(self):
         """Calculate the outputs of the predictor for the loaded image"""
@@ -185,12 +240,14 @@ class CCSDS123():
         self.__init_predictor_arrays()
 
         for y in range(self.header.y_size):
+            print(y)
             for x in range(self.header.x_size):
                 t = x + y * self.header.x_size
                 for z in range(self.header.z_size):
-                    print(f"Predicting pixel {t} of {self.header.x_size * self.header.y_size} in band {z} of {self.header.z_size}")
+                    # print(f"Predicting pixel {t} of {self.header.x_size * self.header.y_size} in band {z} of {self.header.z_size}")
                     self.__calculate_maximum_error(x, y, z, t)
                     self.__calculate_sample_representative(x, y, z, t)
+                    self.__calculate_local_sum(x, y, z, t)
 
 
 
