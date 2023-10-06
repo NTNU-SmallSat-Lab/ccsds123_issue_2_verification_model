@@ -20,7 +20,10 @@ def main():
     image = ccsds123.CCSDS123(image_name)
     image.load_raw_image()
 
-    image.create_predictor_arrays()
+    # print(image.image_sample.shape)
+    # print(image.image_sample)
+
+    image.predictor()
 
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
