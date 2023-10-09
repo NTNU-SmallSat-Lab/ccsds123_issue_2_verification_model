@@ -159,8 +159,8 @@ class CCSDS123():
         value = -1
 
         self.local_sum = np.full(image_shape, value, dtype=np.int32)
-        self.local_difference_vector = np.full(local_difference_vector_shape, value, dtype=np.int32)
-        self.weight_vector = np.full(local_difference_vector_shape, value, dtype=np.int32)
+        self.local_difference_vector = np.zeros(local_difference_vector_shape, dtype=np.int32)
+        self.weight_vector = np.zeros(local_difference_vector_shape, dtype=np.int32)
         self.predicted_central_local_difference = np.full(image_shape, value, dtype=np.int32)
         self.high_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
         self.double_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
@@ -311,6 +311,7 @@ class CCSDS123():
 
     def __init_weights(self, z):
         if self.header.weight_init_method == hd.WeightInitMethod.DEFAULT:
+            # self.weight_vector[0,1,z] = self.spectral_bands_used_mask[z]
             offset = 0
             if self.header.prediction_mode == hd.PredictionMode.FULL:
                 self.weight_vector[0,1,z,0] = 0
@@ -346,14 +347,23 @@ class CCSDS123():
             np.sign(self.double_resolution_prediction_error[prev_y,prev_x,z]) + \
             (self.double_resolution_prediction_error[prev_y,prev_x,z] == 0).astype(int)
         
+        # self.spectral_bands_used_mask[z] * \
         self.weight_vector[y,x,z] = \
-            self.spectral_bands_used_mask[z] * \
             (self.weight_vector[prev_y,prev_x,z] + \
             1/2 * (double_resolution_prediction_error_sign_positive * \
             2**(-(self.weight_update_scaling_exponent[t - 1] + weight_exponent_offset)) * \
             self.local_difference_vector[prev_y,prev_x,z] + 1) \
             ).clip(self.weight_min, self.weight_max)
-                
+        
+
+    def __calculate_predicted_central_local_difference(self, x, y, z, t):
+        if t == 0:
+            return
+        if self.header.prediction_mode == hd.PredictionMode.REDUCED and z == 0:
+            self.predicted_central_local_difference[y,x,z] = 0
+            return
+        self.predicted_central_local_difference[y,x,z] = np.dot(self.weight_vector[y,x,z], self.local_difference_vector[y,x,z])
+        
 
     def predictor(self):
         """Calculate the outputs of the predictor for the loaded image"""
@@ -371,6 +381,7 @@ class CCSDS123():
                     self.__calculate_local_sum(x, y, z, t)
                     self.__calculate_local_difference_vector(x, y, z, t)
                     self.__calculate_weight_vector(x, y, z, t)
+                    self.__calculate_predicted_central_local_difference(x, y, z, t)
 
 
     def save_data(self):
