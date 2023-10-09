@@ -28,6 +28,7 @@ class CCSDS123():
     header = None
     raw_image_folder = "raw_images"
     image_sample = None # Symbol: s
+    output_folder = "output"
 
     def __init__(self, image_name):
         self.image_name = image_name
@@ -80,6 +81,7 @@ class CCSDS123():
     sample_representative_part_3 = None # psi * 2^(Omega - Theta)
     sample_representative_part_4 = None # phi * 2^(Omega + 1)
     sample_representative_part_5 = None # 2^(Omega + Theta + 1)
+    local_difference_values_num = None
     spectral_bands_used = None # Symbol: P^*
 
 
@@ -89,6 +91,10 @@ class CCSDS123():
         self.sample_representative_part_3 = self.header.fixed_offset_value * 2**(self.header.weight_component_resolution - self.header.sample_representative_resolution)
         self.sample_representative_part_4 = self.header.fixed_damping_value * 2**(self.header.weight_component_resolution + 1)
         self.sample_representative_part_5 = 2**(self.header.weight_component_resolution + self.header.sample_representative_resolution + 1)
+
+        self.local_difference_values_num = self.header.prediction_bands_num
+        if self.header.prediction_mode == hd.PredictionMode.FULL:
+            self.local_difference_values_num += 3
 
         self.spectral_bands_used = np.empty((self.header.z_size), dtype=np.int32)
         for z in range(self.header.z_size):
@@ -113,26 +119,25 @@ class CCSDS123():
     
     def __init_predictor_arrays(self):
         image_shape = self.image_sample.shape
-        num_local_difference_values = self.header.prediction_bands_num
-        if self.header.prediction_mode == hd.PredictionMode.FULL:
-            num_local_difference_values += 3
-        local_difference_vector_shape = image_shape + (num_local_difference_values,) 
+        local_difference_vector_shape = image_shape + (self.local_difference_values_num,) 
 
-        self.local_sum = np.empty(image_shape, dtype=np.int32)
-        self.local_difference_vector = np.empty(local_difference_vector_shape, dtype=np.int32)
-        self.weight_vector = np.empty(local_difference_vector_shape, dtype=np.int32)
-        self.predicted_central_local_difference = np.empty(image_shape, dtype=np.int32)
-        self.high_resolution_predicted_sample_value = np.empty(image_shape, dtype=np.int32)
-        self.double_resolution_predicted_sample_value = np.empty(image_shape, dtype=np.int32)
-        self.predicted_sample_value = np.zeros(image_shape, dtype=np.int32) # Change back to empty
-        self.prediction_residual = np.empty(image_shape, dtype=np.int32)
-        self.maximum_error = np.empty(image_shape, dtype=np.int32)
-        self.quantizer_index = np.empty(image_shape, dtype=np.int32)
-        self.clipped_quantizer_bin_center = np.empty(image_shape, dtype=np.int32)
-        self.double_resolution_sample_representative = np.empty(image_shape, dtype=np.int32)
-        self.sample_representative = np.empty(image_shape, dtype=np.int32)
-        self.double_resolution_prediction_error = np.empty(image_shape, dtype=np.int32)
-        self.mapped_quantizer_index = np.empty(image_shape, dtype=np.int32)
+        value = -1
+
+        self.local_sum = np.full(image_shape, value, dtype=np.int32)
+        self.local_difference_vector = np.full(local_difference_vector_shape, value, dtype=np.int32)
+        self.weight_vector = np.full(local_difference_vector_shape, value, dtype=np.int32)
+        self.predicted_central_local_difference = np.full(image_shape, value, dtype=np.int32)
+        self.high_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
+        self.double_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
+        self.predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
+        self.prediction_residual = np.full(image_shape, value, dtype=np.int32)
+        self.maximum_error = np.full(image_shape, value, dtype=np.int32)
+        self.quantizer_index = np.full(image_shape, value, dtype=np.int32)
+        self.clipped_quantizer_bin_center = np.full(image_shape, value, dtype=np.int32)
+        self.double_resolution_sample_representative = np.full(image_shape, value, dtype=np.int32)
+        self.sample_representative = np.full(image_shape, value, dtype=np.int32)
+        self.double_resolution_prediction_error = np.full(image_shape, value, dtype=np.int32)
+        self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int32)
 
         # See standard 4.7.3. TODO: Move elsewhere?
         self.double_resolution_predicted_sample_value[0,0,0] = 2 * self.middle_sample_value
@@ -290,6 +295,24 @@ class CCSDS123():
                     self.__calculate_local_difference_vector(x, y, z, t)
                     # if t>1:
                     #     exit()
+
+    def save_data(self):
+        np.savetxt(self.output_folder + "/" + "00-local_sum.csv", self.local_sum.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "01-local_difference_vector.csv", self.local_difference_vector.reshape((self.header.y_size * self.header.x_size, self.header.z_size * self.local_difference_values_num)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "02-weight_vector.csv", self.weight_vector.reshape((self.header.y_size * self.header.x_size, self.header.z_size * self.local_difference_values_num)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "03-predicted_central_local_difference.csv", self.predicted_central_local_difference.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "04-high_resolution_predicted_sample_value.csv", self.high_resolution_predicted_sample_value.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "05-double_resolution_predicted_sample_value.csv", self.double_resolution_predicted_sample_value.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "06-predicted_sample_value.csv", self.predicted_sample_value.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "07-prediction_residual.csv", self.prediction_residual.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "08-maximum_error.csv", self.maximum_error.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "09-quantizer_index.csv", self.quantizer_index.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "10-clipped_quantizer_bin_center.csv", self.clipped_quantizer_bin_center.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "11-double_resolution_sample_representative.csv", self.double_resolution_sample_representative.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "12-sample_representative.csv", self.sample_representative.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "13-double_resolution_prediction_error.csv", self.double_resolution_prediction_error.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "14-mapped_quantizer_index.csv", self.mapped_quantizer_index.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "15-spectral_bands_used.csv", self.spectral_bands_used, delimiter=",", fmt='%d')
 
 
 

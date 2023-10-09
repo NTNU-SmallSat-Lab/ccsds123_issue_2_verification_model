@@ -4,3 +4,5 @@
 *.raw
 
 src/__pycache__/
+
+*.csv

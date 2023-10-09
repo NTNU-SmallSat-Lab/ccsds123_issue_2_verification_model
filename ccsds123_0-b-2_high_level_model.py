@@ -6,9 +6,9 @@ import os
 import psutil
 
 image_name = 'aviris_maine_f030828t01p00r05_sc10.uncal-u16be-224x512x680.raw'
-image_name = 'Landsat_mountain-u16be-6x1024x1024.raw'
 image_name = 'Landsat_mountain-u16be-6x100x100.raw'
 image_name = 'Landsat_mountain-u16be-6x100x200.raw'
+image_name = 'Landsat_mountain-u16be-6x1024x1024.raw'
 
 # Function to get memory usage in MB
 def get_memory_usage():
@@ -26,6 +26,8 @@ def main():
     # print(image.image_sample)
 
     image.predictor()
+
+    image.save_data()
 
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
