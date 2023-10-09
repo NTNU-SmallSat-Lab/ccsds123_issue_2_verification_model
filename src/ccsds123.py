@@ -15,10 +15,10 @@ def sign(x):
         return -1
     return 0
 
-def sign_positive(x):
-    if x >= 0:
-        return 1
-    return -1
+# def sign_positive(x):
+#     if x >= 0:
+#         return 1
+#     return -1
 
 
 class CCSDS123():
@@ -76,21 +76,27 @@ class CCSDS123():
             self.middle_sample_value = 0
 
     # Predictor constants
+    local_difference_values_num = None
+
+    spectral_bands_used = None # Symbol: P^*. Indexed by z
+    spectral_bands_used_mask = None
+
+    weight_component_resolution = None # Symbol: Omega
+    weight_update_change_interval = None # Symbol: t_inc
+    weight_update_initial_parameter = None # Symbol: nu_min
+    weight_update_final_parameter = None # Symbol: nu_max
+    weight_update_scaling_exponent = None # Symbol: rho. Indexed by t
+    weight_min = None # Symbol: omega_min
+    weight_max = None # Symbol: omega_max
+
     sample_representative_part_1 = None # 4 * (2^Theta - phi)
     sample_representative_part_2 = None # 2^Omega
     sample_representative_part_3 = None # psi * 2^(Omega - Theta)
     sample_representative_part_4 = None # phi * 2^(Omega + 1)
     sample_representative_part_5 = None # 2^(Omega + Theta + 1)
-    local_difference_values_num = None
-    spectral_bands_used = None # Symbol: P^*
 
 
     def __init_predictor_constants(self):
-        self.sample_representative_part_1 = 4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value)
-        self.sample_representative_part_2 = 2**self.header.weight_component_resolution
-        self.sample_representative_part_3 = self.header.fixed_offset_value * 2**(self.header.weight_component_resolution - self.header.sample_representative_resolution)
-        self.sample_representative_part_4 = self.header.fixed_damping_value * 2**(self.header.weight_component_resolution + 1)
-        self.sample_representative_part_5 = 2**(self.header.weight_component_resolution + self.header.sample_representative_resolution + 1)
 
         self.local_difference_values_num = self.header.prediction_bands_num
         if self.header.prediction_mode == hd.PredictionMode.FULL:
@@ -99,6 +105,35 @@ class CCSDS123():
         self.spectral_bands_used = np.empty((self.header.z_size), dtype=np.int32)
         for z in range(self.header.z_size):
             self.spectral_bands_used[z] = min(z, self.header.prediction_bands_num)
+
+        self.spectral_bands_used_mask = np.empty((self.header.z_size, self.local_difference_values_num), dtype=np.int32)
+        for z in range(self.header.z_size):
+            offset = 0
+            if self.header.prediction_mode == hd.PredictionMode.FULL:
+                self.spectral_bands_used_mask[z, 0:3] = [1, 1, 1]
+                offset = 3
+            for i in range(self.header.prediction_bands_num):
+                self.spectral_bands_used_mask[z, offset + i] = int(i < self.spectral_bands_used[z])
+
+        self.weight_component_resolution = self.header.weight_component_resolution + 4
+        self.weight_update_change_interval = 2**self.header.weight_update_change_interval
+        self.weight_update_initial_parameter = self.header.weight_update_initial_parameter - 6
+        self.weight_update_final_parameter = self.header.weight_update_final_parameter - 6
+        self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int32)
+        for t in range (self.header.y_size * self.header.x_size):
+            self.weight_update_scaling_exponent[t] = clip( \
+                self.weight_update_initial_parameter + int((t - self.header.x_size) / self.weight_update_change_interval) \
+                , self.weight_update_initial_parameter, self.weight_update_final_parameter) \
+                + self.dynamic_range_bits - self.weight_component_resolution
+        self.weight_min = -2**(self.weight_component_resolution + 2)
+        self.weight_max = 2**(self.weight_component_resolution + 2) - 1
+
+        self.sample_representative_part_1 = 4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value)
+        self.sample_representative_part_2 = 2**self.weight_component_resolution
+        self.sample_representative_part_3 = self.header.fixed_offset_value * 2**(self.weight_component_resolution - self.header.sample_representative_resolution)
+        self.sample_representative_part_4 = self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1)
+        self.sample_representative_part_5 = 2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
+
 
     # Predictor variables
     local_sum = None # Symbol: sigma
@@ -115,7 +150,7 @@ class CCSDS123():
     double_resolution_sample_representative = None # Symbol: s''-hat
     sample_representative = None # Symbol: s''
     double_resolution_prediction_error = None # Symbol: e
-    mapped_quantizer_index = None # Symbol: rho
+    mapped_quantizer_index = None # Symbol: delta
     
     def __init_predictor_arrays(self):
         image_shape = self.image_sample.shape
@@ -153,7 +188,6 @@ class CCSDS123():
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
             self.maximum_error[y, x, z] = int(self.header.relative_error_limit_value * self.predicted_sample_value[y, x, z] / self.dynamic_range)
         else: # self.header.quantizer_fidelity_control_method = hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-            # print(f"x={x}, y={y}, z={z}, t={t}, predicted sample value={self.predicted_sample_value[y, x, z]}")
             self.maximum_error[y, x, z] = min(self.header.absolute_error_limit_value, int(self.header.relative_error_limit_value * self.predicted_sample_value[y, x, z] / self.dynamic_range))
         
 
@@ -252,7 +286,7 @@ class CCSDS123():
         if t == 0:
             return
 
-        index = 0
+        offset = 0
 
         if self.header.prediction_mode == hd.PredictionMode.FULL:
             if x > 0 and y > 0:
@@ -267,14 +301,58 @@ class CCSDS123():
                 self.local_difference_vector[y,x,z,0] = 0
                 self.local_difference_vector[y,x,z,1] = 0
                 self.local_difference_vector[y,x,z,2] = 0
-            index += 3
+            offset += 3
         
         if z > 0:
-            self.local_difference_vector[y,x,z,index] = 4 * self.sample_representative[y, x, z - 1] - self.local_sum[y, x, z - 1]
+            self.local_difference_vector[y,x,z,offset] = 4 * self.sample_representative[y, x, z - 1] - self.local_sum[y, x, z - 1]
             for i in range(1, self.spectral_bands_used[z]):
-                self.local_difference_vector[y,x,z,index + i] = self.local_difference_vector[y, x, z - 1, index + i - 1]
+                self.local_difference_vector[y,x,z,offset + i] = self.local_difference_vector[y, x, z - 1, offset + i - 1]
         
-        # print(f"local_difference_vector[{y},{x},{z}] = {self.local_difference_vector[y,x,z]}")
+
+    def __init_weights(self, z):
+        if self.header.weight_init_method == hd.WeightInitMethod.DEFAULT:
+            offset = 0
+            if self.header.prediction_mode == hd.PredictionMode.FULL:
+                self.weight_vector[0,1,z,0] = 0
+                self.weight_vector[0,1,z,1] = 0
+                self.weight_vector[0,1,z,2] = 0
+                offset += 3
+
+            if z > 0:
+                self.weight_vector[0,1,z,offset] = 2**self.weight_component_resolution * 7 / 8
+                for i in range(1, self.spectral_bands_used[z]):
+                        self.weight_vector[0,1,z,offset + i] = self.weight_vector[0,1,z,offset + i - 1] / 8
+        else:
+            exit("Custom weight init method not supported")
+
+
+    def __calculate_weight_vector(self, x, y, z, t):
+        if t == 0:
+            return
+        if t == 1:
+            self.__init_weights(z)
+            return
+        
+        prev_y = y
+        prev_x = x - 1
+        if prev_x < 0:
+            prev_y -= 1
+            prev_x = self.header.x_size - 1
+
+        # TODO: Add weight exponent offset
+        weight_exponent_offset = 0
+
+        double_resolution_prediction_error_sign_positive = \
+            np.sign(self.double_resolution_prediction_error[prev_y,prev_x,z]) + \
+            (self.double_resolution_prediction_error[prev_y,prev_x,z] == 0).astype(int)
+        
+        self.weight_vector[y,x,z] = \
+            self.spectral_bands_used_mask[z] * \
+            (self.weight_vector[prev_y,prev_x,z] + \
+            1/2 * (double_resolution_prediction_error_sign_positive * \
+            2**(-(self.weight_update_scaling_exponent[t - 1] + weight_exponent_offset)) * \
+            self.local_difference_vector[prev_y,prev_x,z] + 1) \
+            ).clip(self.weight_min, self.weight_max)
                 
 
     def predictor(self):
@@ -288,13 +366,12 @@ class CCSDS123():
             for x in range(self.header.x_size):
                 t = x + y * self.header.x_size
                 for z in range(self.header.z_size):
-                    # print(f"Predicting pixel {t} of {self.header.x_size * self.header.y_size} in band {z} of {self.header.z_size}")
                     self.__calculate_maximum_error(x, y, z, t)
                     self.__calculate_sample_representative(x, y, z, t)
                     self.__calculate_local_sum(x, y, z, t)
                     self.__calculate_local_difference_vector(x, y, z, t)
-                    # if t>1:
-                    #     exit()
+                    self.__calculate_weight_vector(x, y, z, t)
+
 
     def save_data(self):
         np.savetxt(self.output_folder + "/" + "00-local_sum.csv", self.local_sum.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
