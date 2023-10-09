@@ -7,6 +7,7 @@ import psutil
 
 image_name = 'aviris_maine_f030828t01p00r05_sc10.uncal-u16be-224x512x680.raw'
 image_name = 'Landsat_mountain-u16be-6x1024x1024.raw'
+image_name = 'Landsat_mountain-u16be-6x100x100.raw'
 
 # Function to get memory usage in MB
 def get_memory_usage():

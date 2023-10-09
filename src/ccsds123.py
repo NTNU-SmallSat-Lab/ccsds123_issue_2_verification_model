@@ -42,10 +42,11 @@ class CCSDS123():
         with open(self.raw_image_folder + "/" + self.image_name, 'rb') as file:
             file.seek(1) # Skip the first byte
             self.image_sample = np.fromfile(file, dtype=np.uint16)
-        self.image_sample=np.pad(self.image_sample, (0,1), 'constant', constant_values=last) # Pad the last two bytes
+        if self.image_sample.shape[0] != self.header.z_size * self.header.y_size * self.header.x_size:
+            self.image_sample=np.pad(self.image_sample, (0,1), 'constant', constant_values=last) # Pad the last two bytes
         self.image_sample[0] += first << 8 # Reintroduce the first byte
         # self.image_raw.shape = (self.header.z_size, self.image_raw.size//self.header.z_size)
-        self.image_sample = self.image_sample.reshape(self.header.z_size, self.header.y_size, self.header.x_size) # Reshape to z,y,x (BSQ) 3D array
+        self.image_sample = self.image_sample.reshape((self.header.z_size, self.header.y_size, self.header.x_size)) # Reshape to z,y,x (BSQ) 3D array
         self.image_sample = self.image_sample.transpose(1,2,0) # Transpose to y,x,z order (BIP) 
 
     # Image constants
