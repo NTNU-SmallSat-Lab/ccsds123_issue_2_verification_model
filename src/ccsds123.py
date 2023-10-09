@@ -20,6 +20,10 @@ def sign(x):
 #         return 1
 #     return -1
 
+# Unsure what the proper name of this operation is
+def modulo_star(x, R):
+    return ((x + 2**(R-1)) % 2**R) - 2**(R-1)
+
 
 class CCSDS123():
     """
@@ -89,11 +93,13 @@ class CCSDS123():
     weight_min = None # Symbol: omega_min
     weight_max = None # Symbol: omega_max
 
-    sample_representative_part_1 = None # 4 * (2^Theta - phi)
-    sample_representative_part_2 = None # 2^Omega
-    sample_representative_part_3 = None # psi * 2^(Omega - Theta)
-    sample_representative_part_4 = None # phi * 2^(Omega + 1)
-    sample_representative_part_5 = None # 2^(Omega + Theta + 1)
+    register_size = None # Symbol: R
+
+    intermediate_constant_1 = None # 4 * (2^Theta - phi)
+    intermediate_constant_2 = None # 2^Omega
+    intermediate_constant_3 = None # psi * 2^(Omega - Theta)
+    intermediate_constant_4 = None # phi * 2^(Omega + 1)
+    intermediate_constant_5 = None # 2^(Omega + Theta + 1)
 
 
     def __init_predictor_constants(self):
@@ -128,11 +134,15 @@ class CCSDS123():
         self.weight_min = -2**(self.weight_component_resolution + 2)
         self.weight_max = 2**(self.weight_component_resolution + 2) - 1
 
-        self.sample_representative_part_1 = 4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value)
-        self.sample_representative_part_2 = 2**self.weight_component_resolution
-        self.sample_representative_part_3 = self.header.fixed_offset_value * 2**(self.weight_component_resolution - self.header.sample_representative_resolution)
-        self.sample_representative_part_4 = self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1)
-        self.sample_representative_part_5 = 2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
+        self.register_size = self.header.register_size
+        if self.register_size == 0:
+            self.register_size = 64
+
+        self.intermediate_constant_1 = 4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value)
+        self.intermediate_constant_2 = 2**self.weight_component_resolution
+        self.intermediate_constant_3 = self.header.fixed_offset_value * 2**(self.weight_component_resolution - self.header.sample_representative_resolution)
+        self.intermediate_constant_4 = self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1)
+        self.intermediate_constant_5 = 2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
 
 
     # Predictor variables
@@ -162,7 +172,7 @@ class CCSDS123():
         self.local_difference_vector = np.zeros(local_difference_vector_shape, dtype=np.int32)
         self.weight_vector = np.zeros(local_difference_vector_shape, dtype=np.int32)
         self.predicted_central_local_difference = np.full(image_shape, value, dtype=np.int32)
-        self.high_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
+        self.high_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int64)
         self.double_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
         self.predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
         self.prediction_residual = np.full(image_shape, value, dtype=np.int32)
@@ -173,10 +183,6 @@ class CCSDS123():
         self.sample_representative = np.full(image_shape, value, dtype=np.int32)
         self.double_resolution_prediction_error = np.full(image_shape, value, dtype=np.int32)
         self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int32)
-
-        # See standard 4.7.3. TODO: Move elsewhere?
-        self.double_resolution_predicted_sample_value[0,0,0] = 2 * self.middle_sample_value
-        self.predicted_sample_value[0,0,0] = self.middle_sample_value
 
 
     def __calculate_maximum_error(self, x, y, z, t):
@@ -206,13 +212,13 @@ class CCSDS123():
         else:
             # Assumes band_varying_damping_flag = BAND_INDEPENDENT and band_varying_offset_flag = BAND_INDEPENDENT
             self.double_resolution_sample_representative[y, x, z] = \
-                int((self.sample_representative_part_1 * \
-                (self.clipped_quantizer_bin_center[y, x, z] * self.sample_representative_part_2 - \
+                int((self.intermediate_constant_1 * \
+                (self.clipped_quantizer_bin_center[y, x, z] * self.intermediate_constant_2 - \
                 sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * \
-                self.sample_representative_part_3) + \
+                self.intermediate_constant_3) + \
                 self.header.fixed_damping_value * self.high_resolution_predicted_sample_value[y, x, z] \
-                - self.sample_representative_part_4) \
-                / self.sample_representative_part_5)
+                - self.intermediate_constant_4) \
+                / self.intermediate_constant_5)
             
         self.sample_representative[y, x, z] = int(self.double_resolution_sample_representative[y, x, z] / 2)
 
@@ -363,7 +369,38 @@ class CCSDS123():
             self.predicted_central_local_difference[y,x,z] = 0
             return
         self.predicted_central_local_difference[y,x,z] = np.dot(self.weight_vector[y,x,z], self.local_difference_vector[y,x,z])
-        
+
+
+    def __calculate_prediction(self, x, y, z, t):
+        if t > 0:
+            self.high_resolution_predicted_sample_value[y,x,z] = \
+                clip( 
+                    modulo_star(
+                        self.predicted_central_local_difference[y,x,z] + \
+                        2**self.weight_component_resolution * \
+                        (self.local_sum[y,x,z] - 4 * self.middle_sample_value), \
+                        self.register_size \
+                    ) + 2**(self.weight_component_resolution + 2) * \
+                    self.middle_sample_value + \
+                    2**(self.weight_component_resolution + 1), \
+                    2**(self.weight_component_resolution + 2) * self.lower_sample_limit, \
+                    2**(self.weight_component_resolution + 2) * self.upper_sample_limit +
+                    2**(self.weight_component_resolution + 1) \
+                )
+            self.double_resolution_predicted_sample_value[y,x,z] = \
+                self.high_resolution_predicted_sample_value[y,x,z] / \
+                2**(self.weight_component_resolution + 1)
+        elif t == 0 and self.header.prediction_bands_num > 0 and z > 0:
+            self.double_resolution_predicted_sample_value[y,x,z] = \
+                2 * self.image_sample[y,x,z - 1]
+        else:
+            self.double_resolution_predicted_sample_value[y,x,z] = \
+                2 * self.middle_sample_value
+            
+        self.predicted_sample_value[y,x,z] = \
+            self.double_resolution_predicted_sample_value[y,x,z] / 2
+    
+
 
     def predictor(self):
         """Calculate the outputs of the predictor for the loaded image"""
@@ -376,13 +413,13 @@ class CCSDS123():
             for x in range(self.header.x_size):
                 t = x + y * self.header.x_size
                 for z in range(self.header.z_size):
-                    self.__calculate_maximum_error(x, y, z, t)
-                    self.__calculate_sample_representative(x, y, z, t)
                     self.__calculate_local_sum(x, y, z, t)
                     self.__calculate_local_difference_vector(x, y, z, t)
                     self.__calculate_weight_vector(x, y, z, t)
                     self.__calculate_predicted_central_local_difference(x, y, z, t)
-
+                    self.__calculate_prediction(x, y, z, t)
+                    self.__calculate_maximum_error(x, y, z, t)
+                    self.__calculate_sample_representative(x, y, z, t)
 
     def save_data(self):
         np.savetxt(self.output_folder + "/" + "00-local_sum.csv", self.local_sum.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')

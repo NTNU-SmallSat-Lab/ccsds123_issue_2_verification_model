@@ -138,7 +138,7 @@ class Header:
     # Relative error limit
     relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
     relative_error_limit_bit_depth = 15 # D_R. Encode as D_R%16. 1<=D_R<=min{D−1,16}
-    relative_error_limit_value = 2 # R*. 0<=R*<=2^D_R-1. TODO: Support BAND_DEPENDENT values
+    relative_error_limit_value = 4 # R*. 0<=R*<=2^D_R-1. TODO: Support BAND_DEPENDENT values
 
     # Sample Representative
     sample_representative_resolution = 4 # Theta. 0<=Theta<=4
