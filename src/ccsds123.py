@@ -184,44 +184,6 @@ class CCSDS123():
         self.double_resolution_prediction_error = np.full(image_shape, value, dtype=np.int32)
         self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int32)
 
-
-    def __calculate_maximum_error(self, x, y, z, t):
-        # Assumes periodic_error_updating_flag = NOT_USED, absolute_error_limit_assignment_method = BAND_INDEPENDENT and relative_error_limit_assignment_method = BAND_INDEPENDENT
-        if self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.LOSSLESS:
-            self.maximum_error[y, x, z] = 0
-        elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
-            self.maximum_error[y, x, z] = self.header.absolute_error_limit_value
-        elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
-            self.maximum_error[y, x, z] = int(self.header.relative_error_limit_value * self.predicted_sample_value[y, x, z] / self.dynamic_range)
-        else: # self.header.quantizer_fidelity_control_method = hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-            self.maximum_error[y, x, z] = min(self.header.absolute_error_limit_value, int(self.header.relative_error_limit_value * self.predicted_sample_value[y, x, z] / self.dynamic_range))
-        
-
-    def __calculate_sample_representative(self, x, y, z, t):
-        if t == 0:
-            self.sample_representative[y, x, z] = self.image_sample[y, x, z]
-            return
-        
-        if self.maximum_error[y, x, z] == 0: # Lossless
-            self.clipped_quantizer_bin_center[y, x, z] = self.image_sample[y, x, z]
-        else:
-            self.clipped_quantizer_bin_center[y, x, z] = clip(self.predicted_sample_value[y, x, z] + self.quantizer_index[y, x, z] * (2 * self.maximum_error[y, x, z] + 1), self.lower_sample_limit, self.upper_sample_limit)
-        
-        if self.header.fixed_damping_value == 0 and self.header.fixed_offset_value == 0: # Lossless
-            self.double_resolution_sample_representative[y, x, z] = self.clipped_quantizer_bin_center[y, x, z]
-        else:
-            # Assumes band_varying_damping_flag = BAND_INDEPENDENT and band_varying_offset_flag = BAND_INDEPENDENT
-            self.double_resolution_sample_representative[y, x, z] = \
-                int((self.intermediate_constant_1 * \
-                (self.clipped_quantizer_bin_center[y, x, z] * self.intermediate_constant_2 - \
-                sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * \
-                self.intermediate_constant_3) + \
-                self.header.fixed_damping_value * self.high_resolution_predicted_sample_value[y, x, z] \
-                - self.intermediate_constant_4) \
-                / self.intermediate_constant_5)
-            
-        self.sample_representative[y, x, z] = int(self.double_resolution_sample_representative[y, x, z] / 2)
-
     
     def __calculate_local_sum(self, x, y, z, t):
         if t == 0:
@@ -400,6 +362,30 @@ class CCSDS123():
         self.predicted_sample_value[y,x,z] = \
             self.double_resolution_predicted_sample_value[y,x,z] / 2
     
+
+    def __calculate_maximum_error(self, x, y, z, t):
+        # Assumes periodic_error_updating_flag = NOT_USED, absolute_error_limit_assignment_method = BAND_INDEPENDENT and relative_error_limit_assignment_method = BAND_INDEPENDENT
+        if self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.LOSSLESS:
+            self.maximum_error[y, x, z] = 0
+
+        elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+            self.maximum_error[y, x, z] = self.header.absolute_error_limit_value
+
+        elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+            self.maximum_error[y, x, z] =  \
+                int(self.header.relative_error_limit_value * \
+                self.predicted_sample_value[y, x, z] / \
+                self.dynamic_range)
+            
+        else: # self.header.quantizer_fidelity_control_method = hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
+            self.maximum_error[y, x, z] = \
+                min( \
+                    self.header.absolute_error_limit_value, \
+                    int(self.header.relative_error_limit_value * \
+                    self.predicted_sample_value[y, x, z] / \
+                    self.dynamic_range) \
+                )
+
     
     def __calculate_quantization(self, x, y, z, t):
         self.prediction_residual[y,x,z] = \
@@ -414,6 +400,42 @@ class CCSDS123():
             int((abs(self.prediction_residual[y,x,z]) + \
             self.maximum_error[y,x,z]) / \
             (2 * self.maximum_error[y,x,z] + 1))
+        
+    
+    def __calculate_sample_representative(self, x, y, z, t):
+        if t == 0:
+            self.sample_representative[y, x, z] = self.image_sample[y, x, z]
+            return
+        
+        if self.maximum_error[y, x, z] == 0: # Lossless
+            self.clipped_quantizer_bin_center[y, x, z] = self.image_sample[y, x, z]
+        else:
+            self.clipped_quantizer_bin_center[y, x, z] = \
+                clip( \
+                    self.predicted_sample_value[y, x, z] + \
+                    self.quantizer_index[y, x, z] * \
+                    (2 * self.maximum_error[y, x, z] + 1), \
+                    self.lower_sample_limit, \
+                    self.upper_sample_limit \
+                )
+        
+        if self.header.fixed_damping_value == 0 and self.header.fixed_offset_value == 0: # Lossless
+            self.double_resolution_sample_representative[y, x, z] = \
+                self.clipped_quantizer_bin_center[y, x, z]
+        else:
+            # Assumes band_varying_damping_flag = BAND_INDEPENDENT and band_varying_offset_flag = BAND_INDEPENDENT
+            self.double_resolution_sample_representative[y, x, z] = \
+                int((self.intermediate_constant_1 * \
+                (self.clipped_quantizer_bin_center[y, x, z] * self.intermediate_constant_2 - \
+                sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * \
+                self.intermediate_constant_3) + \
+                self.header.fixed_damping_value * \
+                self.high_resolution_predicted_sample_value[y, x, z] \
+                - self.intermediate_constant_4) \
+                / self.intermediate_constant_5)
+            
+        self.sample_representative[y, x, z] = \
+            int(self.double_resolution_sample_representative[y, x, z] / 2)
 
 
     def predictor(self):
@@ -433,8 +455,8 @@ class CCSDS123():
                     self.__calculate_predicted_central_local_difference(x, y, z, t)
                     self.__calculate_prediction(x, y, z, t)
                     self.__calculate_maximum_error(x, y, z, t)
-                    self.__calculate_sample_representative(x, y, z, t)
                     self.__calculate_quantization(x, y, z, t)
+                    self.__calculate_sample_representative(x, y, z, t)
 
     def save_data(self):
         np.savetxt(self.output_folder + "/" + "00-local_sum.csv", self.local_sum.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
