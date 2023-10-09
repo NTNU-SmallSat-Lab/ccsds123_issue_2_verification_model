@@ -83,7 +83,7 @@ class CCSDS123():
     local_difference_values_num = None
 
     spectral_bands_used = None # Symbol: P^*. Indexed by z
-    spectral_bands_used_mask = None
+    # spectral_bands_used_mask = None
 
     weight_component_resolution = None # Symbol: Omega
     weight_update_change_interval = None # Symbol: t_inc
@@ -112,14 +112,14 @@ class CCSDS123():
         for z in range(self.header.z_size):
             self.spectral_bands_used[z] = min(z, self.header.prediction_bands_num)
 
-        self.spectral_bands_used_mask = np.empty((self.header.z_size, self.local_difference_values_num), dtype=np.int32)
-        for z in range(self.header.z_size):
-            offset = 0
-            if self.header.prediction_mode == hd.PredictionMode.FULL:
-                self.spectral_bands_used_mask[z, 0:3] = [1, 1, 1]
-                offset = 3
-            for i in range(self.header.prediction_bands_num):
-                self.spectral_bands_used_mask[z, offset + i] = int(i < self.spectral_bands_used[z])
+        # self.spectral_bands_used_mask = np.empty((self.header.z_size, self.local_difference_values_num), dtype=np.int32)
+        # for z in range(self.header.z_size):
+        #     offset = 0
+        #     if self.header.prediction_mode == hd.PredictionMode.FULL:
+        #         self.spectral_bands_used_mask[z, 0:3] = [1, 1, 1]
+        #         offset = 3
+        #     for i in range(self.header.prediction_bands_num):
+        #         self.spectral_bands_used_mask[z, offset + i] = int(i < self.spectral_bands_used[z])
 
         self.weight_component_resolution = self.header.weight_component_resolution + 4
         self.weight_update_change_interval = 2**self.header.weight_update_change_interval
@@ -439,7 +439,43 @@ class CCSDS123():
         self.double_resolution_prediction_error[y, x, z] = \
             2 * self.clipped_quantizer_bin_center[y, x, z] - \
             self.double_resolution_predicted_sample_value[y, x, z]
+        
+    
+    def __calculate_mapped_quantizer_index(self, x, y, z, t):
+        scaled_prediction_endpoint_difference = 0
 
+        if t == 0:
+            scaled_prediction_endpoint_difference = \
+                min( \
+                    self.predicted_sample_value[0, 0, z] - \
+                    self.lower_sample_limit, \
+                    self.upper_sample_limit - \
+                    self.predicted_sample_value[0, 0, z] \
+                )
+        else:
+            scaled_prediction_endpoint_difference = \
+                min( \
+                    self.predicted_sample_value[y, x, z] - \
+                    self.lower_sample_limit + \
+                    self.maximum_error[y,x,z] / \
+                    (2 * self.maximum_error[y,x,z] + 1), \
+                    self.upper_sample_limit - \
+                    self.predicted_sample_value[y, x, z] + \
+                    self.maximum_error[y,x,z] / \
+                    (2 * self.maximum_error[y,x,z] + 1) \
+                )
+        
+        if abs(self.quantizer_index[y,x,z]) > scaled_prediction_endpoint_difference:
+            self.mapped_quantizer_index[y, x, z] = \
+                abs(self.quantizer_index[y,x,z]) + scaled_prediction_endpoint_difference
+        elif 0 <= (-1)**(self.double_resolution_predicted_sample_value[y, x, z] % 2) \
+            and (-1)**(self.double_resolution_predicted_sample_value[y, x, z] % 2) <= scaled_prediction_endpoint_difference:
+            self.mapped_quantizer_index[y, x, z] = \
+                2 * abs(self.quantizer_index[y,x,z])
+        else:
+            self.mapped_quantizer_index[y, x, z] = \
+                2 * abs(self.quantizer_index[y,x,z]) - 1
+      
 
     def predictor(self):
         """Calculate the outputs of the predictor for the loaded image"""
@@ -461,6 +497,8 @@ class CCSDS123():
                     self.__calculate_quantization(x, y, z, t)
                     self.__calculate_sample_representative(x, y, z, t)
                     self.__calculate_prediction_error(x, y, z, t)
+                    self.__calculate_mapped_quantizer_index(x, y, z, t)
+
 
     def save_data(self):
         np.savetxt(self.output_folder + "/" + "00-local_sum.csv", self.local_sum.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
@@ -479,6 +517,4 @@ class CCSDS123():
         np.savetxt(self.output_folder + "/" + "13-double_resolution_prediction_error.csv", self.double_resolution_prediction_error.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
         np.savetxt(self.output_folder + "/" + "14-mapped_quantizer_index.csv", self.mapped_quantizer_index.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
         np.savetxt(self.output_folder + "/" + "15-spectral_bands_used.csv", self.spectral_bands_used, delimiter=",", fmt='%d')
-
-
-
+    
