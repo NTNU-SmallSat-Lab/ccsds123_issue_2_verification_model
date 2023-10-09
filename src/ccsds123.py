@@ -15,10 +15,10 @@ def sign(x):
         return -1
     return 0
 
-# def sign_positive(x):
-#     if x >= 0:
-#         return 1
-#     return -1
+def sign_positive(x):
+    if x >= 0:
+        return 1
+    return -1
 
 # Unsure what the proper name of this operation is
 def modulo_star(x, R):
@@ -307,20 +307,17 @@ class CCSDS123():
         if prev_x < 0:
             prev_y -= 1
             prev_x = self.header.x_size - 1
+        
+        assert t - 1 == prev_x + prev_y * self.header.x_size
 
         # TODO: Add weight exponent offset
         weight_exponent_offset = 0
 
-        double_resolution_prediction_error_sign_positive = \
-            np.sign(self.double_resolution_prediction_error[prev_y,prev_x,z]) + \
-            (self.double_resolution_prediction_error[prev_y,prev_x,z] == 0).astype(int)
-        
-        # self.spectral_bands_used_mask[z] * \
         self.weight_vector[y,x,z] = \
-            (self.weight_vector[prev_y,prev_x,z] + \
-            1/2 * (double_resolution_prediction_error_sign_positive * \
+            (self.weight_vector[prev_y,prev_x,z] + (1/2 * \
+            (sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z]) * \
             2**(-(self.weight_update_scaling_exponent[t - 1] + weight_exponent_offset)) * \
-            self.local_difference_vector[prev_y,prev_x,z] + 1) \
+            self.local_difference_vector[prev_y,prev_x,z] + 1)).astype(int) \
             ).clip(self.weight_min, self.weight_max)
         
 
@@ -436,6 +433,12 @@ class CCSDS123():
             
         self.sample_representative[y, x, z] = \
             int(self.double_resolution_sample_representative[y, x, z] / 2)
+    
+
+    def __calculate_prediction_error(self, x, y, z, t):
+        self.double_resolution_prediction_error[y, x, z] = \
+            2 * self.clipped_quantizer_bin_center[y, x, z] - \
+            self.double_resolution_predicted_sample_value[y, x, z]
 
 
     def predictor(self):
@@ -457,6 +460,7 @@ class CCSDS123():
                     self.__calculate_maximum_error(x, y, z, t)
                     self.__calculate_quantization(x, y, z, t)
                     self.__calculate_sample_representative(x, y, z, t)
+                    self.__calculate_prediction_error(x, y, z, t)
 
     def save_data(self):
         np.savetxt(self.output_folder + "/" + "00-local_sum.csv", self.local_sum.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
