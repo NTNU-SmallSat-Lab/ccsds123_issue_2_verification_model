@@ -400,6 +400,20 @@ class CCSDS123():
         self.predicted_sample_value[y,x,z] = \
             self.double_resolution_predicted_sample_value[y,x,z] / 2
     
+    
+    def __calculate_quantization(self, x, y, z, t):
+        self.prediction_residual[y,x,z] = \
+            self.image_sample[y,x,z] - self.predicted_sample_value[y,x,z]
+
+        if t == 0:
+            self.quantizer_index[y,x,z] = self.prediction_residual[y,x,z]
+            return
+        
+        self.quantizer_index[y,x,z] = \
+            sign(self.prediction_residual[y,x,z]) * \
+            int((abs(self.prediction_residual[y,x,z]) + \
+            self.maximum_error[y,x,z]) / \
+            (2 * self.maximum_error[y,x,z] + 1))
 
 
     def predictor(self):
@@ -420,6 +434,7 @@ class CCSDS123():
                     self.__calculate_prediction(x, y, z, t)
                     self.__calculate_maximum_error(x, y, z, t)
                     self.__calculate_sample_representative(x, y, z, t)
+                    self.__calculate_quantization(x, y, z, t)
 
     def save_data(self):
         np.savetxt(self.output_folder + "/" + "00-local_sum.csv", self.local_sum.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
