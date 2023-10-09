@@ -2,7 +2,7 @@ import numpy as np
 import re
 
 image_name = 'Landsat_mountain-u16be-6x1024x1024.raw'
-new_x_size = 100
+new_x_size = 200
 new_y_size = 100
 new_z_size = 6
 

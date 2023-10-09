@@ -80,6 +80,7 @@ class CCSDS123():
     sample_representative_part_3 = None # psi * 2^(Omega - Theta)
     sample_representative_part_4 = None # phi * 2^(Omega + 1)
     sample_representative_part_5 = None # 2^(Omega + Theta + 1)
+    spectral_bands_used = None # Symbol: P^*
 
 
     def __init_predictor_constants(self):
@@ -88,7 +89,10 @@ class CCSDS123():
         self.sample_representative_part_3 = self.header.fixed_offset_value * 2**(self.header.weight_component_resolution - self.header.sample_representative_resolution)
         self.sample_representative_part_4 = self.header.fixed_damping_value * 2**(self.header.weight_component_resolution + 1)
         self.sample_representative_part_5 = 2**(self.header.weight_component_resolution + self.header.sample_representative_resolution + 1)
-        
+
+        self.spectral_bands_used = np.empty((self.header.z_size), dtype=np.int32)
+        for z in range(self.header.z_size):
+            self.spectral_bands_used[z] = min(z, self.header.prediction_bands_num)
 
     # Predictor variables
     local_sum = None # Symbol: sigma
@@ -109,18 +113,18 @@ class CCSDS123():
     
     def __init_predictor_arrays(self):
         image_shape = self.image_sample.shape
-        self.local_sum = np.empty(image_shape, dtype=np.int32)
-
         num_local_difference_values = self.header.prediction_bands_num
         if self.header.prediction_mode == hd.PredictionMode.FULL:
             num_local_difference_values += 3
-        local_difference_vector_shape = (num_local_difference_values,) + image_shape 
+        local_difference_vector_shape = image_shape + (num_local_difference_values,) 
+
+        self.local_sum = np.empty(image_shape, dtype=np.int32)
         self.local_difference_vector = np.empty(local_difference_vector_shape, dtype=np.int32)
         self.weight_vector = np.empty(local_difference_vector_shape, dtype=np.int32)
         self.predicted_central_local_difference = np.empty(image_shape, dtype=np.int32)
         self.high_resolution_predicted_sample_value = np.empty(image_shape, dtype=np.int32)
         self.double_resolution_predicted_sample_value = np.empty(image_shape, dtype=np.int32)
-        self.predicted_sample_value = np.empty(image_shape, dtype=np.int32)
+        self.predicted_sample_value = np.zeros(image_shape, dtype=np.int32) # Change back to empty
         self.prediction_residual = np.empty(image_shape, dtype=np.int32)
         self.maximum_error = np.empty(image_shape, dtype=np.int32)
         self.quantizer_index = np.empty(image_shape, dtype=np.int32)
@@ -144,6 +148,7 @@ class CCSDS123():
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
             self.maximum_error[y, x, z] = int(self.header.relative_error_limit_value * self.predicted_sample_value[y, x, z] / self.dynamic_range)
         else: # self.header.quantizer_fidelity_control_method = hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
+            # print(f"x={x}, y={y}, z={z}, t={t}, predicted sample value={self.predicted_sample_value[y, x, z]}")
             self.maximum_error[y, x, z] = min(self.header.absolute_error_limit_value, int(self.header.relative_error_limit_value * self.predicted_sample_value[y, x, z] / self.dynamic_range))
         
 
@@ -174,6 +179,9 @@ class CCSDS123():
 
     
     def __calculate_local_sum(self, x, y, z, t):
+        if t == 0:
+            return
+        
         if self.header.local_sum_type == hd.LocalSumType.WIDE_NEIGHBOR_ORIENTED:
             if y > 0 and 0 < x and x < self.header.x_size - 1:
                 self.local_sum[y, x, z] = \
@@ -233,6 +241,36 @@ class CCSDS123():
             elif y == 0 and x > 0 and z == 0:
                 self.local_sum[y, x, z] = \
                     self.middle_sample_value * 4
+        
+
+    def __calculate_local_difference_vector(self, x, y, z, t):
+        if t == 0:
+            return
+
+        index = 0
+
+        if self.header.prediction_mode == hd.PredictionMode.FULL:
+            if x > 0 and y > 0:
+                self.local_difference_vector[y,x,z,0] = 4 * self.sample_representative[y - 1, x    , z] - self.local_sum[y, x, z]
+                self.local_difference_vector[y,x,z,1] = 4 * self.sample_representative[y    , x - 1, z] - self.local_sum[y, x, z]
+                self.local_difference_vector[y,x,z,2] = 4 * self.sample_representative[y - 1, x - 1, z] - self.local_sum[y, x, z]
+            elif x == 0 and y > 0:
+                self.local_difference_vector[y,x,z,0] = 4 * self.sample_representative[y - 1, x    , z] - self.local_sum[y, x, z]
+                self.local_difference_vector[y,x,z,1] = 4 * self.sample_representative[y - 1, x    , z] - self.local_sum[y, x, z]
+                self.local_difference_vector[y,x,z,2] = 4 * self.sample_representative[y - 1, x    , z] - self.local_sum[y, x, z]
+            else: # y = 0
+                self.local_difference_vector[y,x,z,0] = 0
+                self.local_difference_vector[y,x,z,1] = 0
+                self.local_difference_vector[y,x,z,2] = 0
+            index += 3
+        
+        if z > 0:
+            self.local_difference_vector[y,x,z,index] = 4 * self.sample_representative[y, x, z - 1] - self.local_sum[y, x, z - 1]
+            for i in range(1, self.spectral_bands_used[z]):
+                self.local_difference_vector[y,x,z,index + i] = self.local_difference_vector[y, x, z - 1, index + i - 1]
+        
+        # print(f"local_difference_vector[{y},{x},{z}] = {self.local_difference_vector[y,x,z]}")
+                
 
     def predictor(self):
         """Calculate the outputs of the predictor for the loaded image"""
@@ -241,7 +279,7 @@ class CCSDS123():
         self.__init_predictor_arrays()
 
         for y in range(self.header.y_size):
-            print(y)
+            print(f"y={y}")
             for x in range(self.header.x_size):
                 t = x + y * self.header.x_size
                 for z in range(self.header.z_size):
@@ -249,7 +287,9 @@ class CCSDS123():
                     self.__calculate_maximum_error(x, y, z, t)
                     self.__calculate_sample_representative(x, y, z, t)
                     self.__calculate_local_sum(x, y, z, t)
-
+                    self.__calculate_local_difference_vector(x, y, z, t)
+                    # if t>1:
+                    #     exit()
 
 
 

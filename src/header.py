@@ -109,7 +109,7 @@ class Header:
     # Predicator metadata
     #####################
     sample_representative_flag = SampleRepresentativeFlag.INCLUDED
-    prediction_bands_num = 3 # P. 0<=P<=15
+    prediction_bands_num = 4 # P. 0<=P<=15
     prediction_mode = PredictionMode.FULL
     weight_exponent_offset_flag = WeightExponentOffsetFlag.NOT_ALL_ZERO
     local_sum_type = LocalSumType.WIDE_NEIGHBOR_ORIENTED

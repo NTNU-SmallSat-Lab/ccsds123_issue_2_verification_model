@@ -5,8 +5,9 @@ import numpy as np
 display_layer = 1 # 1-indexed
 # image_name = 'aviris_hawaii_f011020t01p03r05_sc01.uncal-u16be-224x512x614.raw'
 image_name = 'aviris_maine_f030828t01p00r05_sc10.uncal-u16be-224x512x680.raw'
-image_name = 'Landsat_mountain-u16be-6x100x100.raw'
 image_name = 'Landsat_mountain-u16be-6x1024x1024.raw'
+image_name = 'Landsat_mountain-u16be-6x100x100.raw'
+image_name = 'Landsat_mountain-u16be-6x100x200.raw'
 
 
 # I am a regex master
