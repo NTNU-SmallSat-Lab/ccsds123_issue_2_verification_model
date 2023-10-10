@@ -32,13 +32,6 @@ class Predictor():
 
     register_size = None # Symbol: R
 
-    intermediate_constant_1 = None # 4 * (2^Theta - phi)
-    intermediate_constant_2 = None # 2^Omega
-    intermediate_constant_3 = None # psi * 2^(Omega - Theta)
-    intermediate_constant_4 = None # phi * 2^(Omega + 1)
-    intermediate_constant_5 = None # 2^(Omega + Theta + 1)
-
-
     def __init_predictor_constants(self):
         self.local_difference_values_num = self.header.prediction_bands_num
         if self.header.prediction_mode == hd.PredictionMode.FULL:
@@ -47,15 +40,6 @@ class Predictor():
         self.spectral_bands_used = np.empty((self.header.z_size), dtype=np.int64)
         for z in range(self.header.z_size):
             self.spectral_bands_used[z] = min(z, self.header.prediction_bands_num)
-
-        # self.spectral_bands_used_mask = np.empty((self.header.z_size, self.local_difference_values_num), dtype=np.int64)
-        # for z in range(self.header.z_size):
-        #     offset = 0
-        #     if self.header.prediction_mode == hd.PredictionMode.FULL:
-        #         self.spectral_bands_used_mask[z, 0:3] = [1, 1, 1]
-        #         offset = 3
-        #     for i in range(self.header.prediction_bands_num):
-        #         self.spectral_bands_used_mask[z, offset + i] = int(i < self.spectral_bands_used[z])
 
         self.weight_component_resolution = self.header.weight_component_resolution + 4
         self.weight_update_change_interval = 2**self.header.weight_update_change_interval
@@ -73,12 +57,6 @@ class Predictor():
         self.register_size = self.header.register_size
         if self.register_size == 0:
             self.register_size = 64
-
-        self.intermediate_constant_1 = 4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value)
-        self.intermediate_constant_2 = 2**self.weight_component_resolution
-        self.intermediate_constant_3 = self.header.fixed_offset_value * 2**(self.weight_component_resolution - self.header.sample_representative_resolution)
-        self.intermediate_constant_4 = self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1)
-        self.intermediate_constant_5 = 2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
 
 
     # Predictor variables
@@ -217,7 +195,6 @@ class Predictor():
 
     def __init_weights(self, z):
         if self.header.weight_init_method == hd.WeightInitMethod.DEFAULT:
-            # self.weight_vector[0,1,z] = self.spectral_bands_used_mask[z]
             offset = 0
             if self.header.prediction_mode == hd.PredictionMode.FULL:
                 self.weight_vector[0,1,z,0] = 0
@@ -373,16 +350,6 @@ class Predictor():
                 self.high_resolution_predicted_sample_value[y, x, z] - \
                 self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1) / \
                 2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
-            
-            # self.double_resolution_sample_representative[y, x, z] = \
-            #     int((self.intermediate_constant_1 * \
-            #     (self.clipped_quantizer_bin_center[y, x, z] * self.intermediate_constant_2 - \
-            #     sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * \
-            #     self.intermediate_constant_3) + \
-            #     self.header.fixed_damping_value * \
-            #     self.high_resolution_predicted_sample_value[y, x, z] \
-            #     - self.intermediate_constant_4) \
-            #     / self.intermediate_constant_5)
 
             self.sample_representative[y, x, z] = \
                 (self.double_resolution_sample_representative[y, x, z] + 1) / 2
