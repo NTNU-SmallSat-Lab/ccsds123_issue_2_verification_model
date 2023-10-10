@@ -97,7 +97,7 @@ class Header:
     z_size = 0 # N_z. 1<=N_z<=2^16-1
     sample_type = SampleType.UNSIGNED_INTEGER
     large_d_flag = LargeDFlag.SMALL_D
-    dynamic_range = 0 # D. Encode as D%16. 1<=D<=32
+    dynamic_range = 8 # D. Encode as D%16. 1<=D<=32
     sample_encoding_order = SampleEncodingOrder.BI
     sub_frame_interleaving_depth = z_size # M. Encode as M%16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=16
