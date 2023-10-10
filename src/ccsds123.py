@@ -108,11 +108,11 @@ class CCSDS123():
         if self.header.prediction_mode == hd.PredictionMode.FULL:
             self.local_difference_values_num += 3
 
-        self.spectral_bands_used = np.empty((self.header.z_size), dtype=np.int32)
+        self.spectral_bands_used = np.empty((self.header.z_size), dtype=np.int64)
         for z in range(self.header.z_size):
             self.spectral_bands_used[z] = min(z, self.header.prediction_bands_num)
 
-        # self.spectral_bands_used_mask = np.empty((self.header.z_size, self.local_difference_values_num), dtype=np.int32)
+        # self.spectral_bands_used_mask = np.empty((self.header.z_size, self.local_difference_values_num), dtype=np.int64)
         # for z in range(self.header.z_size):
         #     offset = 0
         #     if self.header.prediction_mode == hd.PredictionMode.FULL:
@@ -125,7 +125,7 @@ class CCSDS123():
         self.weight_update_change_interval = 2**self.header.weight_update_change_interval
         self.weight_update_initial_parameter = self.header.weight_update_initial_parameter - 6
         self.weight_update_final_parameter = self.header.weight_update_final_parameter - 6
-        self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int32)
+        self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int64)
         for t in range (self.header.y_size * self.header.x_size):
             self.weight_update_scaling_exponent[t] = clip( \
                 self.weight_update_initial_parameter + int((t - self.header.x_size) / self.weight_update_change_interval) \
@@ -168,21 +168,21 @@ class CCSDS123():
 
         value = -1
 
-        self.local_sum = np.full(image_shape, value, dtype=np.int32)
-        self.local_difference_vector = np.zeros(local_difference_vector_shape, dtype=np.int32)
-        self.weight_vector = np.zeros(local_difference_vector_shape, dtype=np.int32)
-        self.predicted_central_local_difference = np.full(image_shape, value, dtype=np.int32)
+        self.local_sum = np.full(image_shape, value, dtype=np.int64)
+        self.local_difference_vector = np.zeros(local_difference_vector_shape, dtype=np.int64)
+        self.weight_vector = np.zeros(local_difference_vector_shape, dtype=np.int64)
+        self.predicted_central_local_difference = np.full(image_shape, value, dtype=np.int64)
         self.high_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int64)
-        self.double_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
-        self.predicted_sample_value = np.full(image_shape, value, dtype=np.int32)
-        self.prediction_residual = np.full(image_shape, value, dtype=np.int32)
-        self.maximum_error = np.full(image_shape, value, dtype=np.int32)
-        self.quantizer_index = np.full(image_shape, value, dtype=np.int32)
-        self.clipped_quantizer_bin_center = np.full(image_shape, value, dtype=np.int32)
-        self.double_resolution_sample_representative = np.full(image_shape, value, dtype=np.int32)
-        self.sample_representative = np.full(image_shape, value, dtype=np.int32)
-        self.double_resolution_prediction_error = np.full(image_shape, value, dtype=np.int32)
-        self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int32)
+        self.double_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int64)
+        self.predicted_sample_value = np.full(image_shape, value, dtype=np.int64)
+        self.prediction_residual = np.full(image_shape, value, dtype=np.int64)
+        self.maximum_error = np.full(image_shape, value, dtype=np.int64)
+        self.quantizer_index = np.full(image_shape, value, dtype=np.int64)
+        self.clipped_quantizer_bin_center = np.full(image_shape, value, dtype=np.int64)
+        self.double_resolution_sample_representative = np.full(image_shape, value, dtype=np.int64)
+        self.sample_representative = np.full(image_shape, value, dtype=np.int64)
+        self.double_resolution_prediction_error = np.full(image_shape, value, dtype=np.int64)
+        self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int64)
 
     
     def __calculate_local_sum(self, x, y, z, t):
@@ -311,13 +311,13 @@ class CCSDS123():
         assert t - 1 == prev_x + prev_y * self.header.x_size
 
         # TODO: Add weight exponent offset
-        weight_exponent_offset = 0
+        weight_exponent_offset = 0.0
 
         self.weight_vector[y,x,z] = \
-            (self.weight_vector[prev_y,prev_x,z] + (1/2 * \
-            (sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z]) * \
-            2**(-(self.weight_update_scaling_exponent[t - 1] + weight_exponent_offset)) * \
-            self.local_difference_vector[prev_y,prev_x,z] + 1)).astype(int) \
+            (self.weight_vector[prev_y,prev_x,z] + np.floor( \
+            (float(sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z])) * \
+            2.0**(-(self.weight_update_scaling_exponent[t - 1].astype(np.float64) + weight_exponent_offset)) * \
+            self.local_difference_vector[prev_y,prev_x,z].astype(np.float64) + 1.0)/2.0).astype(np.int64) \
             ).clip(self.weight_min, self.weight_max)
         
 
@@ -533,4 +533,4 @@ class CCSDS123():
         np.savetxt(self.output_folder + "/" + "14-mapped_quantizer_index.csv", self.mapped_quantizer_index.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
         np.savetxt(self.output_folder + "/" + "15-spectral_bands_used.csv", self.spectral_bands_used, delimiter=",", fmt='%d')
         np.savetxt(self.output_folder + "/" + "16-image_sample.csv", self.image_sample.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
-    
+        np.savetxt(self.output_folder + "/" + "17-weight_update_scaling_exponent.csv", self.weight_update_scaling_exponent.reshape((self.header.y_size * self.header.x_size, 1)), delimiter=",", fmt='%d')
