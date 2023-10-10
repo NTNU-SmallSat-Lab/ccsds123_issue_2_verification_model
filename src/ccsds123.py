@@ -160,6 +160,7 @@ class CCSDS123():
     double_resolution_sample_representative = None # Symbol: s''-hat
     sample_representative = None # Symbol: s''
     double_resolution_prediction_error = None # Symbol: e
+    scaled_prediction_endpoint_difference = None # Symbol: theta
     mapped_quantizer_index = None # Symbol: delta
     
     def __init_predictor_arrays(self):
@@ -182,6 +183,7 @@ class CCSDS123():
         self.double_resolution_sample_representative = np.full(image_shape, value, dtype=np.int64)
         self.sample_representative = np.full(image_shape, value, dtype=np.int64)
         self.double_resolution_prediction_error = np.full(image_shape, value, dtype=np.int64)
+        self.scaled_prediction_endpoint_difference = np.full(image_shape, value, dtype=np.int64)
         self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int64)
 
     
@@ -457,10 +459,8 @@ class CCSDS123():
         
     
     def __calculate_mapped_quantizer_index(self, x, y, z, t):
-        scaled_prediction_endpoint_difference = 0
-
         if t == 0:
-            scaled_prediction_endpoint_difference = \
+            self.scaled_prediction_endpoint_difference[y,x,z] = \
                 min( \
                     self.predicted_sample_value[0, 0, z] - \
                     self.lower_sample_limit, \
@@ -468,29 +468,30 @@ class CCSDS123():
                     self.predicted_sample_value[0, 0, z] \
                 )
         else:
-            scaled_prediction_endpoint_difference = \
+            self.scaled_prediction_endpoint_difference[y,x,z] = \
                 min( \
-                    self.predicted_sample_value[y, x, z] - \
+                    (self.predicted_sample_value[y, x, z] - \
                     self.lower_sample_limit + \
-                    self.maximum_error[y,x,z] / \
+                    self.maximum_error[y,x,z]) / \
                     (2 * self.maximum_error[y,x,z] + 1), \
-                    self.upper_sample_limit - \
+                    (self.upper_sample_limit - \
                     self.predicted_sample_value[y, x, z] + \
-                    self.maximum_error[y,x,z] / \
+                    self.maximum_error[y,x,z]) / \
                     (2 * self.maximum_error[y,x,z] + 1) \
                 )
         
-        if abs(self.quantizer_index[y,x,z]) > scaled_prediction_endpoint_difference:
+        term = (-1)**(self.double_resolution_predicted_sample_value[y, x, z] % 2) * self.quantizer_index[y,x,z]
+
+        if abs(self.quantizer_index[y,x,z]) > self.scaled_prediction_endpoint_difference[y,x,z]:
             self.mapped_quantizer_index[y, x, z] = \
-                abs(self.quantizer_index[y,x,z]) + scaled_prediction_endpoint_difference
-        elif 0 <= (-1)**(self.double_resolution_predicted_sample_value[y, x, z] % 2) \
-            and (-1)**(self.double_resolution_predicted_sample_value[y, x, z] % 2) <= scaled_prediction_endpoint_difference:
+                abs(self.quantizer_index[y,x,z]) + self.scaled_prediction_endpoint_difference[y,x,z]
+        elif 0 <= term and term <= self.scaled_prediction_endpoint_difference[y,x,z]:
             self.mapped_quantizer_index[y, x, z] = \
                 2 * abs(self.quantizer_index[y,x,z])
         else:
             self.mapped_quantizer_index[y, x, z] = \
                 2 * abs(self.quantizer_index[y,x,z]) - 1
-      
+
 
     def predictor(self):
         """Calculate the outputs of the predictor for the loaded image"""
@@ -534,3 +535,4 @@ class CCSDS123():
         np.savetxt(self.output_folder + "/" + "15-spectral_bands_used.csv", self.spectral_bands_used, delimiter=",", fmt='%d')
         np.savetxt(self.output_folder + "/" + "16-image_sample.csv", self.image_sample.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
         np.savetxt(self.output_folder + "/" + "17-weight_update_scaling_exponent.csv", self.weight_update_scaling_exponent.reshape((self.header.y_size * self.header.x_size, 1)), delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "18-scaled_prediction_endpoint_difference.csv", self.scaled_prediction_endpoint_difference.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
