@@ -176,8 +176,11 @@ class Header:
         self.z_size = int(re.findall('-(.+)x', re.findall('-(.+)x', image_name)[0])[0])
         format = re.findall('-(.*)-', image_name)[0]
         self.sample_type = SampleType.UNSIGNED_INTEGER if format[0] == 'u' else SampleType.SIGNED_INTEGER
-        self.large_d_flag = LargeDFlag.SMALL_D if int(format[1:3]) <= 16 else LargeDFlag.LARGE_D
-        self.dynamic_range = int(format[1:3]) % 16
+
+        # Pick dynamic range manually, since the range in the file name is generally way to wide
+        # self.large_d_flag = LargeDFlag.SMALL_D if int(format[1:3]) <= 16 else LargeDFlag.LARGE_D
+        # self.dynamic_range = int(format[1:3]) % 16
+
         if format[3:5] != 'be':
             exit("Only big endian is supported")
     
