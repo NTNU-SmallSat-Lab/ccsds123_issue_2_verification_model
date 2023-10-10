@@ -327,7 +327,8 @@ class CCSDS123():
         if self.header.prediction_mode == hd.PredictionMode.REDUCED and z == 0:
             self.predicted_central_local_difference[y,x,z] = 0
             return
-        self.predicted_central_local_difference[y,x,z] = np.dot(self.weight_vector[y,x,z], self.local_difference_vector[y,x,z])
+        self.predicted_central_local_difference[y,x,z] = \
+            np.dot(self.weight_vector[y,x,z], self.local_difference_vector[y,x,z])
 
 
     def __calculate_prediction(self, x, y, z, t):
@@ -418,22 +419,36 @@ class CCSDS123():
         
         if self.header.fixed_damping_value == 0 and self.header.fixed_offset_value == 0: # Lossless
             self.double_resolution_sample_representative[y, x, z] = \
-                self.clipped_quantizer_bin_center[y, x, z]
+                2 * self.clipped_quantizer_bin_center[y, x, z]
+            
+            self.sample_representative[y, x, z] = self.image_sample[y, x, z]
+
         else:
             # Assumes band_varying_damping_flag = BAND_INDEPENDENT and band_varying_offset_flag = BAND_INDEPENDENT
             self.double_resolution_sample_representative[y, x, z] = \
-                int((self.intermediate_constant_1 * \
-                (self.clipped_quantizer_bin_center[y, x, z] * self.intermediate_constant_2 - \
+                4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value) * \
+                (self.clipped_quantizer_bin_center[y, x, z] * 2**self.weight_component_resolution - \
                 sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * \
-                self.intermediate_constant_3) + \
+                self.header.fixed_offset_value * \
+                2**(self.weight_component_resolution - self.header.sample_representative_resolution)) + \
                 self.header.fixed_damping_value * \
-                self.high_resolution_predicted_sample_value[y, x, z] \
-                - self.intermediate_constant_4) \
-                / self.intermediate_constant_5)
+                self.high_resolution_predicted_sample_value[y, x, z] - \
+                self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1) / \
+                2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
             
-        self.sample_representative[y, x, z] = \
-            int(self.double_resolution_sample_representative[y, x, z] / 2)
-    
+            # self.double_resolution_sample_representative[y, x, z] = \
+            #     int((self.intermediate_constant_1 * \
+            #     (self.clipped_quantizer_bin_center[y, x, z] * self.intermediate_constant_2 - \
+            #     sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * \
+            #     self.intermediate_constant_3) + \
+            #     self.header.fixed_damping_value * \
+            #     self.high_resolution_predicted_sample_value[y, x, z] \
+            #     - self.intermediate_constant_4) \
+            #     / self.intermediate_constant_5)
+
+            self.sample_representative[y, x, z] = \
+                (self.double_resolution_sample_representative[y, x, z] + 1) / 2
+            
 
     def __calculate_prediction_error(self, x, y, z, t):
         self.double_resolution_prediction_error[y, x, z] = \
@@ -517,4 +532,5 @@ class CCSDS123():
         np.savetxt(self.output_folder + "/" + "13-double_resolution_prediction_error.csv", self.double_resolution_prediction_error.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
         np.savetxt(self.output_folder + "/" + "14-mapped_quantizer_index.csv", self.mapped_quantizer_index.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
         np.savetxt(self.output_folder + "/" + "15-spectral_bands_used.csv", self.spectral_bands_used, delimiter=",", fmt='%d')
+        np.savetxt(self.output_folder + "/" + "16-image_sample.csv", self.image_sample.reshape((self.header.y_size * self.header.x_size, self.header.z_size)), delimiter=",", fmt='%d')
     
