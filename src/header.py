@@ -111,13 +111,13 @@ class Header:
     sample_representative_flag = SampleRepresentativeFlag.INCLUDED
     prediction_bands_num = 4 # P. 0<=P<=15
     prediction_mode = PredictionMode.FULL
-    weight_exponent_offset_flag = WeightExponentOffsetFlag.NOT_ALL_ZERO
+    weight_exponent_offset_flag = WeightExponentOffsetFlag.ALL_ZERO
     local_sum_type = LocalSumType.WIDE_NEIGHBOR_ORIENTED
     register_size = 32 # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
-    weight_component_resolution = 13 # Omega. Encode as Omega-4. 4<=Omega<=19
+    weight_component_resolution = 2 # Omega. Encode as Omega-4. 4<=Omega<=19
     weight_update_change_interval = 6 # t_inc. Encode as log2(t_inc)-4. 2^4<=t_inc<=2^11
-    weight_update_initial_parameter = -1 # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
-    weight_update_final_parameter    = 3 # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
+    weight_update_initial_parameter = 6 # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
+    weight_update_final_parameter = 10 # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
     weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag.NOT_INCLUDED
     weight_init_method = WeightInitMethod.DEFAULT
     weight_init_table_flag = WeightInitTableFlag.NOT_INCLUDED
@@ -138,16 +138,16 @@ class Header:
     # Relative error limit
     relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
     relative_error_limit_bit_depth = 15 # D_R. Encode as D_R%16. 1<=D_R<=min{D−1,16}
-    relative_error_limit_value = 4 # R*. 0<=R*<=2^D_R-1. TODO: Support BAND_DEPENDENT values
+    relative_error_limit_value = 8 # R*. 0<=R*<=2^D_R-1. TODO: Support BAND_DEPENDENT values
 
     # Sample Representative
     sample_representative_resolution = 4 # Theta. 0<=Theta<=4
     band_varying_damping_flag = BandVaryingDampingFlag.BAND_INDEPENDENT
     damping_table_flag = DampingTableFlag.NOT_INCLUDED
-    fixed_damping_value = 8 # phi. Encode as 0 if damping_table_flag=INCLUDED, otherwise as phi. 0<=phi<=2^Theta-1
+    fixed_damping_value = 0 # phi. Encode as 0 if damping_table_flag=INCLUDED, otherwise as phi. 0<=phi<=2^Theta-1
     band_varying_offset_flag = BandVaryingOffsetFlag.BAND_INDEPENDENT
     damping_offset_table_flag = OffsetTableFlag.NOT_INCLUDED
-    fixed_offset_value = 8 # psi. Encode as 0 if damping_offset_table_flag=INCLUDED, otherwise as psi. 0<=psi<=2^Theta-1. psi=0 if lossless
+    fixed_offset_value = 0 # psi. Encode as 0 if damping_offset_table_flag=INCLUDED, otherwise as psi. 0<=psi<=2^Theta-1. psi=0 if lossless
     # TODO: Support damping table subblock
     # TODO: Support offset table subblock
 
