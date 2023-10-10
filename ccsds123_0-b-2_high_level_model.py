@@ -7,8 +7,8 @@ import psutil
 
 image_name = 'aviris_maine_f030828t01p00r05_sc10.uncal-u16be-224x512x680.raw'
 image_name = 'Landsat_mountain-u16be-6x100x100.raw'
-image_name = 'Landsat_mountain-u16be-6x1024x1024.raw'
 image_name = 'Landsat_mountain-u16be-6x100x200.raw'
+image_name = 'Landsat_mountain-u16be-6x1024x1024.raw'
 image_name = 'Landsat_mountain-u16be-6x50x100.raw'
 
 # Function to get memory usage in MB
@@ -21,17 +21,7 @@ def main():
     start_time = time.time()
 
     image = ccsds123.CCSDS123(image_name)
-    image.load_raw_image()
-    print(f"{time.time() - start_time:.3f} seconds. Done with loading")
-
-    # print(image.image_sample.shape)
-    # print(image.image_sample)
-
-    image.predictor()
-    print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
-
-    image.save_data()
-    print(f"{time.time() - start_time:.3f} seconds. Done with saving")
+    image.compress_image()
 
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
