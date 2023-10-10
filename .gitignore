@@ -6,3 +6,5 @@
 src/__pycache__/
 
 *.csv
+
+.VSCodeCounter/

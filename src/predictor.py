@@ -416,9 +416,13 @@ class Predictor():
                     self.__calculate_sample_representative(x, y, z, t)
                     self.__calculate_prediction_error(x, y, z, t)
                     self.__calculate_mapped_quantizer_index(x, y, z, t)
-    
+
+    def get_predictor_output(self):
+        """Return the outputs of the predictor for the loaded image. The mapped quantizer index."""
+        return self.mapped_quantizer_index    
 
     def save_data(self, output_folder):
+        """Save the predictor data to csv files"""
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
         csv_vector_shape = (self.header.y_size * self.header.x_size, self.header.z_size * self.local_difference_values_num)
         np.savetxt(output_folder + "/predictor-00-local_sum.csv", self.local_sum.reshape(csv_image_shape), delimiter=",", fmt='%d')

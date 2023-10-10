@@ -92,14 +92,14 @@ class Header:
     # Image metadata
     ################
     user_defined_data = 0
-    x_size = 0 # N_x. 1<=N_x<=2^16-1
-    y_size = 0 # N_y. 1<=N_y<=2^16-1
-    z_size = 0 # N_z. 1<=N_z<=2^16-1
+    x_size = 0 # N_x. Encode as N_x%2^16. 1<=N_x<=2^16-1
+    y_size = 0 # N_y. Encode as N_y%2^16. 1<=N_y<=2^16-1
+    z_size = 0 # N_z. Encode as N_z%2^16. 1<=N_z<=2^16-1
     sample_type = SampleType.UNSIGNED_INTEGER
     large_d_flag = LargeDFlag.SMALL_D
     dynamic_range = 8 # D. Encode as D%16. 1<=D<=32
     sample_encoding_order = SampleEncodingOrder.BI
-    sub_frame_interleaving_depth = z_size # M. Encode as M%16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
+    sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=16
     entropy_coder_type = EntropyCoderType.HYBRID
     quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
@@ -139,6 +139,7 @@ class Header:
     relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
     relative_error_limit_bit_depth = 15 # D_R. Encode as D_R%16. 1<=D_R<=min{D−1,16}
     relative_error_limit_value = 8 # R*. 0<=R*<=2^D_R-1. TODO: Support BAND_DEPENDENT values
+    # TODO: Support periodic error updating
 
     # Sample Representative
     sample_representative_resolution = 4 # Theta. 0<=Theta<=4
@@ -183,4 +184,12 @@ class Header:
 
         if format[3:5] != 'be':
             exit("Only big endian is supported")
+    
+    def set_encoding_order_bip(self):
+        self.sample_encoding_order = SampleEncodingOrder.BI
+        self.sub_frame_interleaving_depth = self.z_size
+
+    def set_encoding_order_bil(self):
+        self.sample_encoding_order = SampleEncodingOrder.BI
+        self.sub_frame_interleaving_depth = 1
     

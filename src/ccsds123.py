@@ -1,6 +1,7 @@
 from . import header as hd
 from . import constants as const
 from . import predictor as pred
+from . import sa_encoder as sa_enc
 import numpy as np
 import time
 
@@ -37,6 +38,8 @@ class CCSDS123():
         start_time = time.time()
 
         self.header = hd.Header(self.image_name)
+        self.header.set_encoding_order_bip()
+        
         self.__load_raw_image()
         print(f"{time.time() - start_time:.3f} seconds. Done with loading")
 
@@ -45,6 +48,12 @@ class CCSDS123():
         self.predictor = pred.Predictor(self.header, self.image_constants, self.image_sample)
         self.predictor.run_predictor()
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
+
+        self.encoder = sa_enc.SampleAdaptiveEncoder(self.header,
+                                                    self.image_constants,
+                                                    self.predictor.get_predictor_output())
+        self.encoder.run_encoder()
+        print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
 
         self.predictor.save_data(self.output_folder)
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")
