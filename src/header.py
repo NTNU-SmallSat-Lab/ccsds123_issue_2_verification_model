@@ -160,7 +160,7 @@ class Header:
     rescaling_counter_size = 5 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=γ<=11
     initial_count_exponent = 5 # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
     # Remaining sample-adaptive entropy coder
-    accumulator_init_constant = 4 # K. Encode as 0 if K is not used. 0<=K<=min(D-2,14)
+    accumulator_init_constant = 4 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
     accumulator_init_table_flag = AccumulatorInitTableFlag.NOT_INCLUDED
     # TODO: Support accumulator initialization table
 
@@ -236,7 +236,7 @@ class Header:
         assert (8 <= self.unary_length_limit and self.unary_length_limit < 32) or self.unary_length_limit == 0
         assert max(4, self.initial_count_exponent + 8 * int(self.initial_count_exponent == 0) - 1) <= self.rescaling_counter_size + 4 and self.rescaling_counter_size + 4 <= 11
         assert 0 <= self.initial_count_exponent and self.initial_count_exponent < 8
-        assert 0 <= self.accumulator_init_constant and self.accumulator_init_constant <= min(self.get_dynamic_range_bits() - 2, 14)
+        assert (0 <= self.accumulator_init_constant and self.accumulator_init_constant <= min(self.get_dynamic_range_bits() - 2, 14)) or (self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED and self.accumulator_init_constant == 15)
         assert self.accumulator_init_table_flag in AccumulatorInitTableFlag
     
     def set_encoding_order_bip(self):
