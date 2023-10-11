@@ -39,7 +39,7 @@ class CCSDS123():
 
         self.header = hd.Header(self.image_name)
         self.header.set_encoding_order_bip()
-        
+
         self.__load_raw_image()
         print(f"{time.time() - start_time:.3f} seconds. Done with loading")
 
@@ -56,6 +56,7 @@ class CCSDS123():
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
 
         self.predictor.save_data(self.output_folder)
+        self.encoder.save_data(self.output_folder)
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")
         
 
