@@ -17,12 +17,7 @@ class ImageConstants():
     middle_sample_value = None # Symbol: s_mid
 
     def __init_image_constants(self):
-        self.dynamic_range_bits = self.header.dynamic_range
-        if self.dynamic_range_bits == 0:
-            self.dynamic_range_bits = 16
-        if self.header.large_d_flag == hd.LargeDFlag.LARGE_D:
-            self.dynamic_range_bits += 16
-
+        self.dynamic_range_bits = self.header.get_dynamic_range_bits()
         self.dynamic_range = 2**self.dynamic_range_bits
 
         if self.header.sample_type == hd.SampleType.UNSIGNED_INTEGER:
