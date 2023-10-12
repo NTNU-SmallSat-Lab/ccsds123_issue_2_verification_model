@@ -49,9 +49,15 @@ class CCSDS123():
         self.predictor.run_predictor()
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
-        self.encoder = sa_enc.SampleAdaptiveEncoder(self.header,
-                                                    self.image_constants,
-                                                    self.predictor.get_predictor_output())
+        if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
+            self.encoder = sa_enc.SampleAdaptiveEncoder(self.header,
+                                                        self.image_constants,
+                                                        self.predictor.get_predictor_output())
+        elif self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
+            exit("Entropy coder type not implemented")
+        else:
+            exit("Entropy coder type not implemented")
+        
         self.encoder.run_encoder()
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
 
