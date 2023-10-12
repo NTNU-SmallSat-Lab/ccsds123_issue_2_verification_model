@@ -1,9 +1,10 @@
 import numpy as np
 import re
+from bitarray import bitarray
 
 image_name = 'Landsat_mountain-u16be-6x1024x1024.raw'
-new_x_size = 200
-new_y_size = 100
+new_x_size = 100
+new_y_size = 50
 new_z_size = 6
 
 
@@ -14,6 +15,8 @@ def main():
     x_size = int(re.findall('x(.*).raw', image_name)[0].split("x")[-1]) 
     y_size = int(re.findall('x(.+)x', image_name)[0])
     z_size = int(re.findall('-(.+)x', re.findall('-(.+)x', image_name)[0])[0])
+
+    bits = 16
 
     file = open(raw_image_folder + "/" + image_name, 'rb').read()
     first = file[0] # Set aside first byte
@@ -31,10 +34,23 @@ def main():
     # print(new_image.shape)
 
     new_image_name = raw_image_folder + "/" + image_name.split(f"-{z_size}x")[0] + f"-{new_z_size}x{new_y_size}x{new_x_size}.raw"
+
     # np.save(new_image_name, new_image)
-    with open(new_image_name, 'wb') as file:
-        file.write(bytes([0]))
-        file.write(new_image.tobytes())
+    # print(new_image[:10])
+    # print(new_image.tobytes()[:10])
+    # with open(new_image_name, 'wb') as file:
+    #     # file.write(bytes([0]))
+    #     file.write(new_image.tobytes())
+
+    bitstream = bitarray()
+    for sample in new_image:
+        bitstring = bin(sample)[2:]
+        bitstream += '0' * (bits - len(bitstring)) + bitstring
+
+    with open(new_image_name, "wb") as file:
+            bitstream.tofile(file)
+
+    print(f"Saved new image as {new_image_name}")
 
 if __name__ == "__main__":
     main()
