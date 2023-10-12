@@ -402,7 +402,7 @@ class Predictor():
         self.__init_predictor_arrays()
 
         for y in range(self.header.y_size):
-            print(f"y={y}")
+            print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
             for x in range(self.header.x_size):
                 t = x + y * self.header.x_size
                 for z in range(self.header.z_size):
@@ -416,6 +416,7 @@ class Predictor():
                     self.__calculate_sample_representative(x, y, z, t)
                     self.__calculate_prediction_error(x, y, z, t)
                     self.__calculate_mapped_quantizer_index(x, y, z, t)
+        print("")
 
     def get_predictor_output(self):
         """Return the outputs of the predictor for the loaded image. The mapped quantizer index."""

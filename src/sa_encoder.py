@@ -96,7 +96,6 @@ class SampleAdaptiveEncoder():
     def __find_code_length(self,x,y,z):
         if 2 * self.counter[y,x] > self.accumulator[y,x,z] + floor(self.counter[y,x] * 49 / 2**7):
             self.variable_length_code[y,x,z] = 0
-            print(f"x={x}, y={y}, z={z}, counter={self.counter[y,x]}, accumulator={self.accumulator[y,x,z]}")
         else:
             self.variable_length_code[y,x,z] = \
                 min(
@@ -140,7 +139,7 @@ class SampleAdaptiveEncoder():
 
         if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI:
             for y in range(self.header.y_size):
-                print(f"y={y}")
+                print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
 
                 if y % 2**self.header.error_update_period_exponent == 0 \
                     and self.header.periodic_error_updating_flag == \
@@ -157,7 +156,7 @@ class SampleAdaptiveEncoder():
 
                         for z in range(z_start, z_end):
                             self.__encode_sample(x, y, z)
-                # exit()
+            print("")
 
         elif self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
             exit("BSQ encoding order not implemented")
