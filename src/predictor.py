@@ -187,7 +187,7 @@ class Predictor():
                 self.local_difference_vector[y,x,z,2] = 0
             offset += 3
         
-        if z > 0:
+        if z > 0 and self.spectral_bands_used[z] > 0:
             self.local_difference_vector[y,x,z,offset] = 4 * self.sample_representative[y, x, z - 1] - self.local_sum[y, x, z - 1]
             for i in range(1, self.spectral_bands_used[z]):
                 self.local_difference_vector[y,x,z,offset + i] = self.local_difference_vector[y, x, z - 1, offset + i - 1]
@@ -202,7 +202,7 @@ class Predictor():
                 self.weight_vector[0,1,z,2] = 0
                 offset += 3
 
-            if z > 0:
+            if z > 0 and self.spectral_bands_used[z] > 0:
                 self.weight_vector[0,1,z,offset] = 2**self.weight_component_resolution * 7 / 8
                 for i in range(1, self.spectral_bands_used[z]):
                         self.weight_vector[0,1,z,offset + i] = self.weight_vector[0,1,z,offset + i - 1] / 8
