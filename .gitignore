@@ -10,3 +10,5 @@ src/__pycache__/
 .VSCodeCounter/
 
 *.bin
+
+from_golden_model/

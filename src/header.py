@@ -1,5 +1,6 @@
 from enum import Enum
 import re
+from bitarray import bitarray
 
 class SampleType(Enum):
         UNSIGNED_INTEGER = 0
@@ -105,6 +106,8 @@ class Header:
     quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
     supplementary_information_table_count = 0 # tau. 0<=tau<=15. Supplementary information tables are not implemented
 
+    # TODO: Support supplementary information tables
+
     #####################
     # Predicator metadata
     #####################
@@ -167,12 +170,13 @@ class Header:
     # Block-adaptive entropy coder
     # TODO: Support block-adaptive entropy coder
 
+    header_bitstream = None
 
     def __init__(self, image_name):
-        self.set_config_according_to_image_name(image_name)
-        self.check_legal_config()
+        self.__set_config_according_to_image_name(image_name)
+        self.__check_legal_config()
         
-    def set_config_according_to_image_name(self, image_name):
+    def __set_config_according_to_image_name(self, image_name):
         # TODO: Actually learn regex and do this properly
         self.x_size = int(re.findall('x(.*).raw', image_name)[0].split("x")[-1]) 
         self.y_size = int(re.findall('x(.+)x', image_name)[0])
@@ -187,7 +191,7 @@ class Header:
         if format[3:5] != 'be':
             exit("Only big endian is supported")
     
-    def check_legal_config(self):
+    def __check_legal_config(self):
         assert 0 < self.x_size and self.x_size < 2**16
         assert 0 < self.y_size and self.y_size < 2**16
         assert 0 < self.z_size and self.z_size < 2**16
@@ -200,6 +204,7 @@ class Header:
         assert self.entropy_coder_type in EntropyCoderType
         assert self.quantizer_fidelity_control_method in QuantizerFidelityControlMethod
         assert 0 <= self.supplementary_information_table_count and self.supplementary_information_table_count <= 15
+        assert self.supplementary_information_table_count == 0 # Not implemented
 
         assert self.sample_representative_flag in SampleRepresentativeFlag
         assert 0 <= self.prediction_bands_num and self.prediction_bands_num < 16
@@ -212,25 +217,35 @@ class Header:
         assert -6 <= self.weight_update_initial_parameter - 6 and self.weight_update_initial_parameter - 6 <= 9
         assert -6 <= self.weight_update_final_parameter - 6 and self.weight_update_final_parameter - 6 <= 9
         assert self.weight_exponent_offset_table_flag in WeightExponentOffsetTableFlag
+        assert self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED # Table not implemented
         assert self.weight_init_method in WeightInitMethod
         assert self.weight_init_table_flag in WeightInitTableFlag
+        assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED # Table not implemented
         assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
 
         assert self.periodic_error_updating_flag in PeriodicErrorUpdatingFlag
+        assert self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED # Not implemented
         assert (self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED and 0 <= self.error_update_period_exponent and self.error_update_period_exponent <= 9) or (self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED and self.error_update_period_exponent == 0)
+        assert self.error_update_period_exponent == 0 # Not implemented
         assert self.absolute_error_limit_assignment_method in ErrorLimitAssignmentMethod
+        assert self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT # Not implemented
         assert 0 <= self.absolute_error_limit_bit_depth and self.absolute_error_limit_bit_depth <= min(self.get_dynamic_range_bits() - 1, 16) % 16
         assert 0 <= self.absolute_error_limit_value and self.absolute_error_limit_value <= 2**self.absolute_error_limit_bit_depth - 1
         assert self.relative_error_limit_assignment_method in ErrorLimitAssignmentMethod
+        assert self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT # Not implemented
         assert 0 <= self.relative_error_limit_bit_depth and self.relative_error_limit_bit_depth <= min(self.get_dynamic_range_bits() - 1, 16) % 16
         assert 0 <= self.relative_error_limit_value and self.relative_error_limit_value <= 2**self.relative_error_limit_bit_depth - 1
 
         assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4
         assert self.band_varying_damping_flag in BandVaryingDampingFlag
+        assert self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_INDEPENDENT # Not implemented
         assert self.damping_table_flag in DampingTableFlag
+        assert self.damping_table_flag == DampingTableFlag.NOT_INCLUDED # Table not implemented
         assert (self.damping_table_flag == DampingTableFlag.NOT_INCLUDED and 0 <= self.fixed_damping_value and self.fixed_damping_value <= 2**self.sample_representative_resolution - 1) or (self.damping_table_flag == DampingTableFlag.INCLUDED and self.fixed_damping_value == 0)
         assert self.band_varying_offset_flag in BandVaryingOffsetFlag
+        assert self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_INDEPENDENT # Not implemented
         assert self.damping_offset_table_flag in OffsetTableFlag
+        assert self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED # Table not implemented
         assert (self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED and 0 <= self.fixed_offset_value and self.fixed_offset_value <= 2**self.sample_representative_resolution - 1) or (self.damping_offset_table_flag == OffsetTableFlag.INCLUDED and self.fixed_offset_value == 0)
 
         assert (8 <= self.unary_length_limit and self.unary_length_limit < 32) or self.unary_length_limit == 0
@@ -238,7 +253,145 @@ class Header:
         assert 0 <= self.initial_count_exponent and self.initial_count_exponent < 8
         assert (0 <= self.accumulator_init_constant and self.accumulator_init_constant <= min(self.get_dynamic_range_bits() - 2, 14)) or (self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED and self.accumulator_init_constant == 15)
         assert self.accumulator_init_table_flag in AccumulatorInitTableFlag
+        assert self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED # Table not implemented
     
+    def __encode_essential_subpart_structure(self):
+        bitstream = bitarray()
+        bitstream += 8 * '0' # User-Defined Data
+        bitstream += bin(self.x_size)[2:].zfill(16)
+        bitstream += bin(self.y_size)[2:].zfill(16)
+        bitstream += bin(self.z_size)[2:].zfill(16)
+        bitstream += bin(self.sample_type.value)[2:].zfill(1)
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.large_d_flag.value)[2:].zfill(1)
+        bitstream += bin(self.dynamic_range)[2:].zfill(4)
+        bitstream += bin(self.sample_encoding_order.value)[2:].zfill(1)
+        bitstream += bin(self.sub_frame_interleaving_depth)[2:].zfill(16)
+        bitstream += 2 * '0' # Reserved
+        bitstream += bin(self.output_word_size)[2:].zfill(3)
+        bitstream += bin(self.entropy_coder_type.value)[2:].zfill(2)
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.quantizer_fidelity_control_method.value)[2:].zfill(2)
+        bitstream += 2 * '0' # Reserved
+        bitstream += bin(self.supplementary_information_table_count)[2:].zfill(4)
+        assert len(bitstream) == 12 * 8
+        return bitstream
+    
+    def __encode_predictor_primary_structure(self):
+        bitstream = bitarray()
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.sample_representative_flag.value)[2:].zfill(1)
+        bitstream += bin(self.prediction_bands_num)[2:].zfill(4)
+        bitstream += bin(self.prediction_mode.value)[2:].zfill(1)
+        bitstream += bin(self.weight_exponent_offset_flag.value)[2:].zfill(1)
+        bitstream += bin(self.local_sum_type.value)[2:].zfill(2)
+        bitstream += bin(self.register_size)[2:].zfill(6)
+        bitstream += bin(self.weight_component_resolution)[2:].zfill(4)
+        bitstream += bin(self.weight_update_change_interval)[2:].zfill(4)
+        bitstream += bin(self.weight_update_initial_parameter)[2:].zfill(4)
+        bitstream += bin(self.weight_update_final_parameter)[2:].zfill(4)
+        bitstream += bin(self.weight_exponent_offset_table_flag.value)[2:].zfill(1)
+        bitstream += bin(self.weight_init_method.value)[2:].zfill(1)
+        bitstream += bin(self.weight_init_table_flag.value)[2:].zfill(1)
+        bitstream += bin(self.weight_init_resolution)[2:].zfill(5)
+        assert len(bitstream) == 8 * 5
+        if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+            exit("Weight initialization table not implemented")
+        if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+            exit("Weight exponent offset table not implemented")
+        return bitstream
+    
+    def __encode_predictor_quantization_error_limit_update_period_structure(self):
+        bitstream = bitarray()
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.periodic_error_updating_flag.value)[2:].zfill(1)
+        bitstream += 2 * '0' # Reserved
+        bitstream += bin(self.error_update_period_exponent)[2:].zfill(4)
+        assert len(bitstream) == 8
+        return bitstream
+    
+    def __encode_predictor_quantization_absolute_error_limit_structure(self):
+        bitstream = bitarray()
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.absolute_error_limit_assignment_method.value)[2:].zfill(1)
+        bitstream += 2 * '0' # Reserved
+        bitstream += bin(self.absolute_error_limit_bit_depth)[2:].zfill(4)
+        bitstream += bin(self.absolute_error_limit_value)[2:].zfill(self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0))
+        assert len(bitstream) == (self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0)) + 8
+        bitstream += (8 - (len(bitstream) % 8)) * '0'
+        assert len(bitstream) % 8 == 0
+        return bitstream
+    
+    def __encode_predictor_quantization_relative_error_limit_structure(self):
+        bitstream = bitarray()
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.relative_error_limit_assignment_method.value)[2:].zfill(1)
+        bitstream += 2 * '0' # Reserved
+        bitstream += bin(self.relative_error_limit_bit_depth)[2:].zfill(4)
+        bitstream += bin(self.relative_error_limit_value)[2:].zfill(self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0))
+        assert len(bitstream) == (self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0)) + 8
+        bitstream += (8 - (len(bitstream) % 8)) * '0'
+        assert len(bitstream) % 8 == 0
+        return bitstream
+    
+    def __encode_predictor_quantization_structure(self):
+        bitstream = bitarray()
+        if self.sample_encoding_order != SampleEncodingOrder.BSQ:
+            bitstream += self.__encode_predictor_quantization_error_limit_update_period_structure()
+        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+            bitstream += self.__encode_predictor_quantization_absolute_error_limit_structure()
+        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+            bitstream += self.__encode_predictor_quantization_relative_error_limit_structure()
+        return bitstream
+    
+    def __encode_predictor_sample_representative_structure(self):
+        bitstream = bitarray()
+        bitstream += 5 * '0' # Reserved
+        bitstream += bin(self.sample_representative_resolution)[2:].zfill(3)
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.band_varying_damping_flag.value)[2:].zfill(1)
+        bitstream += bin(self.damping_table_flag.value)[2:].zfill(1)
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.fixed_damping_value)[2:].zfill(4)
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.band_varying_offset_flag.value)[2:].zfill(1)
+        bitstream += bin(self.damping_offset_table_flag.value)[2:].zfill(1)
+        bitstream += 1 * '0'
+        bitstream += bin(self.fixed_offset_value)[2:].zfill(4)
+        assert len(bitstream) == 8 * 3
+        if self.damping_table_flag == DampingTableFlag.INCLUDED:
+            exit("Damping table not implemented")
+        if self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
+            exit("Damping offset table not implemented")
+        return bitstream
+
+    def __encode_entropy_coder_sample_adaptive_structure(self):
+        bitstream = bitarray()
+        bitstream += bin(self.unary_length_limit)[2:].zfill(5)
+        bitstream += bin(self.rescaling_counter_size)[2:].zfill(3)
+        bitstream += bin(self.initial_count_exponent)[2:].zfill(3)
+        bitstream += bin(self.accumulator_init_constant)[2:].zfill(4)
+        bitstream += bin(self.accumulator_init_table_flag.value)[2:].zfill(1)
+        assert len(bitstream) == 8 * 2
+        if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
+            exit("Accumulator initialization table not implemented")   
+        return bitstream
+    
+    def __create_header_bitstream(self):
+        bitstream = bitarray()
+
+        bitstream += self.__encode_essential_subpart_structure()
+        bitstream += self.__encode_predictor_primary_structure()
+
+        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
+            bitstream += self.__encode_predictor_quantization_structure()
+        if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
+            bitstream += self.__encode_predictor_sample_representative_structure()        
+        if self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE:
+            bitstream += self.__encode_entropy_coder_sample_adaptive_structure()
+        
+        self.header_bitstream = bitstream
+
     def set_encoding_order_bip(self):
         self.sample_encoding_order = SampleEncodingOrder.BI
         self.sub_frame_interleaving_depth = self.z_size
@@ -254,4 +407,12 @@ class Header:
         if self.large_d_flag == LargeDFlag.LARGE_D:
             dynamic_range_bits += 16
         return dynamic_range_bits
+    
+    def get_header_bitstream(self):
+        self.__create_header_bitstream()
+        return self.header_bitstream
+
+    def save_header(self, output_folder):
+        with open(output_folder + "/header.bin", "wb") as file:
+            self.get_header_bitstream().tofile(file)
         

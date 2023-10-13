@@ -61,8 +61,9 @@ class CCSDS123():
         self.encoder.run_encoder()
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
 
+        self.header.save_header(self.output_folder)
         self.predictor.save_data(self.output_folder)
-        self.encoder.save_data(self.output_folder)
+        self.encoder.save_data(self.output_folder, self.header.get_header_bitstream())
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")
         
 
