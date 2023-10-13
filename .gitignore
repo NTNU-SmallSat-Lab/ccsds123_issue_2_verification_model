@@ -12,3 +12,5 @@ src/__pycache__/
 *.bin
 
 from_golden_model/
+
+test/comparison.txt
