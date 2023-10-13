@@ -27,7 +27,7 @@ class SampleAdaptiveEncoder():
         if self.header.unary_length_limit == 0:
             self.unary_length_limit += 32
 
-        if self.header.accumulator_init_constant != 0:
+        if self.header.accumulator_init_constant != 15:
             self.accumulator_init_parameter_2 = np.full((self.header.z_size), self.header.accumulator_init_constant, dtype=np.int64)
         else:
             exit("Accumulator init table not implemented")        
