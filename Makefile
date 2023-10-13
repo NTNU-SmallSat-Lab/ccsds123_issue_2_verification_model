@@ -18,6 +18,7 @@ print:
 	xxd -b -l $(bin_length) test/hlm.bin
 
 compare:
+	make clean; \
 	python ccsds123_0-b-2_high_level_model.py; \
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
