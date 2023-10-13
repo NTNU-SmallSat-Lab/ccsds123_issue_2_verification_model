@@ -114,15 +114,11 @@ class SampleAdaptiveEncoder():
         if zeros < self.unary_length_limit:
             if k == 0:
                 return '0' * zeros + '1'
-            bitstring_j = bin(j)[2:]
-            if len(bitstring_j) < k:
-                bitstring_j = '0' * (k - len(bitstring_j)) + bitstring_j
+            bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
             return '0' * zeros + '1' + bitstring_j[-k:]
         else:
-            bitstring_j = bin(j)[2:]
-            if len(bitstring_j) < self.image_constants.dynamic_range_bits:
-                bitstring_j = '0' * (self.image_constants.dynamic_range_bits - len(bitstring_j)) + bitstring_j
-            return '0' * self.unary_length_limit + bitstring_j[-self.image_constants.dynamic_range_bits:]
+            bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
+            return '0' * self.unary_length_limit + bitstring_j
     
     def __add_to_bitstream(self, bitstring, x, y, z):
         self.bitstream += bitstring
