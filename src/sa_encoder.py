@@ -74,7 +74,9 @@ class SampleAdaptiveEncoder():
         elif self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
             exit("BSQ encoding order not implemented")
 
-        if self.counter[prev_y,prev_x] == 2**self.rescaling_counter_size - 1:
+        if y == 0 and x == 1:
+            pass
+        elif self.counter[prev_y,prev_x] == 2**self.rescaling_counter_size - 1:
             self.counter[y,x] = np.floor((self.counter[prev_y,prev_x] + 1) / 2)
             self.accumulator[y,x,z] = \
                 np.floor( \
