@@ -98,7 +98,7 @@ class Header:
     z_size = 0 # N_z. Encode as N_z%2^16. 1<=N_z<=2^16-1
     sample_type = SampleType.UNSIGNED_INTEGER
     large_d_flag = LargeDFlag.SMALL_D
-    dynamic_range = 8 # D. Encode as D%16. 1<=D<=32
+    dynamic_range = 14 # D. Encode as D%16. 1<=D<=32
     sample_encoding_order = SampleEncodingOrder.BI
     sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
@@ -192,14 +192,14 @@ class Header:
             exit("Only big endian is supported")
     
     def __check_legal_config(self):
-        assert 0 < self.x_size and self.x_size < 2**16
-        assert 0 < self.y_size and self.y_size < 2**16
-        assert 0 < self.z_size and self.z_size < 2**16
+        assert 0 <= self.x_size and self.x_size < 2**16
+        assert 0 <= self.y_size and self.y_size < 2**16
+        assert 0 <= self.z_size and self.z_size < 2**16
         assert self.sample_type in SampleType
         assert self.large_d_flag in LargeDFlag
         assert 0 <= self.dynamic_range and self.dynamic_range < 16
         assert self.sample_encoding_order in SampleEncodingOrder
-        assert 0 < self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth < self.z_size
+        assert 0 < self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth <= self.z_size
         assert 0 <= self.output_word_size and self.output_word_size < 8
         assert self.entropy_coder_type in EntropyCoderType
         assert self.quantizer_fidelity_control_method in QuantizerFidelityControlMethod
@@ -211,7 +211,7 @@ class Header:
         assert self.prediction_mode in PredictionMode
         assert self.weight_exponent_offset_flag in WeightExponentOffsetFlag
         assert self.local_sum_type in LocalSumType
-        assert max(32, self.get_dynamic_range_bits() + self.weight_component_resolution + 2) <= self.register_size + 64 * int(self.register_size == 0) and self.register_size < 64
+        assert max(32, self.get_dynamic_range_bits() + (self.weight_component_resolution + 4) + 2) <= self.register_size + 64 * int(self.register_size == 0) and self.register_size < 64
         assert 4 <= self.weight_component_resolution + 4 and self.weight_component_resolution + 4 <= 19
         assert 4 <= self.weight_update_change_interval + 4 and self.weight_update_change_interval + 4 <= 11
         assert -6 <= self.weight_update_initial_parameter - 6 and self.weight_update_initial_parameter - 6 <= 9
@@ -221,7 +221,7 @@ class Header:
         assert self.weight_init_method in WeightInitMethod
         assert self.weight_init_table_flag in WeightInitTableFlag
         assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED # Table not implemented
-        assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
+        assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 4 + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
 
         assert self.periodic_error_updating_flag in PeriodicErrorUpdatingFlag
         assert self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED # Not implemented

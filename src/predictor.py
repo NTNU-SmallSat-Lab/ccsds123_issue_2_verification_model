@@ -2,6 +2,7 @@ from . import header as hd
 from . import constants as const
 from .utils import clip, sign, sign_positive, modulo_star
 import numpy as np
+from math import floor
 
 class Predictor():
     """
@@ -48,7 +49,7 @@ class Predictor():
         self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int64)
         for t in range (self.header.y_size * self.header.x_size):
             self.weight_update_scaling_exponent[t] = clip( \
-                self.weight_update_initial_parameter + int((t - self.header.x_size) / self.weight_update_change_interval) \
+                self.weight_update_initial_parameter + floor((t - self.header.x_size) / self.weight_update_change_interval) \
                 , self.weight_update_initial_parameter, self.weight_update_final_parameter) \
                 + self.image_constants.dynamic_range_bits - self.weight_component_resolution
         self.weight_min = -2**(self.weight_component_resolution + 2)

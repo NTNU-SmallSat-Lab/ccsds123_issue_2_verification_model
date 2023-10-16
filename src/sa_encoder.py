@@ -60,9 +60,8 @@ class SampleAdaptiveEncoder():
 
     def __encode_sample(self, x, y, z):
         if y == 0 and x == 0:
-            bitstring = bin(self.mapped_quantizer_index[y,x,z])[2:]
-            bitstring = '0' * (self.image_constants.dynamic_range_bits - len(bitstring)) + bitstring
-            self.__add_to_bitstream(bitstring,x, y, z)
+            bitstring = bin(self.mapped_quantizer_index[y,x,z])[2:].zfill(self.image_constants.dynamic_range_bits)
+            self.__add_to_bitstream(bitstring,x,y,z)
             return
         
         if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI:
