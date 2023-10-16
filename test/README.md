@@ -1,0 +1,1 @@
+Location for output test files. Running "make compare" will produce a compressed file from this high-level model, the golden model, the header file and a comparison of the first data from the two compressed images.
