@@ -12,12 +12,15 @@ class CCSDS123():
     """
     header = None
     predictor = None
-    raw_image_folder = "raw_images"
+    image_file = None
+    image_name = None
     image_sample = None # Symbol: s
     output_folder = "output"
 
-    def __init__(self, image_name):
-        self.image_name = image_name
+    def __init__(self, image_file):
+        self.image_file = image_file
+        self.image_name = image_file.split('/')[-1]
+        print(self.image_name)
 
     def __get_sample_format(self):
         formats = {
@@ -26,18 +29,18 @@ class CCSDS123():
             "u32be": np.uint32, "u32le": np.dtype('<u4'), "s32be": np.int32, "s32le": np.dtype('<i4'),
             "u64be": np.uint64, "u64le": np.dtype('<u8'), "s64be": np.int64, "s64le": np.dtype('<i8'),
         }
-        format = re.findall('-(.*)-', self.image_name)[0]
+        format = re.findall('-(.*)-', self.image_file)[0]
         return formats[format]
 
     def __load_raw_image(self):
         """Load a raw image into a N_x * N_y by N_z array"""
         # Doing it the obvious way skipped the first byte, hence some hoops have been jumped through to fix it, and little endian is not supported
-        if "le" == re.findall('-(.*)-', self.image_name)[0][-2:]:
+        if "le" == re.findall('-(.*)-', self.image_file)[0][-2:]:
             exit("Little endian not implemented")
-        file = open(self.raw_image_folder + "/" + self.image_name, 'rb').read()
+        file = open(self.image_file, 'rb').read()
         first = file[0] # Set aside first byte
         last = (file[-2] << 8) + file[-1] # set aside last two bytes
-        with open(self.raw_image_folder + "/" + self.image_name, 'rb') as file:
+        with open(self.image_file, 'rb') as file:
             file.seek(1) # Skip the first byte
             self.image_sample = np.fromfile(file, dtype=self.__get_sample_format())
         if self.image_sample.shape[0] != self.header.z_size * self.header.y_size * self.header.x_size:
@@ -50,7 +53,7 @@ class CCSDS123():
     def compress_image(self):
         start_time = time.time()
 
-        self.header = hd.Header(self.image_name)
+        self.header = hd.Header(self.image_file)
         self.header.set_encoding_order_bip()
 
         self.__load_raw_image()

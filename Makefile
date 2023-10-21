@@ -1,4 +1,4 @@
-image = Landsat_mountain-u16be-6x50x100.raw
+image = raw_images/Landsat_mountain-u16be-6x50x100.raw
 image_format = u16be
 hex_length = 320
 bin_length = 48
@@ -19,12 +19,13 @@ print:
 
 compare:
 	make clean; \
-	python ccsds123_0-b-2_high_level_model.py; \
+	python ccsds123_0-b-2_high_level_model.py $(image); \
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
-	lcnl_bsq_reader output/header.bin $(image_format) raw_images/$(image) | lcnl_encoder output/header.bin $(image_format) /dev/stdin test/golden.bin; \
+	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder output/header.bin $(image_format) /dev/stdin test/golden.bin; \
 	python files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
 clean:
 	rm -f test/*
+	rm -f output/*
