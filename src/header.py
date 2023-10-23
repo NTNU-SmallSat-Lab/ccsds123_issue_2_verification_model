@@ -180,8 +180,9 @@ class Header:
         # TODO: Actually learn regex and do this properly
         self.x_size = int(re.findall('x(.*).raw', image_name)[0].split("x")[-1]) 
         self.y_size = int(re.findall('x(.+)x', image_name)[0])
-        self.z_size = int(re.findall('-(.+)x', re.findall('-(.+)x', image_name)[0])[0])
+        self.z_size = int(image_name.split('x')[0].split('-')[-1])
         format = re.findall('-(.*)-', image_name)[0]
+        format = image_name.split('-')[-2].split('-')[-1]
         self.sample_type = SampleType.UNSIGNED_INTEGER if format[0] == 'u' else SampleType.SIGNED_INTEGER
 
         # Pick dynamic range manually, since the range in the file name is generally way to wide

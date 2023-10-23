@@ -29,7 +29,7 @@ class CCSDS123():
             "u32be": np.uint32, "u32le": np.dtype('<u4'), "s32be": np.int32, "s32le": np.dtype('<i4'),
             "u64be": np.uint64, "u64le": np.dtype('<u8'), "s64be": np.int64, "s64le": np.dtype('<i8'),
         }
-        format = re.findall('-(.*)-', self.image_file)[0]
+        format = self.image_name.split('-')[-2].split('-')[-1]
         return formats[format]
 
     def __load_raw_image(self):
