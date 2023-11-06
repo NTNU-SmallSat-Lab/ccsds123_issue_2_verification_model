@@ -22,14 +22,14 @@ def get_memory_usage():
 def main():
     parser = argparse.ArgumentParser(description="Compress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging")
     parser.add_argument("image_file", help="Path to the image file")
-    parser.add_argument("header_file", help="Path to the configuration file")
+    parser.add_argument("--header", default="", help="Path to the configuration file")
     args = parser.parse_args()
 
     start_time = time.time()
 
     image = ccsds123.CCSDS123(args.image_file)
-    if len(args.header_file) > 0:
-        image.set_header_file(args.header_file)
+    if len(args.header) > 0:
+        image.set_header_file(args.header)
 
     image.compress_image()
 
