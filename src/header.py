@@ -83,6 +83,10 @@ class AccumulatorInitTableFlag(Enum):
     NOT_INCLUDED = 0
     INCLUDED = 1
 
+class RestrictedCodeOptionsFlag(Enum):
+    UNRESTRICTED = 0
+    RESTRICTED = 1
+
 
 class Header:
     """
@@ -168,7 +172,9 @@ class Header:
     # TODO: Support accumulator initialization table
 
     # Block-adaptive entropy coder
-    # TODO: Support block-adaptive entropy coder
+    block_size = 2 # B. 0: J=8, 1: J=16, 2: J=32, 3: J=64
+    restricted_code_options_flag = RestrictedCodeOptionsFlag.UNRESTRICTED
+    reference_sample_interval = 2**11 # r. Encode as r%2**12.
 
     header_bitstream = None
 
@@ -192,6 +198,151 @@ class Header:
         if format[3:5] != 'be':
             exit("Only big endian is supported")
     
+    def set_config_from_file(self, config_file):
+        bitstream = bitarray()
+        # print(f"Reading configuration from {config_file}")
+        with open(config_file, "rb") as file:
+            bitstream.fromfile(file)
+
+            # Image metadata 
+        # Essential subpart
+        self.user_defined_data = int(bitstream[0:8].to01(), 2)
+        self.x_size = int(bitstream[8:24].to01(), 2)
+        self.y_size = int(bitstream[24:40].to01(), 2)
+        self.z_size = int(bitstream[40:56].to01(), 2)
+        self.sample_type = SampleType(int(bitstream[56:57].to01(), 2))
+        assert bitstream[57:58].to01() == '0' # Reserved
+        self.large_d_flag = LargeDFlag(int(bitstream[58:59].to01(), 2))
+        self.dynamic_range = int(bitstream[59:63].to01(), 2)
+        self.sample_encoding_order = SampleEncodingOrder(int(bitstream[63:64].to01(), 2))
+        self.sub_frame_interleaving_depth = int(bitstream[64:80].to01(), 2)
+        assert bitstream[80:82].to01() == '00' # Reserved
+        self.output_word_size = int(bitstream[82:85].to01(), 2)
+        self.entropy_coder_type = EntropyCoderType(int(bitstream[85:87].to01(), 2))
+        assert bitstream[87:88].to01() == '0' # Reserved
+        self.quantizer_fidelity_control_method = QuantizerFidelityControlMethod(int(bitstream[88:90].to01(), 2))
+        assert bitstream[90:92].to01() == '00' # Reserved
+        self.supplementary_information_table_count = int(bitstream[92:96].to01(), 2)
+
+        bitstream = bitstream[96:]
+
+        # Supplementary information tables
+        if self.supplementary_information_table_count > 0:
+            exit("Supplementary information tables not implemented")
+        
+            # Predictor metadata
+        # Predictor primary structure
+        assert bitstream[0:1].to01() == '0'
+        self.sample_representative_flag = SampleRepresentativeFlag(int(bitstream[1:2].to01(), 2))
+        self.prediction_bands_num = int(bitstream[2:6].to01(), 2)
+        self.prediction_mode = PredictionMode(int(bitstream[6:7].to01(), 2))
+        self.weight_exponent_offset_flag = WeightExponentOffsetFlag(int(bitstream[7:8].to01(), 2))
+        self.local_sum_type = LocalSumType(int(bitstream[8:10].to01(), 2))
+        self.register_size = int(bitstream[10:16].to01(), 2)
+        self.weight_component_resolution = int(bitstream[16:20].to01(), 2)
+        self.weight_update_change_interval = int(bitstream[20:24].to01(), 2)
+        self.weight_update_initial_parameter = int(bitstream[24:28].to01(), 2)
+        self.weight_update_final_parameter = int(bitstream[28:32].to01(), 2)
+        self.weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag(int(bitstream[32:33].to01(), 2))
+        self.weight_init_method = WeightInitMethod(int(bitstream[33:34].to01(), 2))
+        self.weight_init_table_flag = WeightInitTableFlag(int(bitstream[34:35].to01(), 2))
+        self.weight_init_resolution = int(bitstream[35:40].to01(), 2)
+        bitstream = bitstream[40:]
+
+        # Weight tables subpart
+        if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED or \
+            self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+            exit("Weight tables not implemented")
+
+        # Predictor quantization structure
+        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
+
+            # Predictor quantization error limit update period structure
+            if self.sample_encoding_order != SampleEncodingOrder.BSQ:
+                assert bitstream[0:1].to01() == '0'
+                self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag(int(bitstream[1:2].to01(), 2))
+                assert bitstream[2:4].to01() == '00'
+                self.error_update_period_exponent = int(bitstream[4:8].to01(), 2)
+                bitstream = bitstream[8:]
+
+            # Predictor quantization absolute error limit structure
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                assert bitstream[0:1].to01() == '0'
+                self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(bitstream[1:2].to01(), 2))
+                assert bitstream[2:4].to01() == '00'
+                self.absolute_error_limit_bit_depth = int(bitstream[4:8].to01(), 2)
+                self.absolute_error_limit_value = int(bitstream[8:8+self.absolute_error_limit_bit_depth].to01(), 2)
+                bitstream = bitstream[8+self.absolute_error_limit_bit_depth:]
+
+                if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    exit("Band-dependent absolute error limit not implemented")
+            
+            # Predictor quantization relative error limit structure
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                assert bitstream[0:1].to01() == '0'
+                self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(bitstream[1:2].to01(), 2))
+                assert bitstream[2:4].to01() == '00'
+                self.relative_error_limit_bit_depth = int(bitstream[4:8].to01(), 2)
+                self.relative_error_limit_value = int(bitstream[8:8+self.relative_error_limit_bit_depth].to01(), 2)
+                bitstream = bitstream[8+self.relative_error_limit_bit_depth:]
+
+                if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    exit("Band-dependent relative error limit not implemented")
+
+        # Predictor sample representative structure
+        if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
+            assert bitstream[0:5].to01() == '00000'
+            self.sample_representative_resolution = int(bitstream[5:8].to01(), 2)
+            assert bitstream[8:9].to01() == '0'
+            self.band_varying_damping_flag = BandVaryingDampingFlag(int(bitstream[9:10].to01(), 2))
+            self.damping_table_flag = DampingTableFlag(int(bitstream[10:11].to01(), 2))
+            assert bitstream[11:12].to01() == '0'
+            self.fixed_damping_value = int(bitstream[12:16].to01(), 2)
+            assert bitstream[16:17].to01() == '0'
+            self.band_varying_offset_flag = BandVaryingOffsetFlag(int(bitstream[17:18].to01(), 2))
+            self.damping_offset_table_flag = OffsetTableFlag(int(bitstream[18:19].to01(), 2))
+            assert bitstream[19:20].to01() == '0'
+            self.fixed_offset_value = int(bitstream[20:24].to01(), 2)
+            bitstream = bitstream[24:]
+
+            # Damping and offset table sublocks
+            if self.damping_table_flag == DampingTableFlag.INCLUDED or \
+                self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
+                exit("Damping tables not implemented")
+        
+            # Entropy coder metadata
+        # Sample-adaptive entropy coder
+        if self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE:
+            self.unary_length_limit = int(bitstream[0:5].to01(), 2)
+            self.rescaling_counter_size = int(bitstream[5:8].to01(), 2)
+            self.initial_count_exponent = int(bitstream[8:11].to01(), 2)
+            self.accumulator_init_constant = int(bitstream[11:15].to01(), 2)
+            self.accumulator_init_table_flag = AccumulatorInitTableFlag(int(bitstream[15:16].to01(), 2))
+            bitstream = bitstream[16:]
+
+            # Accumulator initialization table subblock
+            if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
+                exit("Accumulator initialization table not implemented")
+        
+        # Hybrid entropy coder
+        elif self.entropy_coder_type == EntropyCoderType.HYBRID:
+            self.unary_length_limit = int(bitstream[0:5].to01(), 2)
+            self.rescaling_counter_size = int(bitstream[5:8].to01(), 2)
+            self.initial_count_exponent = int(bitstream[8:11].to01(), 2)
+            assert bitstream[11:16].to01() == '00000'
+            bitstream = bitstream[16:]
+        
+        # Block-adaptive entropy coder
+        elif self.entropy_coder_type == EntropyCoderType.BLOCK_ADAPTIVE:
+            assert bitstream[0:1].to01() == '0'
+            self.block_size = int(bitstream[1:3].to01(), 2)
+            self.restricted_code_options_flag = RestrictedCodeOptionsFlag(int(bitstream[3:4].to01(), 2))
+            self.reference_sample_interval = int(bitstream[4:16].to01(), 2)
+            bitstream = bitstream[16:]
+
+        assert len(bitstream) == 0
+
+    
     def __check_legal_config(self):
         assert 0 <= self.x_size and self.x_size < 2**16
         assert 0 <= self.y_size and self.y_size < 2**16
@@ -203,6 +354,7 @@ class Header:
         assert 0 < self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth <= self.z_size
         assert 0 <= self.output_word_size and self.output_word_size < 8
         assert self.entropy_coder_type in EntropyCoderType
+        assert self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE # Other encoders not yet implemented
         assert self.quantizer_fidelity_control_method in QuantizerFidelityControlMethod
         assert 0 <= self.supplementary_information_table_count and self.supplementary_information_table_count <= 15
         assert self.supplementary_information_table_count == 0 # Not implemented

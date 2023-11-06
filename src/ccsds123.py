@@ -16,6 +16,8 @@ class CCSDS123():
     image_name = None
     image_sample = None # Symbol: s
     output_folder = "output"
+    header_file = None
+    use_header_file = False
 
     def __init__(self, image_file):
         self.image_file = image_file
@@ -49,12 +51,18 @@ class CCSDS123():
         self.image_sample = self.image_sample.reshape((self.header.z_size, self.header.y_size, self.header.x_size)) # Reshape to z,y,x (BSQ) 3D array
         self.image_sample = self.image_sample.transpose(1,2,0) # Transpose to y,x,z order (BIP) 
 
+    def set_header_file(self, header_file):
+        self.header_file = header_file
+        self.use_header_file = True
 
     def compress_image(self):
         start_time = time.time()
 
         self.header = hd.Header(self.image_file)
-        self.header.set_encoding_order_bip()
+        if self.use_header_file:
+            self.header.set_config_from_file(self.header_file)
+        else:
+            self.header.set_encoding_order_bip()
 
         self.__load_raw_image()
         print(f"{time.time() - start_time:.3f} seconds. Done with loading")
