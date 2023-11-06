@@ -226,16 +226,24 @@ class Predictor():
         
         assert t - 1 == prev_x + prev_y * self.header.x_size
 
-        # TODO: Add weight exponent offset
-        weight_exponent_offset = 0.0
+        if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.ALL_ZERO:
+            weight_exponent_offset = 0
+        else:
+            exit("Non-zero weight exponent offset not supported")
 
-        self.weight_vector[y,x,z] = \
-            (self.weight_vector[prev_y,prev_x,z] + np.floor( \
-            (float(sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z])) * \
-            2.0**(-(self.weight_update_scaling_exponent[t - 1].astype(np.float64) + weight_exponent_offset)) * \
-            self.local_difference_vector[prev_y,prev_x,z].astype(np.float64) + 1.0)/2.0).astype(np.int64) \
-            ).clip(self.weight_min, self.weight_max)
-        
+        assert self.weight_update_scaling_exponent[t - 1] + weight_exponent_offset >= 0
+
+        for i in range(self.weight_vector.shape[3]):
+            self.weight_vector[y,x,z,i] = \
+                clip(
+                    self.weight_vector[prev_y,prev_x,z,i] + \
+                    (sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z]) * \
+                    self.local_difference_vector[prev_y,prev_x,z,i] // \
+                    2**(self.weight_update_scaling_exponent[t - 1] + \
+                    weight_exponent_offset) + 1) // 2, \
+                    self.weight_min, self.weight_max
+                )
+
 
     def __calculate_predicted_central_local_difference(self, x, y, z, t):
         if t == 0:
