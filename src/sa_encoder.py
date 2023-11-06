@@ -53,7 +53,7 @@ class SampleAdaptiveEncoder():
         self.variable_length_code = np.zeros(image_shape, dtype=np.int64)
 
         self.counter[0,1] = 2**self.initial_count_exponent
-        self.accumulator[0,1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[0,1] / 2**7)
+        self.accumulator[0,1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[0,1] // 2**7)
 
         self.bitstream = bitarray()
         self.bitstream_readable = np.zeros(image_shape, dtype='U64')
@@ -76,13 +76,11 @@ class SampleAdaptiveEncoder():
         if y == 0 and x == 1:
             pass
         elif self.counter[prev_y,prev_x] == 2**self.rescaling_counter_size - 1:
-            self.counter[y,x] = np.floor((self.counter[prev_y,prev_x] + 1) / 2)
+            self.counter[y,x] = (self.counter[prev_y,prev_x] + 1) // 2
             self.accumulator[y,x,z] = \
-                np.floor( \
                     (self.accumulator[prev_y,prev_x,z] + \
                     self.mapped_quantizer_index[prev_y,prev_x,z] + 1) \
-                    / 2 \
-                )
+                    // 2
         else:
             self.counter[y,x] = self.counter[prev_y,prev_x] + 1
             self.accumulator[y,x,z] = \
@@ -95,23 +93,23 @@ class SampleAdaptiveEncoder():
             x, y, z)
     
     def __find_code_length(self,x,y,z):
-        if 2 * self.counter[y,x] > self.accumulator[y,x,z] + floor(self.counter[y,x] * 49 / 2**7):
+        if 2 * self.counter[y,x] > self.accumulator[y,x,z] + self.counter[y,x] * 49 // 2**7:
             self.variable_length_code[y,x,z] = 0
         else:
             self.variable_length_code[y,x,z] = \
                 min(
-                    (log2((self.accumulator[y,x,z] + floor(self.counter[y,x] * 49 / 2**7)) / self.counter[y,x])),
+                    (log2((self.accumulator[y,x,z] + self.counter[y,x] * 49 // 2**7) // self.counter[y,x])),
                     self.image_constants.dynamic_range_bits - 2
                 )
         k_method_2 = 0
         for k in range(self.image_constants.dynamic_range_bits - 2, -1, -1):
-            if self.counter[y,x] * 2**k <= self.accumulator[y,x,z] + floor(self.counter[y,x] * 49 / 2**7):
+            if self.counter[y,x] * 2**k <= self.accumulator[y,x,z] + self.counter[y,x] * 49 // 2**7:
                 k_method_2 = k
                 break
         assert k_method_2 == self.variable_length_code[y,x,z]            
                     
     def __gpo2(self, j, k):
-        zeros = int(j / 2**k)
+        zeros = j // 2**k
         if zeros < self.unary_length_limit:
             if k == 0:
                 return '0' * zeros + '1'
