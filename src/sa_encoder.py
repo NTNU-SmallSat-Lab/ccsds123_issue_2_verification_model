@@ -125,11 +125,6 @@ class SampleAdaptiveEncoder():
         self.bitstream += bitstring
         self.bitstream_readable[y,x,z] = bitstring
 
-    def __add_fill_bits_to_bitstream(self):
-        word_bits = 8 * self.header.output_word_size
-        fill_bits = word_bits - len(self.bitstream) % word_bits
-        self.bitstream += '0' * fill_bits
-
     def run_encoder(self):
         self.__init_encoder_constants()
         self.__init_encoder_arrays()
@@ -158,12 +153,17 @@ class SampleAdaptiveEncoder():
         elif self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
             exit("BSQ encoding order not implemented")
 
-        self.__add_fill_bits_to_bitstream()
-        
     
     def save_data(self, output_folder, header_bitstream):
+        self.bitstream = header_bitstream + self.bitstream
+        
+        # Pad to word size
+        word_bits = 8 * self.header.output_word_size
+        fill_bits = word_bits - (len(self.bitstream)) % word_bits
+        self.bitstream += '0' * fill_bits
+
         with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
-            (header_bitstream + self.bitstream).tofile(file)
+            self.bitstream.tofile(file)
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
         np.savetxt(output_folder + "/sa-encoder-00-accumulator-init-parameter-1.csv", self.accumulator_init_parameter_1, delimiter=",", fmt='%d')
