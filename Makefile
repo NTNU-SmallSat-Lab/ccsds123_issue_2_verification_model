@@ -37,7 +37,10 @@ compare_with_header:
 	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header); \
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
-	lcnl_encoder $(header) $(image_format) $(image) test/golden.bin; \
+	lcnl_encoder $(header) $(image_format) $(image) test/golden.bin
+	@echo "Header: "; \
+	python files_identical_check.py test/header.bin $(header)
+	@echo "\nCompressed image: "; \
 	python files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
