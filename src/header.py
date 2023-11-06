@@ -341,6 +341,7 @@ class Header:
             bitstream = bitstream[16:]
 
         assert len(bitstream) == 0
+        self.__check_legal_config()
 
     
     def __check_legal_config(self):
@@ -351,6 +352,7 @@ class Header:
         assert self.large_d_flag in LargeDFlag
         assert 0 <= self.dynamic_range and self.dynamic_range < 16
         assert self.sample_encoding_order in SampleEncodingOrder
+        assert self.sample_encoding_order == SampleEncodingOrder.BI # BSQ not yet implemented
         assert 0 < self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth <= self.z_size
         assert 0 <= self.output_word_size and self.output_word_size < 8
         assert self.entropy_coder_type in EntropyCoderType
@@ -382,11 +384,11 @@ class Header:
         assert self.error_update_period_exponent == 0 # Not implemented
         assert self.absolute_error_limit_assignment_method in ErrorLimitAssignmentMethod
         assert self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT # Not implemented
-        assert 0 <= self.absolute_error_limit_bit_depth and self.absolute_error_limit_bit_depth <= min(self.get_dynamic_range_bits() - 1, 16) % 16
+        assert 0 <= self.absolute_error_limit_bit_depth and self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0) <= min(self.get_dynamic_range_bits() - 1, 16)
         assert 0 <= self.absolute_error_limit_value and self.absolute_error_limit_value <= 2**self.absolute_error_limit_bit_depth - 1
         assert self.relative_error_limit_assignment_method in ErrorLimitAssignmentMethod
         assert self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT # Not implemented
-        assert 0 <= self.relative_error_limit_bit_depth and self.relative_error_limit_bit_depth <= min(self.get_dynamic_range_bits() - 1, 16) % 16
+        assert 0 <= self.relative_error_limit_bit_depth and self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0) <= min(self.get_dynamic_range_bits() - 1, 16)
         assert 0 <= self.relative_error_limit_value and self.relative_error_limit_value <= 2**self.relative_error_limit_bit_depth - 1
 
         assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4
