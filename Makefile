@@ -1,7 +1,7 @@
 image = raw_images/Landsat_mountain-u16be-6x50x100.raw
 image_format = u16be
 hex_length = 320
-bin_length = 48
+bin_length = 320
 
 print:
 	@echo "Header:"; \
@@ -16,6 +16,11 @@ print:
 	xxd -b -l $(bin_length) test/golden.bin
 	@echo "\nHigh-level model:"; \
 	xxd -b -l $(bin_length) test/hlm.bin
+	@echo "\nGolden model:"; \
+	xxd -b -c 1 test/golden.bin | cut -d' ' -f 2 | tr -d '\n'
+	@echo "\nHigh-level model:"; \
+	xxd -b -c 1 test/hlm.bin | cut -d' ' -f 2 | tr -d '\n'
+
 
 compare:
 	make clean; \
