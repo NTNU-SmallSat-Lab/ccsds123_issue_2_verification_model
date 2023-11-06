@@ -49,7 +49,7 @@ class Predictor():
         self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int64)
         for t in range (self.header.y_size * self.header.x_size):
             self.weight_update_scaling_exponent[t] = clip( \
-                self.weight_update_initial_parameter + floor((t - self.header.x_size) / self.weight_update_change_interval) \
+                self.weight_update_initial_parameter + (t - self.header.x_size) // self.weight_update_change_interval \
                 , self.weight_update_initial_parameter, self.weight_update_final_parameter) \
                 + self.image_constants.dynamic_range_bits - self.weight_component_resolution
         self.weight_min = -2**(self.weight_component_resolution + 2)
@@ -204,9 +204,9 @@ class Predictor():
                 offset += 3
 
             if z > 0 and self.spectral_bands_used[z] > 0:
-                self.weight_vector[0,1,z,offset] = 2**self.weight_component_resolution * 7 / 8
+                self.weight_vector[0,1,z,offset] = 2**self.weight_component_resolution * 7 // 8
                 for i in range(1, self.spectral_bands_used[z]):
-                        self.weight_vector[0,1,z,offset + i] = self.weight_vector[0,1,z,offset + i - 1] / 8
+                        self.weight_vector[0,1,z,offset + i] = self.weight_vector[0,1,z,offset + i - 1] // 8
         else:
             exit("Custom weight init method not supported")
 
@@ -264,7 +264,7 @@ class Predictor():
                     2**(self.weight_component_resolution + 1) \
                 )
             self.double_resolution_predicted_sample_value[y,x,z] = \
-                self.high_resolution_predicted_sample_value[y,x,z] / \
+                self.high_resolution_predicted_sample_value[y,x,z] // \
                 2**(self.weight_component_resolution + 1)
         elif t == 0 and self.header.prediction_bands_num > 0 and z > 0:
             self.double_resolution_predicted_sample_value[y,x,z] = \
@@ -274,7 +274,7 @@ class Predictor():
                 2 * self.image_constants.middle_sample_value
             
         self.predicted_sample_value[y,x,z] = \
-            self.double_resolution_predicted_sample_value[y,x,z] / 2
+            self.double_resolution_predicted_sample_value[y,x,z] // 2
     
 
     def __calculate_maximum_error(self, x, y, z, t):
@@ -288,7 +288,7 @@ class Predictor():
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
             self.maximum_error[y, x, z] =  \
                 int(self.header.relative_error_limit_value * \
-                self.predicted_sample_value[y, x, z] / \
+                self.predicted_sample_value[y, x, z] // \
                 self.image_constants.dynamic_range)
             
         else: # self.header.quantizer_fidelity_control_method = hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
@@ -296,7 +296,7 @@ class Predictor():
                 min( \
                     self.header.absolute_error_limit_value, \
                     int(self.header.relative_error_limit_value * \
-                    self.predicted_sample_value[y, x, z] / \
+                    self.predicted_sample_value[y, x, z] // \
                     self.image_constants.dynamic_range) \
                 )
 
@@ -312,7 +312,7 @@ class Predictor():
         self.quantizer_index[y,x,z] = \
             sign(self.prediction_residual[y,x,z]) * \
             int((abs(self.prediction_residual[y,x,z]) + \
-            self.maximum_error[y,x,z]) / \
+            self.maximum_error[y,x,z]) // \
             (2 * self.maximum_error[y,x,z] + 1))
         
     
@@ -349,11 +349,11 @@ class Predictor():
                 2**(self.weight_component_resolution - self.header.sample_representative_resolution)) + \
                 self.header.fixed_damping_value * \
                 self.high_resolution_predicted_sample_value[y, x, z] - \
-                self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1) / \
+                self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1) // \
                 2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
 
             self.sample_representative[y, x, z] = \
-                (self.double_resolution_sample_representative[y, x, z] + 1) / 2
+                (self.double_resolution_sample_representative[y, x, z] + 1) // 2
             
 
     def __calculate_prediction_error(self, x, y, z, t):
@@ -376,11 +376,11 @@ class Predictor():
                 min( \
                     (self.predicted_sample_value[y, x, z] - \
                     self.image_constants.lower_sample_limit + \
-                    self.maximum_error[y,x,z]) / \
+                    self.maximum_error[y,x,z]) // \
                     (2 * self.maximum_error[y,x,z] + 1), \
                     (self.image_constants.upper_sample_limit - \
                     self.predicted_sample_value[y, x, z] + \
-                    self.maximum_error[y,x,z]) / \
+                    self.maximum_error[y,x,z]) // \
                     (2 * self.maximum_error[y,x,z] + 1) \
                 )
         
