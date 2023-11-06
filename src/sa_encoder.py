@@ -158,7 +158,7 @@ class SampleAdaptiveEncoder():
         self.bitstream = header_bitstream + self.bitstream
         
         # Pad to word size
-        word_bits = 8 * self.header.output_word_size
+        word_bits = 8 * (self.header.output_word_size + 8 * (self.header.output_word_size == 0))
         fill_bits = word_bits - (len(self.bitstream)) % word_bits
         self.bitstream += '0' * fill_bits
 
