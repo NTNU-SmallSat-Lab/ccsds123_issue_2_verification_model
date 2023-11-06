@@ -52,8 +52,9 @@ class SampleAdaptiveEncoder():
         self.counter = np.zeros(image_shape[:2], dtype=np.int64)
         self.variable_length_code = np.zeros(image_shape, dtype=np.int64)
 
-        self.counter[0,1] = 2**self.initial_count_exponent
-        self.accumulator[0,1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[0,1] // 2**7)
+        if image_shape[1] > 1:
+            self.counter[0,1] = 2**self.initial_count_exponent
+            self.accumulator[0,1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[0,1] // 2**7)
 
         self.bitstream = bitarray()
         self.bitstream_readable = np.zeros(image_shape, dtype='U64')
@@ -64,14 +65,11 @@ class SampleAdaptiveEncoder():
             self.__add_to_bitstream(bitstring,x,y,z)
             return
         
-        if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI:
-            prev_y = y
-            prev_x = x - 1
-            if prev_x < 0:
-                prev_y -= 1
-                prev_x = self.header.x_size - 1
-        elif self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
-            exit("BSQ encoding order not implemented")
+        prev_y = y
+        prev_x = x - 1
+        if prev_x < 0:
+            prev_y -= 1
+            prev_x = self.header.x_size - 1
 
         if y == 0 and x == 1:
             pass
@@ -146,11 +144,14 @@ class SampleAdaptiveEncoder():
 
                         for z in range(z_start, z_end):
                             self.__encode_sample(x, y, z)
-            print("")
 
         elif self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
-            exit("BSQ encoding order not implemented")
-
+            for z in range(self.header.z_size):
+                print(f"\rProcessing band z={z+1}/{self.header.z_size}", end="")
+                for y in range(self.header.y_size):
+                    for x in range(self.header.x_size):
+                        self.__encode_sample(x, y, z)
+        print("")
     
     def save_data(self, output_folder, header_bitstream):
         self.bitstream = header_bitstream + self.bitstream

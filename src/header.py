@@ -303,10 +303,10 @@ class Header:
             self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
             self.error_update_period_exponent = 0
             self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            self.absolute_error_limit_bit_depth = 0
+            self.absolute_error_limit_bit_depth = 1
             self.absolute_error_limit_value = 0
             self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            self.relative_error_limit_bit_depth = 0
+            self.relative_error_limit_bit_depth = 1
             self.relative_error_limit_value = 0
 
         # Predictor sample representative structure
@@ -373,6 +373,7 @@ class Header:
 
     
     def __check_legal_config(self):
+        assert 0 <= self.user_defined_data and self.user_defined_data < 2**8
         assert 0 <= self.x_size and self.x_size < 2**16
         assert 0 <= self.y_size and self.y_size < 2**16
         assert 0 <= self.z_size and self.z_size < 2**16
@@ -380,8 +381,7 @@ class Header:
         assert self.large_d_flag in LargeDFlag
         assert 0 <= self.dynamic_range and self.dynamic_range < 16
         assert self.sample_encoding_order in SampleEncodingOrder
-        assert self.sample_encoding_order == SampleEncodingOrder.BI # BSQ not yet implemented
-        assert 0 < self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth <= self.z_size
+        assert (self.sub_frame_interleaving_depth == 0 and self.sample_encoding_order == SampleEncodingOrder.BSQ) or (0 <= self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth + 2**16 * (self.sub_frame_interleaving_depth == 0) <= self.z_size and self.sample_encoding_order == SampleEncodingOrder.BI)
         assert 0 <= self.output_word_size and self.output_word_size < 8
         assert self.entropy_coder_type in EntropyCoderType
         assert self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE # Other encoders not yet implemented
@@ -393,6 +393,7 @@ class Header:
         assert 0 <= self.prediction_bands_num and self.prediction_bands_num < 16
         assert self.prediction_mode in PredictionMode
         assert self.weight_exponent_offset_flag in WeightExponentOffsetFlag
+        assert self.weight_exponent_offset_flag == WeightExponentOffsetFlag.ALL_ZERO # Table not implemented
         assert self.local_sum_type in LocalSumType
         assert max(32, self.get_dynamic_range_bits() + (self.weight_component_resolution + 4) + 2) <= self.register_size + 64 * int(self.register_size == 0) and self.register_size < 64
         assert 4 <= self.weight_component_resolution + 4 and self.weight_component_resolution + 4 <= 19
@@ -440,7 +441,7 @@ class Header:
     
     def __encode_essential_subpart_structure(self):
         bitstream = bitarray()
-        bitstream += 8 * '0' # User-Defined Data
+        bitstream += bin(self.user_defined_data)[2:].zfill(8)
         bitstream += bin(self.x_size)[2:].zfill(16)
         bitstream += bin(self.y_size)[2:].zfill(16)
         bitstream += bin(self.z_size)[2:].zfill(16)
