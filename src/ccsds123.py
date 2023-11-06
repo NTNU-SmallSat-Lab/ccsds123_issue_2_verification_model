@@ -26,28 +26,27 @@ class CCSDS123():
 
     def __get_sample_format(self):
         formats = {
-            "u8be": np.uint8, "u8le": np.dtype('<u1'), "s8be": np.int8, "s8le": np.dtype('<i1'),
-            "u16be": np.uint16, "u16le": np.dtype('<u2'), "s16be": np.int16,"s16le": np.dtype('<i2'),
-            "u32be": np.uint32, "u32le": np.dtype('<u4'), "s32be": np.int32, "s32le": np.dtype('<i4'),
-            "u64be": np.uint64, "u64le": np.dtype('<u8'), "s64be": np.int64, "s64le": np.dtype('<i8'),
+            "u8be": np.dtype('>u1'), "u8le": np.dtype('<u1'), "s8be": np.dtype('>i1'), "s8le": np.dtype('<i1'),
+            "u16be": np.dtype('>u2'), "u16le": np.dtype('<u2'), "s16be": np.dtype('>i2'),"s16le": np.dtype('<i2'),
+            "u32be": np.dtype('>u4'), "u32le": np.dtype('<u4'), "s32be": np.dtype('>i4'), "s32le": np.dtype('<i4'),
+            "u64be": np.dtype('>u8'), "u64le": np.dtype('<u8'), "s64be": np.dtype('>i8'), "s64le": np.dtype('<i8'),
         }
         format = self.image_name.split('-')[-2].split('-')[-1]
         return formats[format]
 
+    def __get_sample_bytes(self):
+        format = self.image_name.split('-')[-2].split('-')[-1][1:3]
+        if format[1] == 'b' or format[1] == 'l':
+            return 1
+        return int(format) // 8
+
     def __load_raw_image(self):
         """Load a raw image into a N_x * N_y by N_z array"""
-        # Doing it the obvious way skipped the first byte, hence some hoops have been jumped through to fix it, and little endian is not supported
+
         if "le" == re.findall('-(.*)-', self.image_file)[0][-2:]:
-            exit("Little endian not implemented")
-        file = open(self.image_file, 'rb').read()
-        first = file[0] # Set aside first byte
-        last = (file[-2] << 8) + file[-1] # set aside last two bytes
-        with open(self.image_file, 'rb') as file:
-            file.seek(1) # Skip the first byte
-            self.image_sample = np.fromfile(file, dtype=self.__get_sample_format())
-        if self.image_sample.shape[0] != self.header.z_size * self.header.y_size * self.header.x_size:
-            self.image_sample=np.pad(self.image_sample, (0,1), 'constant', constant_values=last) # Pad the last two bytes
-        self.image_sample[0] += first << 8 # Reintroduce the first byte
+            print("Little endian is not tested")
+        self.image_sample = np.fromfile(self.image_file, dtype=self.__get_sample_format())
+        self.image_sample = self.image_sample.astype(dtype=np.int64)
         self.image_sample = self.image_sample.reshape((self.header.z_size, self.header.y_size, self.header.x_size)) # Reshape to z,y,x (BSQ) 3D array
         self.image_sample = self.image_sample.transpose(1,2,0) # Transpose to y,x,z order (BIP) 
 
