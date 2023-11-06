@@ -2,7 +2,7 @@ from src import ccsds123
 import os
 import keyboard
 
-test_vector_folder = "Test1-20190201"
+test_vector_folder = "../Test1-20190201"
 
 
 def main():
