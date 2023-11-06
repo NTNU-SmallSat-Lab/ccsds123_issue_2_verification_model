@@ -264,6 +264,9 @@ class Header:
                 assert bitstream[2:4].to01() == '00'
                 self.error_update_period_exponent = int(bitstream[4:8].to01(), 2)
                 bitstream = bitstream[8:]
+            else:
+                self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
+                self.error_update_period_exponent = 0
 
             # Predictor quantization absolute error limit structure
             if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
@@ -276,6 +279,10 @@ class Header:
 
                 if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     exit("Band-dependent absolute error limit not implemented")
+            else:
+                self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
+                self.absolute_error_limit_bit_depth = 0
+                self.absolute_error_limit_value = 0
             
             # Predictor quantization relative error limit structure
             if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
@@ -288,6 +295,19 @@ class Header:
 
                 if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     exit("Band-dependent relative error limit not implemented")
+            else:
+                self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
+                self.relative_error_limit_bit_depth = 0
+                self.relative_error_limit_value = 0
+        else:
+            self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
+            self.error_update_period_exponent = 0
+            self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
+            self.absolute_error_limit_bit_depth = 0
+            self.absolute_error_limit_value = 0
+            self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
+            self.relative_error_limit_bit_depth = 0
+            self.relative_error_limit_value = 0
 
         # Predictor sample representative structure
         if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
@@ -309,6 +329,14 @@ class Header:
             if self.damping_table_flag == DampingTableFlag.INCLUDED or \
                 self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
                 exit("Damping tables not implemented")
+        else:
+            self.sample_representative_resolution = 0
+            self.band_varying_damping_flag = BandVaryingDampingFlag.BAND_INDEPENDENT
+            self.damping_table_flag = DampingTableFlag.NOT_INCLUDED
+            self.fixed_damping_value = 0
+            self.band_varying_offset_flag = BandVaryingOffsetFlag.BAND_INDEPENDENT
+            self.damping_offset_table_flag = OffsetTableFlag.NOT_INCLUDED
+            self.fixed_offset_value = 0
         
             # Entropy coder metadata
         # Sample-adaptive entropy coder
