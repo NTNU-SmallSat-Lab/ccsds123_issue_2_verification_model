@@ -2,6 +2,7 @@ from . import header as hd
 from . import constants as const
 from . import predictor as pred
 from . import sa_encoder as sa_enc
+from . import hybrid_encoder as hyb_enc
 import numpy as np
 import re
 import time
@@ -77,9 +78,11 @@ class CCSDS123():
                                                         self.image_constants,
                                                         self.predictor.get_predictor_output())
         elif self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
-            exit("Entropy coder type not implemented")
+            self.encoder = hyb_enc.HybridEncoder(self.header,
+                                                 self.image_constants,
+                                                 self.predictor.get_predictor_output())
         else:
-            exit("Entropy coder type not implemented")
+            exit("Block-adaptive coder not implemented")
         
         self.encoder.run_encoder()
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
