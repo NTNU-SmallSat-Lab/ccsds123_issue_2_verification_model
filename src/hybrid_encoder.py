@@ -48,7 +48,7 @@ class HybridEncoder():
         self.accumulator = np.zeros(image_shape, dtype=np.int64)
         self.counter = np.zeros(image_shape[:2], dtype=np.int64)
         self.variable_length_code = np.full(image_shape, fill_value=-1, dtype=np.int64)
-        self.active_prefix = [''] * 15 
+        self.active_prefix = [''] * 16
         self.code_index = np.full(image_shape, fill_value=-1, dtype=np.int64)
         self.input_symbol = np.full(image_shape, fill_value='', dtype='U64')
         self.codewords = np.full(image_shape, fill_value='', dtype='U64')
@@ -84,7 +84,7 @@ class HybridEncoder():
                     (self.accumulator[prev_y,prev_x,z] + \
                     4 * self.mapped_quantizer_index[y,x,z] + 1) \
                     // 2
-            accumulator_lsb = bin(self.accumulator[y,x,z])[-1]
+            accumulator_lsb = bin(self.accumulator[prev_y,prev_x,z])[-1]
             self.__add_to_bitstream(accumulator_lsb, x, y, z)
         else:
             self.counter[y,x] = self.counter[prev_y,prev_x] + 1
