@@ -3,6 +3,7 @@ from . import constants as const
 from . import predictor as pred
 from . import sa_encoder as sa_enc
 from . import hybrid_encoder as hyb_enc
+from . import ba_encoder as ba_enc
 import numpy as np
 import re
 import time
@@ -84,9 +85,9 @@ class CCSDS123():
             if self.use_accu_init_file:
                 self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.BLOCK_ADAPTIVE:
-            self.encoder = hyb_enc.HybridEncoder(self.header,
-                                                 self.image_constants,
-                                                 self.predictor.get_predictor_output())
+            self.encoder = ba_enc.BlockAdaptiveEncoder(self.header,
+                                                       self.image_constants,
+                                                       self.predictor.get_predictor_output())
         
         self.encoder.run_encoder()
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")

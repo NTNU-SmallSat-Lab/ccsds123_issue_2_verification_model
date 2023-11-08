@@ -26,6 +26,7 @@ class BlockAdaptiveEncoder():
         # self.unary_length_limit = self.header.unary_length_limit + 32 * (self.header.unary_length_limit == 0)
         # self.rescaling_counter_size = self.header.rescaling_counter_size + 4
         # self.initial_count_exponent = self.header.initial_count_exponent + 8 * (self.header.initial_count_exponent == 0)
+        return
 
     # accumulator = None # Symbol: Sigma
     # counter = None # Symbol: Gamma
