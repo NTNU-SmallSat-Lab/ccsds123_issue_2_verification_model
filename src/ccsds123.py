@@ -19,6 +19,8 @@ class CCSDS123():
     output_folder = "output"
     header_file = None
     use_header_file = False
+    accu_init_file = None
+    use_accu_init_file = False
 
     def __init__(self, image_file):
         self.image_file = image_file
@@ -49,6 +51,10 @@ class CCSDS123():
         self.header_file = header_file
         self.use_header_file = True
 
+    def set_hybrid_accu_init_file(self, accu_init_file):
+        self.accu_init_file = accu_init_file
+        self.use_accu_init_file = True
+
     def compress_image(self):
         start_time = time.time()
 
@@ -75,6 +81,8 @@ class CCSDS123():
             self.encoder = hyb_enc.HybridEncoder(self.header,
                                                  self.image_constants,
                                                  self.predictor.get_predictor_output())
+            if self.use_accu_init_file:
+                self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
         else:
             exit("Block-adaptive coder not implemented")
         

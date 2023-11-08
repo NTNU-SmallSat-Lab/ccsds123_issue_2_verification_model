@@ -31,6 +31,16 @@ compare:
 	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
+compare_hybrid:
+	make clean; \
+	python ccsds123_0_b_2_high_level_model.py $(image); \
+	cp output/header.bin test/; \
+	cp output/z-output-bitstream.bin test/hlm.bin; \
+	cp output/hybrid_initial_accumulator.bin test/hybrid_initial_accumulator.bin; \
+	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -a test/hybrid_initial_accumulator.bin output/header.bin $(image_format) /dev/stdin test/golden.bin; \
+	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
+	make print > test/comparison.txt
+
 # Example: make compare_with_header image=Test1-20190201/sample-000000-s32be-33x1x2.raw header=Test1-20190201/sample-000000-hdr.bin image_format=s32be
 compare_with_header:
 	make clean; \

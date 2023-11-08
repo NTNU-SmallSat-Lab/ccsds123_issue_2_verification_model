@@ -11,6 +11,8 @@ class HybridEncoder():
     header = None
     image_constants = None
     mapped_quantizer_index = None # Symbol: delta
+    accu_init_file = None
+    use_accu_init_file = False
     
     def __init__(self, header, image_constants, mapped_quantizer_index):
         self.header = header
@@ -57,11 +59,19 @@ class HybridEncoder():
         self.current_active_prefix = np.full(image_shape, fill_value='-', dtype='U512')
         self.prefix_match_index = np.full(image_shape, fill_value=-2, dtype=np.int64)
 
-        # if image_shape[1] > 1:
         self.counter[0,0] = 2**self.initial_count_exponent
-        # The hybrid encoder does not have a default accumulator init value in the standard
-        self.accumulator[0,0] = 4 * self.counter[0,0]
-            # TODO: External accumulator init table
+        
+        if self.use_accu_init_file:
+            with open(self.accu_init_file, "rb") as file:
+                data = file.read()
+                data = ''.join([bin(byte)[2:].zfill(8) for byte in data])
+                num_bits = self.image_constants.dynamic_range_bits + self.initial_count_exponent
+                data = [int(data[i:i+num_bits], 2) for i in range(0, len(data) - num_bits, num_bits)]
+                assert len(data) == self.header.z_size
+                self.accumulator[0,0] = np.array(data)
+        else:
+            # The hybrid encoder does not have a default accumulator init value in the standard. This is an arbitrary value
+            self.accumulator[0,0] = 4 * self.counter[0,0]
 
         self.bitstream = bitarray()
         self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U512')
@@ -181,6 +191,11 @@ class HybridEncoder():
         self.__add_to_bitstream('1', self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1)
     
 
+    def set_hybrid_accu_init_file(self, accu_init_file):
+        self.accu_init_file = accu_init_file
+        self.use_accu_init_file = True    
+
+
     def run_encoder(self):
         self.__init_encoder_constants()
         self.__init_encoder_arrays()
@@ -226,6 +241,14 @@ class HybridEncoder():
 
         with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
             self.bitstream.tofile(file)
+      
+        # Save the initial accumulator value
+        accu = bitarray()
+        for z in range(self.header.z_size):
+            accu += bin(int(self.accumulator[0,0,z]))[2:].zfill(int(self.image_constants.dynamic_range_bits + self.initial_count_exponent))
+        accu += '0' * (8 - len(accu))
+        with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
+            accu.tofile(file)
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
         np.savetxt(output_folder + "/hybrid-encoder-00-accumulator.csv", self.accumulator.reshape(csv_image_shape), delimiter=",", fmt='%d')
