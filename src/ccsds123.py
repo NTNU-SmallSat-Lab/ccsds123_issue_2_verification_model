@@ -62,8 +62,6 @@ class CCSDS123():
         self.header = hd.Header(self.image_file)
         if self.use_header_file:
             self.header.set_config_from_file(self.header_file)
-        else:
-            self.header.set_encoding_order_bip()
 
         self.__load_raw_image()
         print(f"{time.time() - start_time:.3f} seconds. Done with loading")
