@@ -35,12 +35,6 @@ class CCSDS123():
         format = self.image_name.split('-')[-2].split('-')[-1]
         return formats[format]
 
-    def __get_sample_bytes(self):
-        format = self.image_name.split('-')[-2].split('-')[-1][1:3]
-        if format[1] == 'b' or format[1] == 'l':
-            return 1
-        return int(format) // 8
-
     def __load_raw_image(self):
         """Load a raw image into a N_x * N_y by N_z array"""
 
