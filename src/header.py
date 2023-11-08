@@ -384,7 +384,7 @@ class Header:
         assert (self.sub_frame_interleaving_depth == 0 and self.sample_encoding_order == SampleEncodingOrder.BSQ) or (0 <= self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth + 2**16 * (self.sub_frame_interleaving_depth == 0) <= self.z_size and self.sample_encoding_order == SampleEncodingOrder.BI)
         assert 0 <= self.output_word_size and self.output_word_size < 8
         assert self.entropy_coder_type in EntropyCoderType
-        assert self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE # Other encoders not yet implemented
+        assert self.entropy_coder_type != EntropyCoderType.BLOCK_ADAPTIVE # Not yet implemented
         assert self.quantizer_fidelity_control_method in QuantizerFidelityControlMethod
         assert 0 <= self.supplementary_information_table_count and self.supplementary_information_table_count <= 15
         assert self.supplementary_information_table_count == 0 # Not implemented

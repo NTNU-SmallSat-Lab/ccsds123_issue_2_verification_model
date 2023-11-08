@@ -1,7 +1,9 @@
 from . import header as hd
 from . import constants as const
+from .hybrid_encoder_tables import *
 import numpy as np
 from bitarray import bitarray
+from math import ceil, log2
 
 
 class HybridEncoder():
@@ -9,36 +11,155 @@ class HybridEncoder():
     header = None
     image_constants = None
     mapped_quantizer_index = None # Symbol: delta
-
+    
     def __init__(self, header, image_constants, mapped_quantizer_index):
         self.header = header
         self.image_constants = image_constants
         self.mapped_quantizer_index = mapped_quantizer_index
 
-    accumulator = None # Symbol: Sigma
-    counter = None # Symbol: Gamma
-    # variable_length_code = None # Symbol: k
-    bitstream = None
-    bitstream_readable = None
+    unary_length_limit = None # Symbol: U_max
+    rescaling_counter_size = None # Symbol: gamma*
+    initial_count_exponent = None # Symbol: gamma_0
 
     def __init_encoder_constants(self):
-        return
+        self.unary_length_limit = self.header.unary_length_limit + 32 * (self.header.unary_length_limit == 0)
+        self.rescaling_counter_size = self.header.rescaling_counter_size + 4
+        self.initial_count_exponent = self.header.initial_count_exponent + 8 * (self.header.initial_count_exponent == 0)
+        tables_init()
+
+
+    accumulator = None # Symbol: Sigma
+    counter = None # Symbol: Gamma
+    variable_length_code = None # Symbol: k
+    bitstream = None
+    bitstream_readable = None
+    active_prefix = None
+    code_index = None # Symbol: i
+    input_symbol = None # Symbol: iota
+    codewords = None
+    codewords_binary = None
+    entropy_type = None
+    current_active_prefix = None
+    prefix_match_index = None
+
 
     def __init_encoder_arrays(self):
         image_shape = self.mapped_quantizer_index.shape
         self.accumulator = np.zeros(image_shape, dtype=np.int64)
         self.counter = np.zeros(image_shape[:2], dtype=np.int64)
-        # self.variable_length_code = np.zeros(image_shape, dtype=np.int64)
+        self.variable_length_code = np.full(image_shape, fill_value=-1, dtype=np.int64)
+        self.active_prefix = [''] * 15 
+        self.code_index = np.full(image_shape, fill_value=-1, dtype=np.int64)
+        self.input_symbol = np.full(image_shape, fill_value='', dtype='U64')
+        self.codewords = np.full(image_shape, fill_value='', dtype='U64')
+        self.codewords_binary = np.full(image_shape, fill_value='', dtype='U64')
+        self.entropy_type = np.full(image_shape, fill_value=2, dtype=np.uint8)
+        self.current_active_prefix = np.full(image_shape, fill_value='-', dtype='U512')
+        self.prefix_match_index = np.full(image_shape, fill_value=-2, dtype=np.int64)
 
         # if image_shape[1] > 1:
-        #     self.counter[0,1] = 2**self.initial_count_exponent
-        #     self.accumulator[0,1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[0,1] // 2**7)
+        self.counter[0,0] = 2**self.initial_count_exponent
+        # The hybrid encoder does not have a default accumulator init value in the standard
+        self.accumulator[0,0] = 4 * self.counter[0,0]
+            # TODO: External accumulator init table
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.zeros(image_shape, dtype='U64')
+        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U64')
 
     def __encode_sample(self, x, y, z):
-        return
+        if y == 0 and x == 0:
+            bitstring = bin(self.mapped_quantizer_index[y,x,z])[2:].zfill(self.image_constants.dynamic_range_bits)
+            self.__add_to_bitstream(bitstring,x,y,z)
+            return
+
+        prev_y = y
+        prev_x = x - 1
+        if prev_x < 0:
+            prev_y -= 1
+            prev_x = self.header.x_size - 1
+
+        if self.counter[prev_y,prev_x] == 2**self.rescaling_counter_size - 1:
+            self.counter[y,x] = (self.counter[prev_y,prev_x] + 1) // 2
+            self.accumulator[y,x,z] = \
+                    (self.accumulator[prev_y,prev_x,z] + \
+                    4 * self.mapped_quantizer_index[y,x,z] + 1) \
+                    // 2
+            accumulator_lsb = bin(self.accumulator[y,x,z])[-1]
+            self.__add_to_bitstream(accumulator_lsb, x, y, z)
+        else:
+            self.counter[y,x] = self.counter[prev_y,prev_x] + 1
+            self.accumulator[y,x,z] = \
+                self.accumulator[prev_y,prev_x,z] + \
+                4 * self.mapped_quantizer_index[y,x,z]
+        
+        if self.accumulator[y,x,z] * 2**14 >= threshold[0] * self.counter[y,x]:
+            self.__encode_high_entropy(x, y, z)
+            self.entropy_type[y,x,z] = 1
+        else:
+            self.__encode_low_entropy(x, y, z)
+            self.entropy_type[y,x,z] = 0
+        
+    
+    def __encode_high_entropy(self, x, y, z):
+        self.variable_length_code[y,x,z] = min(
+                log2((self.accumulator[y,x,z] + self.counter[y,x] * 49 // 2**5) // self.counter[y,x]) - 2,
+                self.image_constants.dynamic_range_bits - 2
+            )
+        assert self.variable_length_code[y,x,z] >= 2
+
+        self.__add_to_bitstream(
+            self.__reverse_gpo2(self.mapped_quantizer_index[y,x,z], self.variable_length_code[y,x,z]),
+            x, y, z)
+
+    
+    def __reverse_gpo2(self, j, k):
+        bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
+        zeros = j // 2**k
+        if zeros < self.unary_length_limit:
+            if k == 0:
+                return '1' + '0' * zeros
+            return bitstring_j[-k:] + '1' + '0' * zeros
+        else:
+            return bitstring_j + '0' * self.unary_length_limit
+        
+
+    def __encode_low_entropy(self, x, y, z):
+        code_index = -2
+        for i in range(15, -1, -1):
+            if self.accumulator[y,x,z] * 2**14 < self.counter[y,x] * threshold[i]:
+                code_index = i
+                break
+        self.code_index[y,x,z] = code_index
+        input_symbol = "F"
+        if self.mapped_quantizer_index[y,x,z] <= input_symbol_limit[code_index]:
+            input_symbol = hex(self.mapped_quantizer_index[y,x,z])[2:].upper()
+            # print(f"{self.input_symbol[y,x,z]}")
+            assert 'h' not in self.input_symbol[y,x,z]
+        else:
+            input_symbol = 'X'
+            residual_value = self.mapped_quantizer_index[y,x,z] - input_symbol_limit[code_index] - 1
+            self.__add_to_bitstream(self.__reverse_gpo2(residual_value, 0), x, y, z)
+        
+        self.active_prefix[code_index] += input_symbol
+        self.current_active_prefix[y,x,z] = self.active_prefix[code_index]
+        self.input_symbol[y,x,z] = input_symbol
+        prefix_match_index = np.where(code_table_input[code_index] == self.active_prefix[code_index])[0]
+        self.prefix_match_index[y,x,z] = prefix_match_index[0] if prefix_match_index.shape[0] == 1 else -1
+
+        if prefix_match_index.shape[0] == 1:
+            codeword = code_table_output[code_index][prefix_match_index[0]]
+            self.codewords[y,x,z] = codeword
+            assert 'Z' not in codeword
+            codeword = bin(int(codeword.split("'h")[1], 16))[2:].zfill(int(codeword.split("'h")[0]))
+            self.codewords_binary[y,x,z] = codeword
+            self.__add_to_bitstream(codeword, x, y, z)
+
+            self.active_prefix[code_index] = ''
+
+
+    def __add_to_bitstream(self, bitstring, x, y, z):
+        self.bitstream += bitstring
+        self.bitstream_readable[y,x,z] += bitstring
     
 
     def run_encoder(self):
@@ -86,9 +207,14 @@ class HybridEncoder():
             self.bitstream.tofile(file)
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
-        # np.savetxt(output_folder + "/sa-encoder-00-accumulator-init-parameter-1.csv", self.accumulator_init_parameter_1, delimiter=",", fmt='%d')
-        # np.savetxt(output_folder + "/sa-encoder-01-accumulator-init-parameter-2.csv", self.accumulator_init_parameter_2, delimiter=",", fmt='%d')
-        np.savetxt(output_folder + "/hybrid-encoder-02-accumulator.csv", self.accumulator.reshape(csv_image_shape), delimiter=",", fmt='%d')
-        np.savetxt(output_folder + "/hybrid-encoder-03-counter.csv", self.counter.reshape(csv_image_shape[:1]), delimiter=",", fmt='%d') 
-        np.savetxt(output_folder + "/hybrid-encoder-04-bitstream-readable.csv", self.bitstream_readable.reshape(csv_image_shape), delimiter=",", fmt='%s')
-        # np.savetxt(output_folder + "/sa-encoder-05-variable-length-code.csv", self.variable_length_code.reshape(csv_image_shape), delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/hybrid-encoder-00-accumulator.csv", self.accumulator.reshape(csv_image_shape), delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/hybrid-encoder-01-counter.csv", self.counter.reshape(csv_image_shape[:1]), delimiter=",", fmt='%d') 
+        np.savetxt(output_folder + "/hybrid-encoder-02-variable-length-code.csv", self.variable_length_code.reshape(csv_image_shape), delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/hybrid-encoder-03-code-index.csv", self.code_index.reshape(csv_image_shape), delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/hybrid-encoder-04-input-symbol.csv", self.input_symbol.reshape(csv_image_shape), delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-05-current-active-prefix.csv", self.current_active_prefix.reshape(csv_image_shape), delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-06-codewords.csv", self.codewords.reshape(csv_image_shape), delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-07-codewords-binary.csv", self.codewords_binary.reshape(csv_image_shape), delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-08-entropy-type.csv", self.entropy_type.reshape(csv_image_shape), delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/hybrid-encoder-09-bitstream-readable.csv", self.bitstream_readable.reshape(csv_image_shape), delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-10-prefix-match-index.csv", self.prefix_match_index.reshape(csv_image_shape), delimiter=",", fmt='%d')
