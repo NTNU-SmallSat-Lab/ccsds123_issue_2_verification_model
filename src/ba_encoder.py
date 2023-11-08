@@ -17,25 +17,22 @@ class BlockAdaptiveEncoder():
         self.mapped_quantizer_index = mapped_quantizer_index
 
     block_size = None # Symbol: J
-    # unary_length_limit = None # Symbol: U_max
-    # accumulator_init_parameter_1 = None # Symbol: k'
-    # accumulator_init_parameter_2 = None # Symbol: k''
-    # rescaling_counter_size = None # Symbol: gamma*
-    # initial_count_exponent = None # Symbol: gamma_0
+    reference_sample_interval = None # Symbol: r
+    id_bits = None # bits used for compression type identification. Zero-block and second extension have 1 more bit
+    segment_size = 64 # Symbol: s. Number of blocks in a segment
     
     def __init_encoder_constants(self):
         block_sizes = [8, 16, 32, 64]
-        self.block_size = block_sizes[self.header.block_size]        
-        # self.unary_length_limit = self.header.unary_length_limit + 32 * (self.header.unary_length_limit == 0)
-        # self.rescaling_counter_size = self.header.rescaling_counter_size + 4
-        # self.initial_count_exponent = self.header.initial_count_exponent + 8 * (self.header.initial_count_exponent == 0)
-        return
+        self.block_size = block_sizes[self.header.block_size]
+        self.reference_sample_interval = self.header.reference_sample_interval + 2**12 * int(self.header.reference_sample_interval == 0)
+        id_bits_limit = 1 if self.header.restricted_code_options_flag == hd.RestrictedCodeOptionsFlag.RESTRICTED else 3
+        self.id_bits = max(ceil(log2(self.image_constants.dynamic_range_bits)), id_bits_limit)
 
     blocks = None
     blocks_shape = None
-    # accumulator = None # Symbol: Sigma
-    # counter = None # Symbol: Gamma
-    # variable_length_code = None # Symbol: k
+    compression_results = None
+    codes_binary = None
+    zero_block_count = None
     # bitstream = None
     # bitstream_readable = None
 
@@ -44,19 +41,72 @@ class BlockAdaptiveEncoder():
         image_size = image_shape[0] * image_shape[1] * image_shape[2]
         self.blocks = np.zeros((image_size // self.block_size + int(image_size % self.block_size != 0), self.block_size), dtype=np.int64)
         self.blocks_shape = self.blocks.shape
-        # self.accumulator = np.zeros(image_shape, dtype=np.int64)
-        # self.counter = np.zeros(image_shape[:2], dtype=np.int64)
-        # self.variable_length_code = np.zeros(image_shape, dtype=np.int64)
+        compressors_results_num = self.image_constants.dynamic_range_bits # Second extension, bits-2 times sample splitting, no compression. zero block results are not stored
+        self.compression_results = np.full((self.blocks.shape[0], compressors_results_num), fill_value='', dtype='U4096')
+        self.zero_block_count = np.zeros((self.blocks.shape[0]), dtype=np.int64)
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.zeros(image_shape, dtype='U64')
+        self.bitstream_readable = np.full((self.blocks.shape[0]), fill_value='', dtype='U4096')
 
-    def __encode_sample(self, x, y, z):
-        exit()
+    def __encode_block(self, num):
+        start_of_segment = (num % self.reference_sample_interval) % self.segment_size == 0
+        if np.all(self.blocks[num] == 0):
+            # This is a zero block
+            if start_of_segment:
+                self.zero_block_count[num] = 1
+            else:
+                self.zero_block_count[num] = self.zero_block_count[num - 1] + 1
+            return
+        
+        # Check if previous was a zero block
+        if self.zero_block_count[num - 1] > 0:
+            code = '0' * (self.id_bits + 1)
+            if self.zero_block_count[num - 1] <= 4:
+                code += '0' * (self.zero_block_count[num - 1] - 1) + '1'
+            elif start_of_segment:
+                code += '00001'
+            else:
+                code += '0' * self.zero_block_count[num - 1] + '1'
+                assert self.zero_block_count[num - 1] <= self.segment_size
+            self.__add_to_bitstream(code, num - 1)
+
+        self.compression_results[num][0] = self.__compress_no_compression(num)
+        self.compression_results[num][1] = self.__compress_second_extension(num)
+        for k in range(self.image_constants.dynamic_range_bits - 2):
+            self.compression_results[num][k + 2] = self.__compress_sample_splitting(num, k)
+
+        lowest_value = 4096
+        lowest_index = 0
+        for i in range (self.compression_results.shape[1]):
+            if len(self.compression_results[num][i]) < lowest_value:
+                lowest_value = len(self.compression_results[num][i])
+                lowest_index = i
+        # self.codes_binary[num] = self.compression_results[num][lowest_index]
+        self.__add_to_bitstream(self.compression_results[num][lowest_index], num)      
+
+        
+    def __compress_no_compression(self, num):
+        return '1' * self.id_bits + ''.join([bin(self.blocks[num][i])[2:] for i in range(self.block_size)])
     
-    def __add_to_bitstream(self, bitstring, x, y, z):
+    def __compress_second_extension(self, num):
+        code = '0' * self.id_bits + '1'
+        for i in range(0, self.block_size, 2):
+            d0, d1 = self.blocks[num][i:i + 2]
+            transformed = (d0 + d1) * (d0 + d1 + 1) // 2 + d1
+            code += '0' * transformed + '1'
+        return code
+    
+    def __compress_sample_splitting(self, num, k):
+        fs_codes, split_codes = '', ''
+        for i in range(self.block_size):
+            fs_codes += '0' * int(bin(self.blocks[num][i])[2:].zfill(32)[:-k], 2) if k != 0 else '0' * self.blocks[num][i] + '1'
+            split_codes += bin(self.blocks[num][i])[2:].zfill(33)[-k:] if k != 0 else ''
+        return bin(k + 1)[2:].zfill(self.id_bits) + fs_codes + split_codes
+
+    
+    def __add_to_bitstream(self, bitstring, num):
         self.bitstream += bitstring
-        self.bitstream_readable[y,x,z] = bitstring
+        self.bitstream_readable[num] = bitstring
 
     def run_encoder(self):
         self.__init_encoder_constants()
@@ -85,16 +135,17 @@ class BlockAdaptiveEncoder():
                             self.blocks[index] = self.mapped_quantizer_index[y,x,z]
                             index += 1
             self.blocks = self.blocks.reshape((self.blocks_shape[0], self.blocks_shape[1]))
-            
+
         elif self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
             self.blocks = self.mapped_quantizer_index.transpose(2,0,1) # Transpose to z,y,x order (BSQ)
             self.blocks = self.blocks.reshape((self.header.z_size * self.header.y_size * self.header.x_size)) # Reshape to 1D array
-            padding = self.blocks_shape[0] - self.blocks.shape[0]
+            padding = self.blocks_shape[0] * self.blocks_shape[1] - self.blocks.shape[0]
             self.blocks = np.pad(self.blocks, (0, padding), mode='constant', constant_values=0)
             self.blocks = self.blocks.reshape(self.blocks_shape)
 
-        for i in range(self.blocks.shape[0]):
-            self.__encode_block(self.blocks[i])
+        for num in range(self.blocks.shape[0]):
+            print(f"\rProcessing block num={num+1}/{self.blocks.shape[0]}", end="")
+            self.__encode_block(num)
         
         print("")
     
@@ -110,6 +161,7 @@ class BlockAdaptiveEncoder():
             self.bitstream.tofile(file)
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
+        np.savetxt(output_folder + "/ba-encoder-00-blocks.csv", self.blocks.reshape(self.blocks_shape), delimiter=",", fmt='%d')
         # np.savetxt(output_folder + "/sa-encoder-00-accumulator-init-parameter-1.csv", self.accumulator_init_parameter_1, delimiter=",", fmt='%d')
         # np.savetxt(output_folder + "/sa-encoder-01-accumulator-init-parameter-2.csv", self.accumulator_init_parameter_2, delimiter=",", fmt='%d')
         # np.savetxt(output_folder + "/sa-encoder-02-accumulator.csv", self.accumulator.reshape(csv_image_shape), delimiter=",", fmt='%d')
