@@ -64,7 +64,7 @@ class HybridEncoder():
             # TODO: External accumulator init table
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U64')
+        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U512')
 
     def __encode_sample(self, x, y, z):
         if y == 0 and x == 0:
@@ -150,16 +150,37 @@ class HybridEncoder():
             codeword = code_table_output[code_index][prefix_match_index[0]]
             self.codewords[y,x,z] = codeword
             assert 'Z' not in codeword
-            codeword = bin(int(codeword.split("'h")[1], 16))[2:].zfill(int(codeword.split("'h")[0]))
-            self.codewords_binary[y,x,z] = codeword
-            self.__add_to_bitstream(codeword, x, y, z)
+            codeword_binary = self.__table_codeword_to_binary(codeword)
+            self.codewords_binary[y,x,z] = codeword_binary
+            self.__add_to_bitstream(codeword_binary, x, y, z)
 
             self.active_prefix[code_index] = ''
+
+    
+    def __table_codeword_to_binary(self, codeword):
+        return bin(int(codeword.split("'h")[1], 16))[2:].zfill(int(codeword.split("'h")[0]))
 
 
     def __add_to_bitstream(self, bitstring, x, y, z):
         self.bitstream += bitstring
         self.bitstream_readable[y,x,z] += bitstring
+
+    
+    def __encode_image_tail(self):
+        for i in range(16):
+            index = np.where(flush_table_prefix[i] == self.active_prefix[i])[0][0] if self.active_prefix[i] != '' else 0
+            print (f"index: {index}, i: {i}, active_prefix: {self.active_prefix[i]}, flush_table_word[i][index] {flush_table_word[i][index]}")
+            self.__add_to_bitstream(
+                self.__table_codeword_to_binary(flush_table_word[i][index]),
+                self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1
+            )
+        
+        for z in range(self.header.z_size):
+            code = bin(self.accumulator[self.header.y_size - 1, self.header.x_size - 1,z])[2:]
+            code = code.zfill(2 + self.image_constants.dynamic_range_bits + self.rescaling_counter_size)
+            self.__add_to_bitstream(code, self.header.x_size - 1, self.header.y_size - 1, z)
+
+        self.__add_to_bitstream('1', self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1)
     
 
     def run_encoder(self):
@@ -192,6 +213,8 @@ class HybridEncoder():
                 for y in range(self.header.y_size):
                     for x in range(self.header.x_size):
                         self.__encode_sample(x, y, z)
+        
+        self.__encode_image_tail()
         print("")
         
 
