@@ -2,7 +2,7 @@ from . import header as hd
 from . import constants as const
 import numpy as np
 from bitarray import bitarray
-from math import ceil, floor, log2
+from math import ceil, log2
 
 
 class SampleAdaptiveEncoder():
@@ -23,9 +23,9 @@ class SampleAdaptiveEncoder():
     initial_count_exponent = None # Symbol: gamma_0
     
     def __init_encoder_constants(self):        
-        self.unary_length_limit = self.header.unary_length_limit
-        if self.header.unary_length_limit == 0:
-            self.unary_length_limit += 32
+        self.unary_length_limit = self.header.unary_length_limit + 32 * (self.header.unary_length_limit == 0)
+        self.rescaling_counter_size = self.header.rescaling_counter_size + 4
+        self.initial_count_exponent = self.header.initial_count_exponent + 8 * (self.header.initial_count_exponent == 0)
 
         if self.header.accumulator_init_constant != 15:
             self.accumulator_init_parameter_2 = np.full((self.header.z_size), self.header.accumulator_init_constant, dtype=np.int64)
@@ -35,10 +35,6 @@ class SampleAdaptiveEncoder():
             (self.accumulator_init_parameter_2 <= 30 - self.image_constants.dynamic_range_bits).astype(int) * self.accumulator_init_parameter_2 + \
             (self.accumulator_init_parameter_2 > 30 - self.image_constants.dynamic_range_bits).astype(int) * (2 * self.accumulator_init_parameter_2 + self.image_constants.dynamic_range_bits - 30)
 
-        self.rescaling_counter_size = self.header.rescaling_counter_size + 4
-        self.initial_count_exponent = self.header.initial_count_exponent
-        if self.header.initial_count_exponent == 0:
-            self.initial_count_exponent += 8 
 
     accumulator = None # Symbol: Sigma
     counter = None # Symbol: Gamma
@@ -107,14 +103,13 @@ class SampleAdaptiveEncoder():
         assert k_method_2 == self.variable_length_code[y,x,z]            
                     
     def __gpo2(self, j, k):
+        bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
         zeros = j // 2**k
         if zeros < self.unary_length_limit:
             if k == 0:
                 return '0' * zeros + '1'
-            bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
             return '0' * zeros + '1' + bitstring_j[-k:]
         else:
-            bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
             return '0' * self.unary_length_limit + bitstring_j
     
     def __add_to_bitstream(self, bitstring, x, y, z):
