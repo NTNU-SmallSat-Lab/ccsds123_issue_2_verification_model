@@ -16,18 +16,23 @@ class BlockAdaptiveEncoder():
         self.image_constants = image_constants
         self.mapped_quantizer_index = mapped_quantizer_index
 
+    block_size = None # Symbol: J
     # unary_length_limit = None # Symbol: U_max
     # accumulator_init_parameter_1 = None # Symbol: k'
     # accumulator_init_parameter_2 = None # Symbol: k''
     # rescaling_counter_size = None # Symbol: gamma*
     # initial_count_exponent = None # Symbol: gamma_0
     
-    def __init_encoder_constants(self):        
+    def __init_encoder_constants(self):
+        block_sizes = [8, 16, 32, 64]
+        self.block_size = block_sizes[self.header.block_size]        
         # self.unary_length_limit = self.header.unary_length_limit + 32 * (self.header.unary_length_limit == 0)
         # self.rescaling_counter_size = self.header.rescaling_counter_size + 4
         # self.initial_count_exponent = self.header.initial_count_exponent + 8 * (self.header.initial_count_exponent == 0)
         return
 
+    blocks = None
+    blocks_shape = None
     # accumulator = None # Symbol: Sigma
     # counter = None # Symbol: Gamma
     # variable_length_code = None # Symbol: k
@@ -36,6 +41,9 @@ class BlockAdaptiveEncoder():
 
     def __init_encoder_arrays(self):
         image_shape = self.mapped_quantizer_index.shape
+        image_size = image_shape[0] * image_shape[1] * image_shape[2]
+        self.blocks = np.zeros((image_size // self.block_size + int(image_size % self.block_size != 0), self.block_size), dtype=np.int64)
+        self.blocks_shape = self.blocks.shape
         # self.accumulator = np.zeros(image_shape, dtype=np.int64)
         # self.counter = np.zeros(image_shape[:2], dtype=np.int64)
         # self.variable_length_code = np.zeros(image_shape, dtype=np.int64)
@@ -54,10 +62,12 @@ class BlockAdaptiveEncoder():
         self.__init_encoder_constants()
         self.__init_encoder_arrays()
 
-        if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI:
-            for y in range(self.header.y_size):
-                print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
+        if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI: 
+            self.blocks = self.blocks.reshape((self.blocks_shape[0] * self.blocks_shape[1]))
+            index = 0
 
+            # TODO: Do this cleaner and more efficently
+            for y in range(self.header.y_size):
                 if y % 2**self.header.error_update_period_exponent == 0 \
                     and self.header.periodic_error_updating_flag == \
                     hd.PeriodicErrorUpdatingFlag.USED:
@@ -72,14 +82,20 @@ class BlockAdaptiveEncoder():
                         )
 
                         for z in range(z_start, z_end):
-                            self.__encode_sample(x, y, z)
-
+                            self.blocks[index] = self.mapped_quantizer_index[y,x,z]
+                            index += 1
+            self.blocks = self.blocks.reshape((self.blocks_shape[0], self.blocks_shape[1]))
+            
         elif self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
-            for z in range(self.header.z_size):
-                print(f"\rProcessing band z={z+1}/{self.header.z_size}", end="")
-                for y in range(self.header.y_size):
-                    for x in range(self.header.x_size):
-                        self.__encode_sample(x, y, z)
+            self.blocks = self.mapped_quantizer_index.transpose(2,0,1) # Transpose to z,y,x order (BSQ)
+            self.blocks = self.blocks.reshape((self.header.z_size * self.header.y_size * self.header.x_size)) # Reshape to 1D array
+            padding = self.blocks_shape[0] - self.blocks.shape[0]
+            self.blocks = np.pad(self.blocks, (0, padding), mode='constant', constant_values=0)
+            self.blocks = self.blocks.reshape(self.blocks_shape)
+
+        for i in range(self.blocks.shape[0]):
+            self.__encode_block(self.blocks[i])
+        
         print("")
     
     def save_data(self, output_folder, header_bitstream):
