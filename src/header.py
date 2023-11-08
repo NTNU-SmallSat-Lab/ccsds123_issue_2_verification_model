@@ -561,6 +561,15 @@ class Header:
             exit("Accumulator initialization table not implemented")   
         return bitstream
     
+    def __encode_entropy_coder_hybrid_structure(self):
+        bitstream = bitarray()
+        bitstream += bin(self.unary_length_limit)[2:].zfill(5)
+        bitstream += bin(self.rescaling_counter_size)[2:].zfill(3)
+        bitstream += bin(self.initial_count_exponent)[2:].zfill(3)
+        bitstream += 5 * '0' # Reserved
+        assert len(bitstream) == 8 * 2
+        return bitstream
+    
     def __create_header_bitstream(self):
         bitstream = bitarray()
 
@@ -573,6 +582,10 @@ class Header:
             bitstream += self.__encode_predictor_sample_representative_structure()        
         if self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE:
             bitstream += self.__encode_entropy_coder_sample_adaptive_structure()
+        elif self.entropy_coder_type == EntropyCoderType.HYBRID:
+            bitstream += self.__encode_entropy_coder_hybrid_structure()
+        elif self.entropy_coder_type == EntropyCoderType.BLOCK_ADAPTIVE:
+            exit("Block-adaptive entropy coder not implemented")
         
         self.header_bitstream = bitstream
 
