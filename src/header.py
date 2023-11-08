@@ -384,7 +384,6 @@ class Header:
         assert (self.sub_frame_interleaving_depth == 0 and self.sample_encoding_order == SampleEncodingOrder.BSQ) or (0 <= self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth + 2**16 * (self.sub_frame_interleaving_depth == 0) <= self.z_size and self.sample_encoding_order == SampleEncodingOrder.BI)
         assert 0 <= self.output_word_size and self.output_word_size < 8
         assert self.entropy_coder_type in EntropyCoderType
-        assert self.entropy_coder_type != EntropyCoderType.BLOCK_ADAPTIVE # Not yet implemented
         assert self.quantizer_fidelity_control_method in QuantizerFidelityControlMethod
         assert 0 <= self.supplementary_information_table_count and self.supplementary_information_table_count <= 15
         assert self.supplementary_information_table_count == 0 # Not implemented
@@ -570,6 +569,15 @@ class Header:
         assert len(bitstream) == 8 * 2
         return bitstream
     
+    def __encode_entropy_coder_block_adaptive_structure(self):
+        bitstream = bitarray()
+        bitstream += 1 * '0'
+        bitstream += bin(self.block_size)[2:].zfill(2)
+        bitstream += bin(self.restricted_code_options_flag.value)[2:].zfill(1)
+        bitstream += bin(self.reference_sample_interval)[2:].zfill(12)
+        assert len(bitstream) == 8 * 2
+        return bitstream
+    
     def __create_header_bitstream(self):
         bitstream = bitarray()
 
@@ -585,7 +593,7 @@ class Header:
         elif self.entropy_coder_type == EntropyCoderType.HYBRID:
             bitstream += self.__encode_entropy_coder_hybrid_structure()
         elif self.entropy_coder_type == EntropyCoderType.BLOCK_ADAPTIVE:
-            exit("Block-adaptive entropy coder not implemented")
+            bitstream += self.__encode_entropy_coder_block_adaptive_structure()
         
         self.header_bitstream = bitstream
 

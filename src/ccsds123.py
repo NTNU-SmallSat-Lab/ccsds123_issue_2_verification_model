@@ -83,8 +83,10 @@ class CCSDS123():
                                                  self.predictor.get_predictor_output())
             if self.use_accu_init_file:
                 self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
-        else:
-            exit("Block-adaptive coder not implemented")
+        elif self.header.entropy_coder_type == hd.EntropyCoderType.BLOCK_ADAPTIVE:
+            self.encoder = hyb_enc.HybridEncoder(self.header,
+                                                 self.image_constants,
+                                                 self.predictor.get_predictor_output())
         
         self.encoder.run_encoder()
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
