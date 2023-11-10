@@ -92,6 +92,9 @@ class BlockAdaptiveEncoder():
         for i in range(0, self.block_size, 2):
             d0, d1 = self.blocks[num][i:i + 2]
             transformed = (d0 + d1) * (d0 + d1 + 1) // 2 + d1
+            if transformed >= self.block_size * self.image_constants.dynamic_range_bits:
+                # Abort. Outputs longer code than no compression
+                return '0' * self.id_bits + '1' + '0' * (self.block_size + 1) * self.image_constants.dynamic_range_bits
             code += '0' * transformed + '1'
         return code
     
