@@ -258,9 +258,9 @@ class Predictor():
             self.high_resolution_predicted_sample_value[y,x,z] = \
                 clip( 
                     modulo_star(
-                        self.predicted_central_local_difference[y,x,z] + \
+                        int(self.predicted_central_local_difference[y,x,z] + \
                         2**self.weight_component_resolution * \
-                        (self.local_sum[y,x,z] - 4 * self.image_constants.middle_sample_value), \
+                        (self.local_sum[y,x,z] - 4 * self.image_constants.middle_sample_value)), \
                         self.register_size \
                     ) + 2**(self.weight_component_resolution + 2) * \
                     self.image_constants.middle_sample_value + \
