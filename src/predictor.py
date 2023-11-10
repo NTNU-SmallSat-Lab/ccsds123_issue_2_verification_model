@@ -231,16 +231,14 @@ class Predictor():
         else:
             exit("Non-zero weight exponent offset not supported")
 
-        assert self.weight_update_scaling_exponent[t - 1] + weight_exponent_offset >= 0
-
         for i in range(self.weight_vector.shape[3]):
             self.weight_vector[y,x,z,i] = \
                 clip(
                     self.weight_vector[prev_y,prev_x,z,i] + \
-                    (sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z]) * \
-                    self.local_difference_vector[prev_y,prev_x,z,i] // \
-                    2**(self.weight_update_scaling_exponent[t - 1] + \
-                    weight_exponent_offset) + 1) // 2, \
+                    floor(float(sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z])) * \
+                    float(self.local_difference_vector[prev_y,prev_x,z,i]) * \
+                    2.0**(-(self.weight_update_scaling_exponent[t - 1] + \
+                    weight_exponent_offset)) + 1.0) // 2, \
                     self.weight_min, self.weight_max
                 )
 

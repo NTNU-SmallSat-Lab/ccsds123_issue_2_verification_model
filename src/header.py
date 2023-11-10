@@ -103,10 +103,10 @@ class Header:
     sample_type = SampleType.UNSIGNED_INTEGER
     large_d_flag = LargeDFlag.SMALL_D
     dynamic_range = 14 # D. Encode as D%16. 1<=D<=32
-    sample_encoding_order = SampleEncodingOrder.BI
-    sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
+    sample_encoding_order = SampleEncodingOrder.BSQ
+    sub_frame_interleaving_depth = 0 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
-    entropy_coder_type = EntropyCoderType.SAMPLE_ADAPTIVE
+    entropy_coder_type = EntropyCoderType.BLOCK_ADAPTIVE
     quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
     supplementary_information_table_count = 0 # tau. 0<=tau<=15. Supplementary information tables are not implemented
 
@@ -174,7 +174,7 @@ class Header:
     # Block-adaptive entropy coder
     block_size = 2 # B. 0: J=8, 1: J=16, 2: J=32, 3: J=64
     restricted_code_options_flag = RestrictedCodeOptionsFlag.UNRESTRICTED
-    reference_sample_interval = 2**11 # r. Encode as r%2**12.
+    reference_sample_interval = 0 # r. Encode as r%2**12.
 
     header_bitstream = None
 
@@ -604,7 +604,7 @@ class Header:
     def set_encoding_order_bil(self):
         self.sample_encoding_order = SampleEncodingOrder.BI
         self.sub_frame_interleaving_depth = 1
-    
+      
     def get_dynamic_range_bits(self):
         dynamic_range_bits = self.dynamic_range
         if dynamic_range_bits == 0:

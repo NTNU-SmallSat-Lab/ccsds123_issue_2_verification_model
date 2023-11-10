@@ -1,7 +1,7 @@
 image = raw_images/Landsat_mountain-u16be-6x50x100.raw
 image_format = u16be
 hex_length = 320
-bin_length = 320
+bin_length = 84
 
 print:
 	@echo "Header:"; \
@@ -51,6 +51,22 @@ compare_with_header:
 	@echo "Header: "; \
 	python tools/files_identical_check.py test/header.bin $(header)
 	@echo "\nCompressed image: "; \
+	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
+	make print > test/comparison.txt
+
+# Example: make compare_vector image=../Test1-20190201/sample-000001-u32be-4x11x45.raw header=../Test1-20190201/sample-000001-hdr.bin image_format=s32be correct=../Test1-20190201/sample-000001.flex
+compare_vector:
+	make clean; \
+	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header); \
+	cp output/header.bin test/; \
+	cp output/z-output-bitstream.bin test/hlm.bin; \
+	cp $(correct) test/golden.bin; \
+	# lcnl_encoder $(header) $(image_format) $(image) test/goldenModel.bin
+	@echo "Header: "; \
+	python tools/files_identical_check.py test/header.bin $(header)
+	# @echo "\nhlm and golden model image: "; \
+	# python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
+	@echo "\nhlm and correct image: "; \
 	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 

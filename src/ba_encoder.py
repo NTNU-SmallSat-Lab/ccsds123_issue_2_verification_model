@@ -98,7 +98,7 @@ class BlockAdaptiveEncoder():
     def __encode_sample_splitting(self, num, k):
         fs_codes, split_codes = '', ''
         for i in range(self.block_size):
-            fs_codes += '0' * int(bin(self.blocks[num][i])[2:].zfill(32)[:-k], 2) if k != 0 else '0' * self.blocks[num][i] + '1'
+            fs_codes += '0' * int(bin(self.blocks[num][i])[2:].zfill(32)[:-k], 2) + '1' if k != 0 else '0' * self.blocks[num][i] + '1'
             split_codes += bin(self.blocks[num][i])[2:].zfill(33)[-k:] if k != 0 else ''
         return bin(k + 1)[2:].zfill(self.id_bits) + fs_codes + split_codes
 
