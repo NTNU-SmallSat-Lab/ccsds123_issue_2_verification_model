@@ -43,7 +43,7 @@ class Predictor():
             self.spectral_bands_used[z] = min(z, self.header.prediction_bands_num)
 
         self.weight_component_resolution = self.header.weight_component_resolution + 4
-        self.weight_update_change_interval = 2**self.header.weight_update_change_interval
+        self.weight_update_change_interval = 2**(self.header.weight_update_change_interval + 4)
         self.weight_update_initial_parameter = self.header.weight_update_initial_parameter - 6
         self.weight_update_final_parameter = self.header.weight_update_final_parameter - 6
         self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int64)
@@ -52,6 +52,7 @@ class Predictor():
                 self.weight_update_initial_parameter + (t - self.header.x_size) // self.weight_update_change_interval \
                 , self.weight_update_initial_parameter, self.weight_update_final_parameter) \
                 + self.image_constants.dynamic_range_bits - self.weight_component_resolution
+        
         self.weight_min = -2**(self.weight_component_resolution + 2)
         self.weight_max = 2**(self.weight_component_resolution + 2) - 1
 
@@ -227,18 +228,18 @@ class Predictor():
         assert t - 1 == prev_x + prev_y * self.header.x_size
 
         if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.ALL_ZERO:
-            weight_exponent_offset = 0
+            weight_exponent_offset = 0.0
         else:
             exit("Non-zero weight exponent offset not supported")
 
         for i in range(self.weight_vector.shape[3]):
             self.weight_vector[y,x,z,i] = \
                 clip(
-                    self.weight_vector[prev_y,prev_x,z,i] + \
-                    floor(float(sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z])) * \
+                    int(self.weight_vector[prev_y,prev_x,z,i]) + \
+                    (floor(float(sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z])) * \
                     float(self.local_difference_vector[prev_y,prev_x,z,i]) * \
-                    2.0**(-(self.weight_update_scaling_exponent[t - 1] + \
-                    weight_exponent_offset)) + 1.0) // 2, \
+                    2.0**(-(float(self.weight_update_scaling_exponent[t - 1]) + \
+                    weight_exponent_offset))) + 1) // 2, \
                     self.weight_min, self.weight_max
                 )
 
@@ -332,9 +333,9 @@ class Predictor():
         else:
             self.clipped_quantizer_bin_center[y, x, z] = \
                 clip( \
-                    self.predicted_sample_value[y, x, z] + \
+                    int(self.predicted_sample_value[y, x, z] + \
                     self.quantizer_index[y, x, z] * \
-                    (2 * self.maximum_error[y, x, z] + 1), \
+                    (2 * self.maximum_error[y, x, z] + 1)), \
                     self.image_constants.lower_sample_limit, \
                     self.image_constants.upper_sample_limit \
                 )

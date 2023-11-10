@@ -102,12 +102,12 @@ class Header:
     z_size = 0 # N_z. Encode as N_z%2^16. 1<=N_z<=2^16-1
     sample_type = SampleType.UNSIGNED_INTEGER
     large_d_flag = LargeDFlag.SMALL_D
-    dynamic_range = 14 # D. Encode as D%16. 1<=D<=32
+    dynamic_range = 8 # D. Encode as D%16. 1<=D<=32
     sample_encoding_order = SampleEncodingOrder.BSQ
     sub_frame_interleaving_depth = 0 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
-    entropy_coder_type = EntropyCoderType.BLOCK_ADAPTIVE
-    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
+    entropy_coder_type = EntropyCoderType.SAMPLE_ADAPTIVE
+    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.LOSSLESS
     supplementary_information_table_count = 0 # tau. 0<=tau<=15. Supplementary information tables are not implemented
 
     # TODO: Support supplementary information tables
@@ -116,12 +116,12 @@ class Header:
     # Predicator metadata
     #####################
     sample_representative_flag = SampleRepresentativeFlag.INCLUDED
-    prediction_bands_num = 4 # P. 0<=P<=15
-    prediction_mode = PredictionMode.FULL
+    prediction_bands_num = 1 # P. 0<=P<=15
+    prediction_mode = PredictionMode.REDUCED
     weight_exponent_offset_flag = WeightExponentOffsetFlag.ALL_ZERO
     local_sum_type = LocalSumType.WIDE_NEIGHBOR_ORIENTED
-    register_size = 32 # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
-    weight_component_resolution = 2 # Omega. Encode as Omega-4. 4<=Omega<=19
+    register_size = 0 # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
+    weight_component_resolution = 15 # Omega. Encode as Omega-4. 4<=Omega<=19
     weight_update_change_interval = 6 # t_inc. Encode as log2(t_inc)-4. 2^4<=t_inc<=2^11
     weight_update_initial_parameter = 6 # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
     weight_update_final_parameter = 10 # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
