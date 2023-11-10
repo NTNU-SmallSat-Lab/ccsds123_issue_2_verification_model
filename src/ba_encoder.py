@@ -118,7 +118,7 @@ class BlockAdaptiveEncoder():
             self.blocks = self.blocks.reshape((self.blocks_shape[0] * self.blocks_shape[1]))
             index = 0
 
-            # TODO: Do this cleaner and more efficently
+            # TODO: Do this cleaner and more efficiently
             for y in range(self.header.y_size):
                 if y % 2**self.header.error_update_period_exponent == 0 \
                     and self.header.periodic_error_updating_flag == \

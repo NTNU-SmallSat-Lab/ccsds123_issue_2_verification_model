@@ -191,12 +191,6 @@ class Header:
         format = image_name.split('-')[-2].split('-')[-1]
         self.sample_type = SampleType.UNSIGNED_INTEGER if format[0] == 'u' else SampleType.SIGNED_INTEGER
 
-        # Pick dynamic range manually, since the range in the file name is generally way to wide
-        # self.large_d_flag = LargeDFlag.SMALL_D if int(format[1:3]) <= 16 else LargeDFlag.LARGE_D
-        # self.dynamic_range = int(format[1:3]) % 16
-
-        if format[3:5] != 'be':
-            exit("Only big endian is supported")
     
     def set_config_from_file(self, config_file):
         bitstream = bitarray()
