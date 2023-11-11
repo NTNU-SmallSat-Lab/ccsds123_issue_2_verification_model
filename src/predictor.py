@@ -349,14 +349,14 @@ class Predictor():
         else:
             # Assumes band_varying_damping_flag = BAND_INDEPENDENT and band_varying_offset_flag = BAND_INDEPENDENT
             self.double_resolution_sample_representative[y, x, z] = \
-                4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value) * \
+                (4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value) * \
                 (self.clipped_quantizer_bin_center[y, x, z] * 2**self.weight_component_resolution - \
                 sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * \
                 self.header.fixed_offset_value * \
                 2**(self.weight_component_resolution - self.header.sample_representative_resolution)) + \
                 self.header.fixed_damping_value * \
                 self.high_resolution_predicted_sample_value[y, x, z] - \
-                self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1) // \
+                self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1)) // \
                 2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
 
             self.sample_representative[y, x, z] = \
