@@ -318,7 +318,7 @@ class Predictor():
         
         self.quantizer_index[y,x,z] = \
             sign(self.prediction_residual[y,x,z]) * \
-            int((abs(self.prediction_residual[y,x,z]) + \
+            ((abs(self.prediction_residual[y,x,z]) + \
             self.maximum_error[y,x,z]) // \
             (2 * self.maximum_error[y,x,z] + 1))
         
@@ -332,7 +332,7 @@ class Predictor():
             self.clipped_quantizer_bin_center[y, x, z] = self.image_sample[y, x, z]
         else:
             self.clipped_quantizer_bin_center[y, x, z] = \
-                clip( \
+                clip(
                     int(self.predicted_sample_value[y, x, z] + \
                     self.quantizer_index[y, x, z] * \
                     (2 * self.maximum_error[y, x, z] + 1)), \
