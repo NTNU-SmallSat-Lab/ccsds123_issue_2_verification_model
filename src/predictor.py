@@ -340,11 +340,11 @@ class Predictor():
                     self.image_constants.upper_sample_limit \
                 )
         
-        if self.header.fixed_damping_value == 0 and self.header.fixed_offset_value == 0: # Lossless
+        if self.header.fixed_damping_value == 0 and self.header.fixed_offset_value == 0:
             self.double_resolution_sample_representative[y, x, z] = \
                 2 * self.clipped_quantizer_bin_center[y, x, z]
             
-            self.sample_representative[y, x, z] = self.image_sample[y, x, z]
+            self.sample_representative[y, x, z] = self.clipped_quantizer_bin_center[y, x, z]
 
         else:
             # Assumes band_varying_damping_flag = BAND_INDEPENDENT and band_varying_offset_flag = BAND_INDEPENDENT
