@@ -385,6 +385,7 @@ class Header:
         assert self.sample_representative_flag in SampleRepresentativeFlag
         assert 0 <= self.prediction_bands_num and self.prediction_bands_num < 16
         assert self.prediction_mode in PredictionMode
+        assert self.x_size != 1 or self.prediction_mode == PredictionMode.REDUCED # Can't use full prediction mode if x_size = 1. See standard section 4.3.1
         assert self.weight_exponent_offset_flag in WeightExponentOffsetFlag
         assert self.weight_exponent_offset_flag == WeightExponentOffsetFlag.ALL_ZERO # Table not implemented
         assert self.local_sum_type in LocalSumType
