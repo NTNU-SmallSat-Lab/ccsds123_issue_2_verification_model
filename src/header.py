@@ -146,12 +146,12 @@ class Header:
     # Absolute error limit
     absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_DEPENDENT
     absolute_error_limit_bit_depth = 2 # D_A. Encode as D_A%16. 1<=D_A<=min{D − 1,16}
-    absolute_error_limit_value = 2 # A*. 0<=A*<=2^D_A-1. TODO: Support BAND_DEPENDENT values
+    absolute_error_limit_value = 2 # A*. 0<=A*<=2^D_A-1.
     absolute_error_limit_table = None # a_z. Array of size N_z
     # Relative error limit
     relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_DEPENDENT
     relative_error_limit_bit_depth = 5 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
-    relative_error_limit_value = 20 # R*. 0<=R*<=2^D_R-1. TODO: Support BAND_DEPENDENT values
+    relative_error_limit_value = 20 # R*. 0<=R*<=2^D_R-1.
     relative_error_limit_table = None # r_z. Array of size N_z
     # TODO: Support periodic error updating
 
