@@ -180,6 +180,7 @@ class Header:
     reference_sample_interval = 0 # r. Encode as r%2**12.
 
     header_bitstream = None
+    optional_tables_bitstream = None
 
     def __init__(self, image_name):
         self.__set_config_according_to_image_name(image_name)
@@ -208,33 +209,37 @@ class Header:
         weight_exponent_offset_table_shape = (self.z_size + 2**16 * int(self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
         self.weight_exponent_offset_table = np.zeros(weight_exponent_offset_table_shape, dtype=np.int64)
     
-    def set_config_from_file(self, config_file):
-        bitstream = bitarray()
-        # print(f"Reading configuration from {config_file}")
-        with open(config_file, "rb") as file:
-            bitstream.fromfile(file)
-
+    def set_config_from_file(self, header_file_location, optional_tables_file_location=None):
+        header_file = bitarray()
+        optional_tables_file = bitarray()
+        
+        with open(header_file_location, "rb") as file:
+            header_file.fromfile(file)
+        
+        if optional_tables_file_location is not None:
+            with open(optional_tables_file_location, "rb") as file:
+                optional_tables_file.fromfile(file)
             # Image metadata 
         # Essential subpart
-        self.user_defined_data = int(bitstream[0:8].to01(), 2)
-        self.x_size = int(bitstream[8:24].to01(), 2)
-        self.y_size = int(bitstream[24:40].to01(), 2)
-        self.z_size = int(bitstream[40:56].to01(), 2)
-        self.sample_type = SampleType(int(bitstream[56:57].to01(), 2))
-        assert bitstream[57:58].to01() == '0' # Reserved
-        self.large_d_flag = LargeDFlag(int(bitstream[58:59].to01(), 2))
-        self.dynamic_range = int(bitstream[59:63].to01(), 2)
-        self.sample_encoding_order = SampleEncodingOrder(int(bitstream[63:64].to01(), 2))
-        self.sub_frame_interleaving_depth = int(bitstream[64:80].to01(), 2)
-        assert bitstream[80:82].to01() == '00' # Reserved
-        self.output_word_size = int(bitstream[82:85].to01(), 2)
-        self.entropy_coder_type = EntropyCoderType(int(bitstream[85:87].to01(), 2))
-        assert bitstream[87:88].to01() == '0' # Reserved
-        self.quantizer_fidelity_control_method = QuantizerFidelityControlMethod(int(bitstream[88:90].to01(), 2))
-        assert bitstream[90:92].to01() == '00' # Reserved
-        self.supplementary_information_table_count = int(bitstream[92:96].to01(), 2)
+        self.user_defined_data = int(header_file[0:8].to01(), 2)
+        self.x_size = int(header_file[8:24].to01(), 2)
+        self.y_size = int(header_file[24:40].to01(), 2)
+        self.z_size = int(header_file[40:56].to01(), 2)
+        self.sample_type = SampleType(int(header_file[56:57].to01(), 2))
+        assert header_file[57:58].to01() == '0' # Reserved
+        self.large_d_flag = LargeDFlag(int(header_file[58:59].to01(), 2))
+        self.dynamic_range = int(header_file[59:63].to01(), 2)
+        self.sample_encoding_order = SampleEncodingOrder(int(header_file[63:64].to01(), 2))
+        self.sub_frame_interleaving_depth = int(header_file[64:80].to01(), 2)
+        assert header_file[80:82].to01() == '00' # Reserved
+        self.output_word_size = int(header_file[82:85].to01(), 2)
+        self.entropy_coder_type = EntropyCoderType(int(header_file[85:87].to01(), 2))
+        assert header_file[87:88].to01() == '0' # Reserved
+        self.quantizer_fidelity_control_method = QuantizerFidelityControlMethod(int(header_file[88:90].to01(), 2))
+        assert header_file[90:92].to01() == '00' # Reserved
+        self.supplementary_information_table_count = int(header_file[92:96].to01(), 2)
 
-        bitstream = bitstream[96:]
+        header_file = header_file[96:]
 
         # Supplementary information tables
         if self.supplementary_information_table_count > 0:
@@ -242,63 +247,80 @@ class Header:
         
             # Predictor metadata
         # Predictor primary structure
-        assert bitstream[0:1].to01() == '0'
-        self.sample_representative_flag = SampleRepresentativeFlag(int(bitstream[1:2].to01(), 2))
-        self.prediction_bands_num = int(bitstream[2:6].to01(), 2)
-        self.prediction_mode = PredictionMode(int(bitstream[6:7].to01(), 2))
-        self.weight_exponent_offset_flag = WeightExponentOffsetFlag(int(bitstream[7:8].to01(), 2))
-        self.local_sum_type = LocalSumType(int(bitstream[8:10].to01(), 2))
-        self.register_size = int(bitstream[10:16].to01(), 2)
-        self.weight_component_resolution = int(bitstream[16:20].to01(), 2)
-        self.weight_update_change_interval = int(bitstream[20:24].to01(), 2)
-        self.weight_update_initial_parameter = int(bitstream[24:28].to01(), 2)
-        self.weight_update_final_parameter = int(bitstream[28:32].to01(), 2)
-        self.weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag(int(bitstream[32:33].to01(), 2))
-        self.weight_init_method = WeightInitMethod(int(bitstream[33:34].to01(), 2))
-        self.weight_init_table_flag = WeightInitTableFlag(int(bitstream[34:35].to01(), 2))
-        self.weight_init_resolution = int(bitstream[35:40].to01(), 2)
-        bitstream = bitstream[40:]
-
+        assert header_file[0:1].to01() == '0'
+        self.sample_representative_flag = SampleRepresentativeFlag(int(header_file[1:2].to01(), 2))
+        self.prediction_bands_num = int(header_file[2:6].to01(), 2)
+        self.prediction_mode = PredictionMode(int(header_file[6:7].to01(), 2))
+        self.weight_exponent_offset_flag = WeightExponentOffsetFlag(int(header_file[7:8].to01(), 2))
+        self.local_sum_type = LocalSumType(int(header_file[8:10].to01(), 2))
+        self.register_size = int(header_file[10:16].to01(), 2)
+        self.weight_component_resolution = int(header_file[16:20].to01(), 2)
+        self.weight_update_change_interval = int(header_file[20:24].to01(), 2)
+        self.weight_update_initial_parameter = int(header_file[24:28].to01(), 2)
+        self.weight_update_final_parameter = int(header_file[28:32].to01(), 2)
+        self.weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag(int(header_file[32:33].to01(), 2))
+        self.weight_init_method = WeightInitMethod(int(header_file[33:34].to01(), 2))
+        self.weight_init_table_flag = WeightInitTableFlag(int(header_file[34:35].to01(), 2))
+        self.weight_init_resolution = int(header_file[35:40].to01(), 2)
+        header_file = header_file[40:]
+        
         # Weight tables subpart
-        if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+        if self.weight_init_method == WeightInitMethod.CUSTOM and len(optional_tables_file) > 0:
             self.__init_weight_init_table_array()
             for z in range(self.weight_init_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
-                    self.weight_init_table[z, j] = int(bitstream[0:self.weight_init_resolution].to01(), 2)
-                    bitstream = bitstream[self.weight_init_resolution:]
-            bitstream = bitstream[len(bitstream) % 8:] # Skip fill bits
-            
-        if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+                    if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+                        self.weight_init_table[z, j] = int(header_file[0:self.weight_init_resolution].to01(), 2)
+                        header_file = header_file[self.weight_init_resolution:]
+                    elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
+                        self.weight_init_table[z, j] = int(optional_tables_file[0:self.weight_init_resolution].to01(), 2)
+                        optional_tables_file = optional_tables_file[self.weight_init_resolution:]
+            # Skip fill bits
+            if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+                header_file = header_file[len(header_file) % 8:] 
+            elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
+                optional_tables_file = optional_tables_file[len(header_file) % 8:] 
+        
+        if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO and len(optional_tables_file) > 0:
             self.__init_weight_exponent_offset_table_array
             for z in range(self.weight_exponent_offset_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
-                    number = bitstream[0:4].to01() # extract 4 bit two's complement number
-                    self.weight_exponent_offset_table[z, j] = int(number[0] == '1') * -2**3 + int(number[1:4], 2) 
-                    bitstream = bitstream[4:]
-            bitstream = bitstream[len(bitstream) % 8:] # Skip fill bits
-
+                    if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+                        number = header_file[0:4].to01() # extract 4 bit two's complement number
+                        self.weight_exponent_offset_table[z, j] = int(number[0] == '1') * -2**3 + int(number[1:4], 2) 
+                        header_file = header_file[4:]
+                    elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
+                        number = optional_tables_file[0:4].to01() # extract 4 bit two's complement number
+                        self.weight_exponent_offset_table[z, j] = int(number[0] == '1') * -2**3 + int(number[1:4], 2) 
+                        optional_tables_file = optional_tables_file[4:]
+            # Skip fill bits
+            if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+                header_file = header_file[len(header_file) % 8:] 
+            elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
+                optional_tables_file = optional_tables_file[len(header_file) % 8:]
+        
         # Predictor quantization structure
         if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
 
             # Predictor quantization error limit update period structure
             if self.sample_encoding_order != SampleEncodingOrder.BSQ:
-                assert bitstream[0:1].to01() == '0'
-                self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag(int(bitstream[1:2].to01(), 2))
-                assert bitstream[2:4].to01() == '00'
-                self.error_update_period_exponent = int(bitstream[4:8].to01(), 2)
-                bitstream = bitstream[8:]
+                assert header_file[0:1].to01() == '0'
+                self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag(int(header_file[1:2].to01(), 2))
+                assert header_file[2:4].to01() == '00'
+                self.error_update_period_exponent = int(header_file[4:8].to01(), 2)
+                header_file = header_file[8:]
             else:
                 self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
                 self.error_update_period_exponent = 0
 
             # Predictor quantization absolute error limit structure
             if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
-                assert bitstream[0:1].to01() == '0'
-                self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(bitstream[1:2].to01(), 2))
-                assert bitstream[2:4].to01() == '00'
-                self.absolute_error_limit_bit_depth = int(bitstream[4:8].to01(), 2)
-                self.absolute_error_limit_value = int(bitstream[8:8+self.absolute_error_limit_bit_depth].to01(), 2)
-                bitstream = bitstream[8+self.absolute_error_limit_bit_depth:]
+                assert header_file[0:1].to01() == '0'
+                self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(header_file[1:2].to01(), 2))
+                assert header_file[2:4].to01() == '00'
+                self.absolute_error_limit_bit_depth = int(header_file[4:8].to01(), 2)
+                self.absolute_error_limit_value = int(header_file[8:8+self.absolute_error_limit_bit_depth].to01(), 2)
+                header_file = header_file[8+self.absolute_error_limit_bit_depth:]
 
                 if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     exit("Band-dependent absolute error limit not implemented")
@@ -309,12 +331,12 @@ class Header:
             
             # Predictor quantization relative error limit structure
             if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
-                assert bitstream[0:1].to01() == '0'
-                self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(bitstream[1:2].to01(), 2))
-                assert bitstream[2:4].to01() == '00'
-                self.relative_error_limit_bit_depth = int(bitstream[4:8].to01(), 2)
-                self.relative_error_limit_value = int(bitstream[8:8+self.relative_error_limit_bit_depth].to01(), 2)
-                bitstream = bitstream[8+self.relative_error_limit_bit_depth:]
+                assert header_file[0:1].to01() == '0'
+                self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(header_file[1:2].to01(), 2))
+                assert header_file[2:4].to01() == '00'
+                self.relative_error_limit_bit_depth = int(header_file[4:8].to01(), 2)
+                self.relative_error_limit_value = int(header_file[8:8+self.relative_error_limit_bit_depth].to01(), 2)
+                header_file = header_file[8+self.relative_error_limit_bit_depth:]
 
                 if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     exit("Band-dependent relative error limit not implemented")
@@ -334,19 +356,19 @@ class Header:
 
         # Predictor sample representative structure
         if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
-            assert bitstream[0:5].to01() == '00000'
-            self.sample_representative_resolution = int(bitstream[5:8].to01(), 2)
-            assert bitstream[8:9].to01() == '0'
-            self.band_varying_damping_flag = BandVaryingDampingFlag(int(bitstream[9:10].to01(), 2))
-            self.damping_table_flag = DampingTableFlag(int(bitstream[10:11].to01(), 2))
-            assert bitstream[11:12].to01() == '0'
-            self.fixed_damping_value = int(bitstream[12:16].to01(), 2)
-            assert bitstream[16:17].to01() == '0'
-            self.band_varying_offset_flag = BandVaryingOffsetFlag(int(bitstream[17:18].to01(), 2))
-            self.damping_offset_table_flag = OffsetTableFlag(int(bitstream[18:19].to01(), 2))
-            assert bitstream[19:20].to01() == '0'
-            self.fixed_offset_value = int(bitstream[20:24].to01(), 2)
-            bitstream = bitstream[24:]
+            assert header_file[0:5].to01() == '00000'
+            self.sample_representative_resolution = int(header_file[5:8].to01(), 2)
+            assert header_file[8:9].to01() == '0'
+            self.band_varying_damping_flag = BandVaryingDampingFlag(int(header_file[9:10].to01(), 2))
+            self.damping_table_flag = DampingTableFlag(int(header_file[10:11].to01(), 2))
+            assert header_file[11:12].to01() == '0'
+            self.fixed_damping_value = int(header_file[12:16].to01(), 2)
+            assert header_file[16:17].to01() == '0'
+            self.band_varying_offset_flag = BandVaryingOffsetFlag(int(header_file[17:18].to01(), 2))
+            self.damping_offset_table_flag = OffsetTableFlag(int(header_file[18:19].to01(), 2))
+            assert header_file[19:20].to01() == '0'
+            self.fixed_offset_value = int(header_file[20:24].to01(), 2)
+            header_file = header_file[24:]
 
             # Damping and offset table sublocks
             if self.damping_table_flag == DampingTableFlag.INCLUDED or \
@@ -364,12 +386,12 @@ class Header:
             # Entropy coder metadata
         # Sample-adaptive entropy coder
         if self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE:
-            self.unary_length_limit = int(bitstream[0:5].to01(), 2)
-            self.rescaling_counter_size = int(bitstream[5:8].to01(), 2)
-            self.initial_count_exponent = int(bitstream[8:11].to01(), 2)
-            self.accumulator_init_constant = int(bitstream[11:15].to01(), 2)
-            self.accumulator_init_table_flag = AccumulatorInitTableFlag(int(bitstream[15:16].to01(), 2))
-            bitstream = bitstream[16:]
+            self.unary_length_limit = int(header_file[0:5].to01(), 2)
+            self.rescaling_counter_size = int(header_file[5:8].to01(), 2)
+            self.initial_count_exponent = int(header_file[8:11].to01(), 2)
+            self.accumulator_init_constant = int(header_file[11:15].to01(), 2)
+            self.accumulator_init_table_flag = AccumulatorInitTableFlag(int(header_file[15:16].to01(), 2))
+            header_file = header_file[16:]
 
             # Accumulator initialization table subblock
             if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
@@ -377,21 +399,21 @@ class Header:
         
         # Hybrid entropy coder
         elif self.entropy_coder_type == EntropyCoderType.HYBRID:
-            self.unary_length_limit = int(bitstream[0:5].to01(), 2)
-            self.rescaling_counter_size = int(bitstream[5:8].to01(), 2)
-            self.initial_count_exponent = int(bitstream[8:11].to01(), 2)
-            assert bitstream[11:16].to01() == '00000'
-            bitstream = bitstream[16:]
+            self.unary_length_limit = int(header_file[0:5].to01(), 2)
+            self.rescaling_counter_size = int(header_file[5:8].to01(), 2)
+            self.initial_count_exponent = int(header_file[8:11].to01(), 2)
+            assert header_file[11:16].to01() == '00000'
+            header_file = header_file[16:]
         
         # Block-adaptive entropy coder
         elif self.entropy_coder_type == EntropyCoderType.BLOCK_ADAPTIVE:
-            assert bitstream[0:1].to01() == '0'
-            self.block_size = int(bitstream[1:3].to01(), 2)
-            self.restricted_code_options_flag = RestrictedCodeOptionsFlag(int(bitstream[3:4].to01(), 2))
-            self.reference_sample_interval = int(bitstream[4:16].to01(), 2)
-            bitstream = bitstream[16:]
+            assert header_file[0:1].to01() == '0'
+            self.block_size = int(header_file[1:3].to01(), 2)
+            self.restricted_code_options_flag = RestrictedCodeOptionsFlag(int(header_file[3:4].to01(), 2))
+            self.reference_sample_interval = int(header_file[4:16].to01(), 2)
+            header_file = header_file[16:]
 
-        assert len(bitstream) == 0
+        assert len(header_file) == 0
         self.__check_legal_config()
 
     
@@ -494,31 +516,43 @@ class Header:
         return bitstream
     
     def __encode_predictor_primary_structure(self):
-        bitstream = bitarray()
-        bitstream += 1 * '0' # Reserved
-        bitstream += bin(self.sample_representative_flag.value)[2:].zfill(1)
-        bitstream += bin(self.prediction_bands_num)[2:].zfill(4)
-        bitstream += bin(self.prediction_mode.value)[2:].zfill(1)
-        bitstream += bin(self.weight_exponent_offset_flag.value)[2:].zfill(1)
-        bitstream += bin(self.local_sum_type.value)[2:].zfill(2)
-        bitstream += bin(self.register_size)[2:].zfill(6)
-        bitstream += bin(self.weight_component_resolution)[2:].zfill(4)
-        bitstream += bin(self.weight_update_change_interval)[2:].zfill(4)
-        bitstream += bin(self.weight_update_initial_parameter)[2:].zfill(4)
-        bitstream += bin(self.weight_update_final_parameter)[2:].zfill(4)
-        bitstream += bin(self.weight_exponent_offset_table_flag.value)[2:].zfill(1)
-        bitstream += bin(self.weight_init_method.value)[2:].zfill(1)
-        bitstream += bin(self.weight_init_table_flag.value)[2:].zfill(1)
-        bitstream += bin(self.weight_init_resolution)[2:].zfill(5)
-        assert len(bitstream) == 8 * 5
-        if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+        header_bitstream = bitarray()
+        optional_tables_bitstream = bitarray()
+        
+        header_bitstream += 1 * '0' # Reserved
+        header_bitstream += bin(self.sample_representative_flag.value)[2:].zfill(1)
+        header_bitstream += bin(self.prediction_bands_num)[2:].zfill(4)
+        header_bitstream += bin(self.prediction_mode.value)[2:].zfill(1)
+        header_bitstream += bin(self.weight_exponent_offset_flag.value)[2:].zfill(1)
+        header_bitstream += bin(self.local_sum_type.value)[2:].zfill(2)
+        header_bitstream += bin(self.register_size)[2:].zfill(6)
+        header_bitstream += bin(self.weight_component_resolution)[2:].zfill(4)
+        header_bitstream += bin(self.weight_update_change_interval)[2:].zfill(4)
+        header_bitstream += bin(self.weight_update_initial_parameter)[2:].zfill(4)
+        header_bitstream += bin(self.weight_update_final_parameter)[2:].zfill(4)
+        header_bitstream += bin(self.weight_exponent_offset_table_flag.value)[2:].zfill(1)
+        header_bitstream += bin(self.weight_init_method.value)[2:].zfill(1)
+        header_bitstream += bin(self.weight_init_table_flag.value)[2:].zfill(1)
+        header_bitstream += bin(self.weight_init_resolution)[2:].zfill(5)
+        assert len(header_bitstream) == 8 * 5
+        
+        if self.weight_init_method == WeightInitMethod.CUSTOM:
             for z in range(self.weight_init_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
-                    bitstream += bin(self.weight_init_table[z, j])[2:].zfill(self.weight_init_resolution)
-            fill_bits = (8 - len(bitstream) % 8) % 8
-            bitstream += fill_bits * '0'
-            assert len(bitstream) % 8 == 0
-        if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+                    if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+                        header_bitstream += bin(self.weight_init_table[z, j])[2:].zfill(self.weight_init_resolution)
+                    elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
+                        optional_tables_bitstream += bin(self.weight_init_table[z, j])[2:].zfill(self.weight_init_resolution)
+            if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+                fill_bits = (8 - len(header_bitstream) % 8) % 8
+                header_bitstream += fill_bits * '0'
+                assert len(header_bitstream) % 8 == 0
+            elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
+                fill_bits = (8 - len(optional_tables_bitstream) % 8) % 8
+                optional_tables_bitstream += fill_bits * '0'
+                assert len(optional_tables_bitstream) % 8 == 0
+            
+        if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             for z in range(self.weight_exponent_offset_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
                     # Transform into two's complement
@@ -526,11 +560,20 @@ class Header:
                     if bin(number)[0] == '-':
                         number += 2**4
                     number = bin(number)[2:].zfill(4)
-                    bitstream += number
-            fill_bits = (8 - len(bitstream) % 8) % 8
-            bitstream += fill_bits * '0'
-            assert len(bitstream) % 8 == 0
-        return bitstream
+                    if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+                        header_bitstream += number
+                    elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
+                        optional_tables_bitstream += number
+            if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+                fill_bits = (8 - len(header_bitstream) % 8) % 8
+                header_bitstream += fill_bits * '0'
+                assert len(header_bitstream) % 8 == 0
+            elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
+                fill_bits = (8 - len(optional_tables_bitstream) % 8) % 8
+                optional_tables_bitstream += fill_bits * '0'
+                assert len(optional_tables_bitstream) % 8 == 0
+        
+        return header_bitstream, optional_tables_bitstream
     
     def __encode_predictor_quantization_error_limit_update_period_structure(self):
         bitstream = bitarray()
@@ -627,23 +670,28 @@ class Header:
         return bitstream
     
     def __create_header_bitstream(self):
-        bitstream = bitarray()
+        header_bitstream = bitarray()
+        optional_tables_bitstream = bitarray()
+        # bitstreams = bitarray()
 
-        bitstream += self.__encode_essential_subpart_structure()
-        bitstream += self.__encode_predictor_primary_structure()
+        header_bitstream += self.__encode_essential_subpart_structure()
+        bitstreams = self.__encode_predictor_primary_structure()
+        header_bitstream += bitstreams[0]
+        optional_tables_bitstream += bitstreams[1]
 
         if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
-            bitstream += self.__encode_predictor_quantization_structure()
+            header_bitstream += self.__encode_predictor_quantization_structure()
         if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
-            bitstream += self.__encode_predictor_sample_representative_structure()        
+            header_bitstream += self.__encode_predictor_sample_representative_structure()        
         if self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE:
-            bitstream += self.__encode_entropy_coder_sample_adaptive_structure()
+            header_bitstream += self.__encode_entropy_coder_sample_adaptive_structure()
         elif self.entropy_coder_type == EntropyCoderType.HYBRID:
-            bitstream += self.__encode_entropy_coder_hybrid_structure()
+            header_bitstream += self.__encode_entropy_coder_hybrid_structure()
         elif self.entropy_coder_type == EntropyCoderType.BLOCK_ADAPTIVE:
-            bitstream += self.__encode_entropy_coder_block_adaptive_structure()
+            header_bitstream += self.__encode_entropy_coder_block_adaptive_structure()
         
-        self.header_bitstream = bitstream
+        self.header_bitstream = header_bitstream
+        self.optional_tables_bitstream = optional_tables_bitstream
 
     def set_encoding_order_bip(self):
         self.sample_encoding_order = SampleEncodingOrder.BI
@@ -675,11 +723,14 @@ class Header:
             dynamic_range_bits += 16
         return dynamic_range_bits
     
-    def get_header_bitstream(self):
+    def get_header_bitstreams(self):
         self.__create_header_bitstream()
-        return self.header_bitstream
+        return self.header_bitstream, self.optional_tables_bitstream
 
     def save_header(self, output_folder):
+        bitstreams = self.get_header_bitstreams()
         with open(output_folder + "/header.bin", "wb") as file:
-            self.get_header_bitstream().tofile(file)
+            bitstreams[0].tofile(file)
+        with open(output_folder + "/optional_tables.bin", "wb") as file:
+            bitstreams[1].tofile(file)
         

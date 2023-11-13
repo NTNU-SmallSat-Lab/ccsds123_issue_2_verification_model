@@ -27,7 +27,7 @@ compare:
 	python ccsds123_0_b_2_high_level_model.py $(image); \
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
-	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder output/header.bin $(image_format) /dev/stdin test/golden.bin; \
+	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -o output/optional_tables.bin output/header.bin $(image_format) /dev/stdin test/golden.bin; \
 	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
@@ -37,7 +37,7 @@ compare_hybrid:
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
 	cp output/hybrid_initial_accumulator.bin test/hybrid_initial_accumulator.bin; \
-	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -a test/hybrid_initial_accumulator.bin output/header.bin $(image_format) /dev/stdin test/golden.bin; \
+	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -o output/optional_tables.bin -a test/hybrid_initial_accumulator.bin output/header.bin $(image_format) /dev/stdin test/golden.bin; \
 	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
@@ -48,6 +48,18 @@ compare_with_header:
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
 	lcnl_encoder $(header) $(image_format) $(image) test/golden.bin
+	@echo "Header: "; \
+	python tools/files_identical_check.py test/header.bin $(header)
+	@echo "\nCompressed image: "; \
+	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
+	make print > test/comparison.txt
+
+compare_with_header_optional_tables:
+	make clean; \
+	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header) --optional $(optional_tables); \
+	cp output/header.bin test/; \
+	cp output/z-output-bitstream.bin test/hlm.bin; \
+	lcnl_encoder -o $(optional_tables) $(header) $(image_format) $(image) test/golden.bin
 	@echo "Header: "; \
 	python tools/files_identical_check.py test/header.bin $(header)
 	@echo "\nCompressed image: "; \

@@ -19,6 +19,7 @@ class CCSDS123():
     image_sample = None # Symbol: s
     output_folder = "output"
     header_file = None
+    optional_tables_file = None
     use_header_file = False
     accu_init_file = None
     use_accu_init_file = False
@@ -51,6 +52,9 @@ class CCSDS123():
     def set_header_file(self, header_file):
         self.header_file = header_file
         self.use_header_file = True
+    
+    def set_optional_tables_file(self, optional_tables_file):
+        self.optional_tables_file = optional_tables_file
 
     def set_hybrid_accu_init_file(self, accu_init_file):
         self.accu_init_file = accu_init_file
@@ -61,7 +65,7 @@ class CCSDS123():
 
         self.header = hd.Header(self.image_file)
         if self.use_header_file:
-            self.header.set_config_from_file(self.header_file)
+            self.header.set_config_from_file(self.header_file, self.optional_tables_file)
 
         self.__load_raw_image()
         print(f"{time.time() - start_time:.3f} seconds. Done with loading")
@@ -92,7 +96,7 @@ class CCSDS123():
 
         self.header.save_header(self.output_folder)
         self.predictor.save_data(self.output_folder)
-        self.encoder.save_data(self.output_folder, self.header.get_header_bitstream())
+        self.encoder.save_data(self.output_folder, self.header.get_header_bitstreams()[0])
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")
         
 

@@ -24,6 +24,7 @@ def main():
     parser.add_argument("image_file", help="Path to the image file")
     parser.add_argument("--header", default="", help="Path to the configuration file")
     parser.add_argument("--accu" , default="", help="Path to the hybrid encoder accumulator initial values file")
+    parser.add_argument("--optional", default="", help="Path to the optional tables file")
     args = parser.parse_args()
 
     start_time = time.time()
@@ -33,6 +34,8 @@ def main():
         image.set_header_file(args.header)
     if len(args.accu) > 0:
         image.set_hybrid_accu_init_file(args.accu)
+    if len(args.optional) > 0:
+        image.set_optional_tables_file(args.optional)
 
     image.compress_image()
 
