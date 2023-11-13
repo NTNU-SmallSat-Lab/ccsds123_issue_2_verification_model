@@ -257,7 +257,7 @@ class Header:
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
                     self.weight_init_table[z, j] = int(bitstream[0:self.weight_init_resolution].to01(), 2)
                     bitstream = bitstream[self.weight_init_resolution:]
-            bitstream = bitstream[len(bitstream) % 8:0] # Skip fill bits
+            bitstream = bitstream[len(bitstream) % 8:] # Skip fill bits
             
         if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
             exit("Weight tables not implemented")
