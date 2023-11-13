@@ -132,9 +132,11 @@ class Header:
     weight_init_resolution = 0 # Q. Encode as 0 if weight_init_method=DEFAULT, otherwise as Q. 3<=Q<=Omega+3
     
     # Weight initialization table
+    weight_init_table_value = 0 # The default value the weight initialization table cells are initialized to
     weight_init_table = None # Lambda. Array of size N_z * C_z
 
     # Weight exponent offset table
+    weight_exponent_offset_value = 0 # The default value the weight exponent offset table cells are initialized to
     weight_exponent_offset_table = None # sigma (in word-final position). Array of size N_z * C_z
 
     # Quantization
@@ -710,14 +712,14 @@ class Header:
         self.__init_weight_init_table_array()
         for z in range(self.weight_init_table.shape[0]):
             for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
-                self.weight_init_table[z, j] = 1
+                self.weight_init_table[z, j] = self.weight_init_table_value
     
     def set_weight_exponent_offset_table_array_to_default(self):
         # The default values here are arbitrary, not set from standard
         self.__init_weight_exponent_offset_table_array()
         for z in range(self.weight_exponent_offset_table.shape[0]):
             for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
-                self.weight_exponent_offset_table[z, j] = -2
+                self.weight_exponent_offset_table[z, j] = self.weight_exponent_offset_value
       
     def get_dynamic_range_bits(self):
         dynamic_range_bits = self.dynamic_range
