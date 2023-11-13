@@ -134,7 +134,8 @@ class Header:
     # Weight initialization table
     weight_init_table = None # Lambda. Array of size N_z * C_z
 
-    # TODO: Weight exponent offset table
+    # Weight exponent offset table
+    weight_exponent_offset_table = None # sigma (in word-final position). Array of size N_z * C_z
 
     # Quantization
     # Error limit update
@@ -182,8 +183,12 @@ class Header:
 
     def __init__(self, image_name):
         self.__set_config_according_to_image_name(image_name)
+
         if self.weight_init_method == WeightInitMethod.CUSTOM:
             self.set_weight_init_table_array_to_default()
+        if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
+            self.set_weight_exponent_offset_table_array_to_default()
+        
         self.__check_legal_config()
         
     def __set_config_according_to_image_name(self, image_name):
@@ -198,6 +203,10 @@ class Header:
     def __init_weight_init_table_array(self):
         weight_init_table_shape = (self.z_size + 2**16 * int(self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
         self.weight_init_table = np.zeros(weight_init_table_shape, dtype=np.int64)
+    
+    def __init_weight_exponent_offset_table_array(self):
+        weight_exponent_offset_table_shape = (self.z_size + 2**16 * int(self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
+        self.weight_exponent_offset_table = np.zeros(weight_exponent_offset_table_shape, dtype=np.int64)
     
     def set_config_from_file(self, config_file):
         bitstream = bitarray()
@@ -260,7 +269,13 @@ class Header:
             bitstream = bitstream[len(bitstream) % 8:] # Skip fill bits
             
         if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
-            exit("Weight tables not implemented")
+            self.__init_weight_exponent_offset_table_array
+            for z in range(self.weight_exponent_offset_table.shape[0]):
+                for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                    number = bitstream[0:4].to01() # extract 4 bit two's complement number
+                    self.weight_exponent_offset_table[z, j] = int(number[0] == '1') * -2**3 + int(number[1:4], 2) 
+                    bitstream = bitstream[4:]
+            bitstream = bitstream[len(bitstream) % 8:] # Skip fill bits
 
         # Predictor quantization structure
         if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
@@ -401,7 +416,6 @@ class Header:
         assert self.prediction_mode in PredictionMode
         assert self.x_size != 1 or self.prediction_mode == PredictionMode.REDUCED # Can't use full prediction mode if x_size = 1. See standard section 4.3.1
         assert self.weight_exponent_offset_flag in WeightExponentOffsetFlag
-        assert self.weight_exponent_offset_flag == WeightExponentOffsetFlag.ALL_ZERO # Table not implemented
         assert self.local_sum_type in LocalSumType
         assert max(32, self.get_dynamic_range_bits() + (self.weight_component_resolution + 4) + 2) <= self.register_size + 64 * int(self.register_size == 0) and self.register_size < 64
         assert 4 <= self.weight_component_resolution + 4 and self.weight_component_resolution + 4 <= 19
@@ -409,11 +423,20 @@ class Header:
         assert -6 <= self.weight_update_initial_parameter - 6 and self.weight_update_initial_parameter - 6 <= 9
         assert -6 <= self.weight_update_final_parameter - 6 and self.weight_update_final_parameter - 6 <= 9
         assert self.weight_exponent_offset_table_flag in WeightExponentOffsetTableFlag
-        assert self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED # Table not implemented
+        assert self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED or (self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED and self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO)
+        assert self.weight_exponent_offset_flag == WeightExponentOffsetFlag.ALL_ZERO or self.weight_exponent_offset_table.shape == (self.z_size + 2**16 * (self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
+        if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
+            for i in range(self.weight_exponent_offset_table.shape[0]):
+                for j in range(self.weight_exponent_offset_table.shape[1]):
+                    assert -6 <= self.weight_exponent_offset_table[i, j] and self.weight_exponent_offset_table[i, j] <= 5
         assert self.weight_init_method in WeightInitMethod
         assert self.weight_init_table_flag in WeightInitTableFlag
         assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED or (self.weight_init_table_flag == WeightInitTableFlag.INCLUDED and self.weight_init_method == WeightInitMethod.CUSTOM)
-        assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED or self.weight_init_table.shape == (self.z_size + 2**16 * (self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
+        assert self.weight_init_method == WeightInitMethod.DEFAULT or self.weight_init_table.shape == (self.z_size + 2**16 * (self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
+        if self.weight_init_method == WeightInitMethod.CUSTOM:
+            for i in range(self.weight_init_table.shape[0]):
+                for j in range(self.weight_init_table.shape[1]):
+                    assert 0 <= self.weight_init_table[i, j] and self.weight_init_table[i, j] <= 2**self.weight_init_resolution - 1
         assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
 
         assert self.periodic_error_updating_flag in PeriodicErrorUpdatingFlag
@@ -496,7 +519,17 @@ class Header:
             bitstream += fill_bits * '0'
             assert len(bitstream) % 8 == 0
         if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
-            exit("Weight exponent offset table not implemented")
+            for z in range(self.weight_exponent_offset_table.shape[0]):
+                for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                    # Transform into two's complement
+                    number = self.weight_exponent_offset_table[z, j]
+                    if bin(number)[0] == '-':
+                        number += 2**4
+                    number = bin(number)[2:].zfill(4)
+                    bitstream += number
+            fill_bits = (8 - len(bitstream) % 8) % 8
+            bitstream += fill_bits * '0'
+            assert len(bitstream) % 8 == 0
         return bitstream
     
     def __encode_predictor_quantization_error_limit_update_period_structure(self):
@@ -625,7 +658,14 @@ class Header:
         self.__init_weight_init_table_array()
         for z in range(self.weight_init_table.shape[0]):
             for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
-                self.weight_init_table[z, j] = 0
+                self.weight_init_table[z, j] = 1
+    
+    def set_weight_exponent_offset_table_array_to_default(self):
+        # The default values here are arbitrary, not set from standard
+        self.__init_weight_exponent_offset_table_array()
+        for z in range(self.weight_exponent_offset_table.shape[0]):
+            for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                self.weight_exponent_offset_table[z, j] = -2
       
     def get_dynamic_range_bits(self):
         dynamic_range_bits = self.dynamic_range

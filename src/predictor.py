@@ -27,6 +27,7 @@ class Predictor():
     weight_update_initial_parameter = None # Symbol: nu_min
     weight_update_final_parameter = None # Symbol: nu_max
     weight_update_scaling_exponent = None # Symbol: rho. Indexed by t
+    weight_exponent_offset = None # Symbol: sigma (in word-final position)
     weight_min = None # Symbol: omega_min
     weight_max = None # Symbol: omega_max
 
@@ -51,6 +52,11 @@ class Predictor():
                     self.weight_update_initial_parameter + (t - self.header.x_size) // self.weight_update_change_interval, \
                     self.weight_update_initial_parameter, self.weight_update_final_parameter \
                 ) + self.image_constants.dynamic_range_bits - self.weight_component_resolution
+            
+        if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.ALL_ZERO:
+            self.weight_exponent_offset = np.full((self.header.z_size, self.local_difference_values_num), 0.0, dtype=np.float64)
+        else:
+            self.weight_exponent_offset = self.header.weight_exponent_offset_table.astype(dtype=np.float64)
         
         self.weight_min = -2**(self.weight_component_resolution + 2)
         self.weight_max = 2**(self.weight_component_resolution + 2) - 1
@@ -228,10 +234,7 @@ class Predictor():
         
         assert t - 1 == prev_x + prev_y * self.header.x_size
 
-        if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.ALL_ZERO:
-            weight_exponent_offset = 0.0
-        else:
-            exit("Non-zero weight exponent offset not supported")
+        
 
         for i in range(self.weight_vector.shape[3]):
             self.weight_vector[y,x,z,i] = \
@@ -240,7 +243,7 @@ class Predictor():
                     (floor(float(sign_positive(self.double_resolution_prediction_error[prev_y,prev_x,z])) * \
                     float(self.local_difference_vector[prev_y,prev_x,z,i]) * \
                     2.0**(-(float(self.weight_update_scaling_exponent[t - 1]) + \
-                    weight_exponent_offset))) + 1) // 2, \
+                    self.weight_exponent_offset[z,i]))) + 1) // 2, \
                     self.weight_min, self.weight_max
                 )
 
