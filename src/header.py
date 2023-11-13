@@ -321,6 +321,7 @@ class Header:
                 self.absolute_error_limit_bit_depth = int(header_file[4:8].to01(), 2)
                 self.absolute_error_limit_value = int(header_file[8:8+self.absolute_error_limit_bit_depth].to01(), 2)
                 header_file = header_file[8+self.absolute_error_limit_bit_depth:]
+                header_file = header_file[len(header_file) % 8:] # Skip fill bits
 
                 if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     exit("Band-dependent absolute error limit not implemented")
@@ -337,6 +338,7 @@ class Header:
                 self.relative_error_limit_bit_depth = int(header_file[4:8].to01(), 2)
                 self.relative_error_limit_value = int(header_file[8:8+self.relative_error_limit_bit_depth].to01(), 2)
                 header_file = header_file[8+self.relative_error_limit_bit_depth:]
+                header_file = header_file[len(header_file) % 8:] # Skip fill bits
 
                 if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     exit("Band-dependent relative error limit not implemented")
@@ -592,7 +594,8 @@ class Header:
         bitstream += bin(self.absolute_error_limit_bit_depth)[2:].zfill(4)
         bitstream += bin(self.absolute_error_limit_value)[2:].zfill(self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0))
         assert len(bitstream) == (self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0)) + 8
-        bitstream += (8 - (len(bitstream) % 8)) * '0'
+        fill_bits = (8 - len(bitstream) % 8) % 8
+        bitstream += fill_bits * '0'
         assert len(bitstream) % 8 == 0
         return bitstream
     
@@ -604,7 +607,8 @@ class Header:
         bitstream += bin(self.relative_error_limit_bit_depth)[2:].zfill(4)
         bitstream += bin(self.relative_error_limit_value)[2:].zfill(self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0))
         assert len(bitstream) == (self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0)) + 8
-        bitstream += (8 - (len(bitstream) % 8)) * '0'
+        fill_bits = (8 - len(bitstream) % 8) % 8
+        bitstream += fill_bits * '0'
         assert len(bitstream) % 8 == 0
         return bitstream
     
