@@ -1,5 +1,6 @@
 from enum import Enum
 import re
+import numpy as np
 from bitarray import bitarray
 
 class SampleType(Enum):
@@ -130,7 +131,8 @@ class Header:
     weight_init_table_flag = WeightInitTableFlag.NOT_INCLUDED
     weight_init_resolution = 0 # Q. Encode as 0 if weight_init_method=DEFAULT, otherwise as Q. 3<=Q<=Omega+3
     
-    # TODO: Weight initialization table
+    # Weight initialization table
+    weight_init_table = None # Lambda. Array of size N_z * C_z
 
     # TODO: Weight exponent offset table
 
@@ -180,6 +182,8 @@ class Header:
 
     def __init__(self, image_name):
         self.__set_config_according_to_image_name(image_name)
+        if self.weight_init_method == WeightInitMethod.CUSTOM:
+            self.set_weight_init_table_array_to_default()
         self.__check_legal_config()
         
     def __set_config_according_to_image_name(self, image_name):
@@ -191,6 +195,9 @@ class Header:
         format = image_name.split('-')[-2].split('-')[-1]
         self.sample_type = SampleType.UNSIGNED_INTEGER if format[0] == 'u' else SampleType.SIGNED_INTEGER
 
+    def __init_weight_init_table_array(self):
+        weight_init_table_shape = (self.z_size + 2**16 * int(self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
+        self.weight_init_table = np.zeros(weight_init_table_shape, dtype=np.int64)
     
     def set_config_from_file(self, config_file):
         bitstream = bitarray()
@@ -244,8 +251,15 @@ class Header:
         bitstream = bitstream[40:]
 
         # Weight tables subpart
-        if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED or \
-            self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+        if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+            self.__init_weight_init_table_array()
+            for z in range(self.weight_init_table.shape[0]):
+                for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                    self.weight_init_table[z, j] = int(bitstream[0:self.weight_init_resolution].to01(), 2)
+                    bitstream = bitstream[self.weight_init_resolution:]
+            bitstream = bitstream[len(bitstream) % 8:0] # Skip fill bits
+            
+        if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
             exit("Weight tables not implemented")
 
         # Predictor quantization structure
@@ -398,8 +412,9 @@ class Header:
         assert self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED # Table not implemented
         assert self.weight_init_method in WeightInitMethod
         assert self.weight_init_table_flag in WeightInitTableFlag
-        assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED # Table not implemented
-        assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 4 + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
+        assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED or (self.weight_init_table_flag == WeightInitTableFlag.INCLUDED and self.weight_init_method == WeightInitMethod.CUSTOM)
+        assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED or self.weight_init_table.shape == (self.z_size + 2**16 * (self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
+        assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
 
         assert self.periodic_error_updating_flag in PeriodicErrorUpdatingFlag
         assert self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED # Not implemented
@@ -474,7 +489,12 @@ class Header:
         bitstream += bin(self.weight_init_resolution)[2:].zfill(5)
         assert len(bitstream) == 8 * 5
         if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
-            exit("Weight initialization table not implemented")
+            for z in range(self.weight_init_table.shape[0]):
+                for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                    bitstream += bin(self.weight_init_table[z, j])[2:].zfill(self.weight_init_resolution)
+            fill_bits = (8 - len(bitstream) % 8) % 8
+            bitstream += fill_bits * '0'
+            assert len(bitstream) % 8 == 0
         if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
             exit("Weight exponent offset table not implemented")
         return bitstream
@@ -599,6 +619,13 @@ class Header:
     def set_encoding_order_bil(self):
         self.sample_encoding_order = SampleEncodingOrder.BI
         self.sub_frame_interleaving_depth = 1
+
+    def set_weight_init_table_array_to_default(self):
+        # The default values here are arbitrary, not set from standard
+        self.__init_weight_init_table_array()
+        for z in range(self.weight_init_table.shape[0]):
+            for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                self.weight_init_table[z, j] = 0
       
     def get_dynamic_range_bits(self):
         dynamic_range_bits = self.dynamic_range

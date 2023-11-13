@@ -21,7 +21,6 @@ class Predictor():
     local_difference_values_num = None
 
     spectral_bands_used = None # Symbol: P^*. Indexed by z
-    # spectral_bands_used_mask = None
 
     weight_component_resolution = None # Symbol: Omega
     weight_update_change_interval = None # Symbol: t_inc
@@ -49,9 +48,9 @@ class Predictor():
         self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int64)
         for t in range (self.header.y_size * self.header.x_size):
             self.weight_update_scaling_exponent[t] = clip( \
-                self.weight_update_initial_parameter + (t - self.header.x_size) // self.weight_update_change_interval \
-                , self.weight_update_initial_parameter, self.weight_update_final_parameter) \
-                + self.image_constants.dynamic_range_bits - self.weight_component_resolution
+                    self.weight_update_initial_parameter + (t - self.header.x_size) // self.weight_update_change_interval, \
+                    self.weight_update_initial_parameter, self.weight_update_final_parameter \
+                ) + self.image_constants.dynamic_range_bits - self.weight_component_resolution
         
         self.weight_min = -2**(self.weight_component_resolution + 2)
         self.weight_max = 2**(self.weight_component_resolution + 2) - 1
@@ -209,8 +208,10 @@ class Predictor():
                 for i in range(1, self.spectral_bands_used[z]):
                         self.weight_vector[0,1,z,offset + i] = self.weight_vector[0,1,z,offset + i - 1] // 8
         else:
-            exit("Custom weight init method not supported")
-
+            self.weight_vector[0,1,z] = \
+                2**(self.weight_component_resolution + 3 - self.header.weight_init_resolution) * \
+                self.header.weight_init_table[z] + \
+                np.ceil(2**(self.weight_component_resolution + 2 - self.header.weight_init_resolution) - 1)
 
     def __calculate_weight_vector(self, x, y, z, t):
         if t == 0:
