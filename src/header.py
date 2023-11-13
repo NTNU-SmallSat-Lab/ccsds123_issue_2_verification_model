@@ -103,12 +103,12 @@ class Header:
     z_size = 0 # N_z. Encode as N_z%2^16. 1<=N_z<=2^16-1
     sample_type = SampleType.UNSIGNED_INTEGER
     large_d_flag = LargeDFlag.SMALL_D
-    dynamic_range = 8 # D. Encode as D%16. 1<=D<=32
-    sample_encoding_order = SampleEncodingOrder.BSQ
-    sub_frame_interleaving_depth = 0 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
+    dynamic_range = 10 # D. Encode as D%16. 1<=D<=32
+    sample_encoding_order = SampleEncodingOrder.BI
+    sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
     entropy_coder_type = EntropyCoderType.SAMPLE_ADAPTIVE
-    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.LOSSLESS
+    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
     supplementary_information_table_count = 0 # tau. 0<=tau<=15. Supplementary information tables are not implemented
 
     # TODO: Support supplementary information tables
@@ -144,13 +144,15 @@ class Header:
     periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
     error_update_period_exponent = 0 # u. Encode as 0 if periodic_error_updating_flag=NOT_USED, otherwise as u. 0<=u<=9
     # Absolute error limit
-    absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
+    absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_DEPENDENT
     absolute_error_limit_bit_depth = 2 # D_A. Encode as D_A%16. 1<=D_A<=min{D − 1,16}
     absolute_error_limit_value = 2 # A*. 0<=A*<=2^D_A-1. TODO: Support BAND_DEPENDENT values
+    absolute_error_limit_table = None # a_z. Array of size N_z
     # Relative error limit
-    relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-    relative_error_limit_bit_depth = 4 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
-    relative_error_limit_value = 8 # R*. 0<=R*<=2^D_R-1. TODO: Support BAND_DEPENDENT values
+    relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_DEPENDENT
+    relative_error_limit_bit_depth = 5 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
+    relative_error_limit_value = 20 # R*. 0<=R*<=2^D_R-1. TODO: Support BAND_DEPENDENT values
+    relative_error_limit_table = None # r_z. Array of size N_z
     # TODO: Support periodic error updating
 
     # Sample Representative
@@ -191,6 +193,12 @@ class Header:
             self.set_weight_init_table_array_to_default()
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             self.set_weight_exponent_offset_table_array_to_default()
+        if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_ONLY or \
+            self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
+            self.set_absolute_error_limit_table_array_to_default()
+        if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.RELATIVE_ONLY or \
+            self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
+            self.set_relative_error_limit_table_array_to_default()
         
         self.__check_legal_config()
         
@@ -210,6 +218,12 @@ class Header:
     def __init_weight_exponent_offset_table_array(self):
         weight_exponent_offset_table_shape = (self.z_size + 2**16 * int(self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
         self.weight_exponent_offset_table = np.zeros(weight_exponent_offset_table_shape, dtype=np.int64)
+
+    def __init_absolute_error_limit_table_array(self):
+        self.absolute_error_limit_table = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
+    
+    def __init_relative_error_limit_table_array(self):
+        self.relative_error_limit_table = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
     
     def set_config_from_file(self, header_file_location, optional_tables_file_location=None):
         header_file = bitarray()
@@ -321,12 +335,20 @@ class Header:
                 self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(header_file[1:2].to01(), 2))
                 assert header_file[2:4].to01() == '00'
                 self.absolute_error_limit_bit_depth = int(header_file[4:8].to01(), 2)
-                self.absolute_error_limit_value = int(header_file[8:8+self.absolute_error_limit_bit_depth].to01(), 2)
-                header_file = header_file[8+self.absolute_error_limit_bit_depth:]
+                header_file = header_file[8:]
+
+                if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    self.absolute_error_limit_value = int(header_file[:self.absolute_error_limit_bit_depth].to01(), 2)
+                    self.set_absolute_error_limit_table_array_to_default()
+                    header_file = header_file[self.absolute_error_limit_bit_depth:]
+                elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    self.__init_absolute_error_limit_table_array()
+                    for z in range(self.absolute_error_limit_table.shape[0]):
+                        self.absolute_error_limit_table[z] = int(header_file[:self.absolute_error_limit_bit_depth].to01(), 2)
+                        header_file = header_file[self.absolute_error_limit_bit_depth:]               
+                
                 header_file = header_file[len(header_file) % 8:] # Skip fill bits
 
-                if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
-                    exit("Band-dependent absolute error limit not implemented")
             else:
                 self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
                 self.absolute_error_limit_bit_depth = 0
@@ -338,12 +360,20 @@ class Header:
                 self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(header_file[1:2].to01(), 2))
                 assert header_file[2:4].to01() == '00'
                 self.relative_error_limit_bit_depth = int(header_file[4:8].to01(), 2)
-                self.relative_error_limit_value = int(header_file[8:8+self.relative_error_limit_bit_depth].to01(), 2)
-                header_file = header_file[8+self.relative_error_limit_bit_depth:]
+                header_file = header_file[8:]
+
+                if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    self.relative_error_limit_value = int(header_file[:self.relative_error_limit_bit_depth].to01(), 2)
+                    self.set_relative_error_limit_table_array_to_default()
+                    header_file = header_file[self.relative_error_limit_bit_depth:]
+                elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    self.__init_relative_error_limit_table_array()
+                    for z in range(self.relative_error_limit_table.shape[0]):
+                        self.relative_error_limit_table[z] = int(header_file[:self.relative_error_limit_bit_depth].to01(), 2)
+                        header_file = header_file[self.relative_error_limit_bit_depth:]
+
                 header_file = header_file[len(header_file) % 8:] # Skip fill bits
 
-                if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
-                    exit("Band-dependent relative error limit not implemented")
             else:
                 self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
                 self.relative_error_limit_bit_depth = 0
@@ -470,13 +500,19 @@ class Header:
         assert (self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED and 0 <= self.error_update_period_exponent and self.error_update_period_exponent <= 9) or (self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED and self.error_update_period_exponent == 0)
         assert self.error_update_period_exponent == 0 # Not implemented
         assert self.absolute_error_limit_assignment_method in ErrorLimitAssignmentMethod
-        assert self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT # Not implemented
         assert 0 <= self.absolute_error_limit_bit_depth and self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0) <= min(self.get_dynamic_range_bits() - 1, 16)
         assert 0 <= self.absolute_error_limit_value and self.absolute_error_limit_value <= 2**self.absolute_error_limit_bit_depth - 1
+        if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_ONLY or \
+            self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
+            for z in range(self.absolute_error_limit_table.shape[0]):
+                assert 0 <= self.absolute_error_limit_table[z] and self.absolute_error_limit_table[z] <= 2**self.absolute_error_limit_bit_depth - 1
         assert self.relative_error_limit_assignment_method in ErrorLimitAssignmentMethod
-        assert self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT # Not implemented
         assert 0 <= self.relative_error_limit_bit_depth and self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0) <= min(self.get_dynamic_range_bits() - 1, 16)
         assert 0 <= self.relative_error_limit_value and self.relative_error_limit_value <= 2**self.relative_error_limit_bit_depth - 1
+        if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.RELATIVE_ONLY or \
+            self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
+            for z in range(self.relative_error_limit_table.shape[0]):
+                assert 0 <= self.relative_error_limit_table[z] and self.relative_error_limit_table[z] <= 2**self.relative_error_limit_bit_depth - 1
 
         assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4
         assert self.band_varying_damping_flag in BandVaryingDampingFlag
@@ -594,8 +630,14 @@ class Header:
         bitstream += bin(self.absolute_error_limit_assignment_method.value)[2:].zfill(1)
         bitstream += 2 * '0' # Reserved
         bitstream += bin(self.absolute_error_limit_bit_depth)[2:].zfill(4)
-        bitstream += bin(self.absolute_error_limit_value)[2:].zfill(self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0))
-        assert len(bitstream) == (self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0)) + 8
+        error_limit_bit_depth = self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0)
+        if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+            bitstream += bin(self.absolute_error_limit_value)[2:].zfill(error_limit_bit_depth)
+            assert len(bitstream) == error_limit_bit_depth + 8
+        elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+            for z in range(self.absolute_error_limit_table.shape[0]):
+                bitstream += bin(self.absolute_error_limit_table[z])[2:].zfill(error_limit_bit_depth)
+            assert len(bitstream) == self.absolute_error_limit_table.shape[0] * error_limit_bit_depth + 8
         fill_bits = (8 - len(bitstream) % 8) % 8
         bitstream += fill_bits * '0'
         assert len(bitstream) % 8 == 0
@@ -607,8 +649,14 @@ class Header:
         bitstream += bin(self.relative_error_limit_assignment_method.value)[2:].zfill(1)
         bitstream += 2 * '0' # Reserved
         bitstream += bin(self.relative_error_limit_bit_depth)[2:].zfill(4)
-        bitstream += bin(self.relative_error_limit_value)[2:].zfill(self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0))
-        assert len(bitstream) == (self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0)) + 8
+        error_limit_bit_depth = self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0)
+        if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+            bitstream += bin(self.relative_error_limit_value)[2:].zfill(error_limit_bit_depth)
+            assert len(bitstream) == error_limit_bit_depth + 8
+        elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+            for z in range(self.relative_error_limit_table.shape[0]):
+                bitstream += bin(self.relative_error_limit_table[z])[2:].zfill(error_limit_bit_depth)    
+            assert len(bitstream) == self.relative_error_limit_table.shape[0] * error_limit_bit_depth + 8
         fill_bits = (8 - len(bitstream) % 8) % 8
         bitstream += fill_bits * '0'
         assert len(bitstream) % 8 == 0
@@ -720,6 +768,24 @@ class Header:
         for z in range(self.weight_exponent_offset_table.shape[0]):
             for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
                 self.weight_exponent_offset_table[z, j] = self.weight_exponent_offset_value
+    
+    def set_absolute_error_limit_table_array_to_default(self):
+        # The default values here are arbitrary, not set from standard
+        self.__init_absolute_error_limit_table_array()
+        for z in range(self.absolute_error_limit_table.shape[0]):
+                if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    self.absolute_error_limit_table[z] = self.absolute_error_limit_value
+                elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    self.absolute_error_limit_table[z] = min(z, 2**self.absolute_error_limit_bit_depth - 1)
+
+    def set_relative_error_limit_table_array_to_default(self):
+        # The default values here are arbitrary, not set from standard
+        self.__init_relative_error_limit_table_array()
+        for z in range(self.relative_error_limit_table.shape[0]):
+                if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    self.relative_error_limit_table[z] = self.relative_error_limit_value
+                elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    self.relative_error_limit_table[z] = min(self.relative_error_limit_value + 2 * z, 2**self.relative_error_limit_bit_depth - 1)
       
     def get_dynamic_range_bits(self):
         dynamic_range_bits = self.dynamic_range

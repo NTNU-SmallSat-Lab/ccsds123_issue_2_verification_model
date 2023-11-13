@@ -289,24 +289,24 @@ class Predictor():
     
 
     def __calculate_maximum_error(self, x, y, z, t):
-        # Assumes periodic_error_updating_flag = NOT_USED, absolute_error_limit_assignment_method = BAND_INDEPENDENT and relative_error_limit_assignment_method = BAND_INDEPENDENT
+        # Assumes periodic_error_updating_flag = NOT_USED
         if self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.LOSSLESS:
             self.maximum_error[y, x, z] = 0
 
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
-            self.maximum_error[y, x, z] = self.header.absolute_error_limit_value
+            self.maximum_error[y, x, z] = self.header.absolute_error_limit_table[z]
 
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
             self.maximum_error[y, x, z] =  \
-                int(self.header.relative_error_limit_value * \
+                int(self.header.relative_error_limit_table[z] * \
                 self.predicted_sample_value[y, x, z] // \
                 self.image_constants.dynamic_range)
             
-        else: # self.header.quantizer_fidelity_control_method = hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
+        elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             self.maximum_error[y, x, z] = \
                 min( \
-                    self.header.absolute_error_limit_value, \
-                    int(self.header.relative_error_limit_value * \
+                    self.header.absolute_error_limit_table[z], \
+                    int(self.header.relative_error_limit_table[z] * \
                     self.predicted_sample_value[y, x, z] // \
                     self.image_constants.dynamic_range) \
                 )
