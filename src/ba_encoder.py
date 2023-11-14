@@ -115,33 +115,33 @@ class BlockAdaptiveEncoder():
         self.bitstream_readable[num] = bitstring
     
 
-    def __encode_error_limits(self, y, num):
-        period_index = y // 2**self.header.error_update_period_exponent
-        if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
-            if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-                self.__add_to_bitstream(
-                    bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.absolute_error_limit_bit_depth),
-                    num
-                )
-            elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
-                for z in range(self.header.z_size):
-                    self.__add_to_bitstream(
-                        bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.absolute_error_limit_bit_depth),
-                        num
-                    )
+    # def __encode_error_limits(self, y, num):
+    #     period_index = y // 2**self.header.error_update_period_exponent
+    #     if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+    #         if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+    #             self.__add_to_bitstream(
+    #                 bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.absolute_error_limit_bit_depth),
+    #                 num
+    #             )
+    #         elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+    #             for z in range(self.header.z_size):
+    #                 self.__add_to_bitstream(
+    #                     bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.absolute_error_limit_bit_depth),
+    #                     num
+    #                 )
 
-        if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
-            if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-                self.__add_to_bitstream(
-                    bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.relative_error_limit_bit_depth),
-                    num
-                )
-            elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
-                for z in range(self.header.z_size):
-                    self.__add_to_bitstream(
-                        bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.relative_error_limit_bit_depth),
-                        num
-                    )
+    #     if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+    #         if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+    #             self.__add_to_bitstream(
+    #                 bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.relative_error_limit_bit_depth),
+    #                 num
+    #             )
+    #         elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+    #             for z in range(self.header.z_size):
+    #                 self.__add_to_bitstream(
+    #                     bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.relative_error_limit_bit_depth),
+    #                     num
+    #                 )
 
 
     def run_encoder(self):
@@ -174,16 +174,16 @@ class BlockAdaptiveEncoder():
             self.blocks = np.pad(self.blocks, (0, padding), mode='constant', constant_values=0)
             self.blocks = self.blocks.reshape(self.blocks_shape)
 
-        prev_y = -1
+        # prev_y = -1
         for num in range(self.blocks.shape[0]):
             print(f"\rProcessing block num={num+1}/{self.blocks.shape[0]}", end="")
-            y = num * self.block_size // (self.header.x_size * self.header.z_size)
-            if self.header.periodic_error_updating_flag == \
-                hd.PeriodicErrorUpdatingFlag.USED and \
-                y != prev_y:
-                prev_y = y
-                if y % 2**self.header.error_update_period_exponent == 0:
-                    self.__encode_error_limits(y, num)
+            # y = num * self.block_size // (self.header.x_size * self.header.z_size)
+            # if self.header.periodic_error_updating_flag == \
+            #     hd.PeriodicErrorUpdatingFlag.USED and \
+            #     y != prev_y:
+            #     prev_y = y
+            #     if y % 2**self.header.error_update_period_exponent == 0:
+            #         self.__encode_error_limits(y, num)
             self.__encode_block(num)
         
         if self.zero_block_count[-1] > 0:
