@@ -53,7 +53,7 @@ class SampleAdaptiveEncoder():
             self.accumulator[0,1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[0,1] // 2**7)
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.zeros(image_shape, dtype='U64')
+        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U512')
 
     def __encode_sample(self, x, y, z):
         if y == 0 and x == 0:
@@ -142,7 +142,7 @@ class SampleAdaptiveEncoder():
 
     def __add_to_bitstream(self, bitstring, x, y, z):
         self.bitstream += bitstring
-        self.bitstream_readable[y,x,z] = bitstring
+        self.bitstream_readable[y,x,z] += bitstring
 
     def run_encoder(self):
         self.__init_encoder_constants()
