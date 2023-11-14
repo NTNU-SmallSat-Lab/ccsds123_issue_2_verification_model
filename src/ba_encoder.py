@@ -177,6 +177,8 @@ class BlockAdaptiveEncoder():
         # prev_y = -1
         for num in range(self.blocks.shape[0]):
             print(f"\rProcessing block num={num+1}/{self.blocks.shape[0]}", end="")
+
+                # The standard does not specify how the periodic error limits should be encoded. I added a solution based on the other coders, but test vector Test1-20190201/sample-000002 does not encode the periodic error limits at all, hence it is commented out
             # y = num * self.block_size // (self.header.x_size * self.header.z_size)
             # if self.header.periodic_error_updating_flag == \
             #     hd.PeriodicErrorUpdatingFlag.USED and \
@@ -188,10 +190,11 @@ class BlockAdaptiveEncoder():
         
         if self.zero_block_count[-1] > 0:
             code = '0' * (self.id_bits + 1)
-            if self.zero_block_count[-1] <= 4:
-                code += '0' * (self.zero_block_count[-1] - 1) + '1'
-            else:
-                code += '00001'
+                # I can't see anywhere in the standards that specifies that the ROS codeword should be encoded if the last segment ends with a zero block, but it seems to be the case from test vector Test1-20190201/sample-000008
+            # if self.zero_block_count[-1] <= 4: 
+            #     code += '0' * (self.zero_block_count[-1] - 1) + '1'
+            # else:
+            code += '00001'
             self.__add_to_bitstream(code, self.blocks.shape[0] - 1)
         
         print("")
