@@ -33,6 +33,9 @@ class Predictor():
 
     register_size = None # Symbol: R
 
+    absolute_error_limits = None # Symbol: a_z
+    relative_error_limits = None # Symbol: r_z
+
     def __init_predictor_constants(self):
         self.local_difference_values_num = self.header.prediction_bands_num
         if self.header.prediction_mode == hd.PredictionMode.FULL:
@@ -64,7 +67,23 @@ class Predictor():
         self.register_size = self.header.register_size
         if self.register_size == 0:
             self.register_size = 64
+        
+        self.absolute_error_limits = np.full((self.header.y_size,self.header.z_size), -1, dtype=np.int64)
+        self.relative_error_limits = np.full((self.header.y_size,self.header.z_size), -1, dtype=np.int64)
 
+        if self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.NOT_USED:
+            if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                self.absolute_error_limits[:,] = self.header.absolute_error_limit_table
+            if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                self.relative_error_limits[:,] = self.header.relative_error_limit_table
+        elif self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.USED:
+            period = 2**self.header.error_update_period_exponent
+            for y in range(self.header.y_size + 2**16 * int(self.header.y_size == 0)):
+                i = y // period
+                if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                    self.absolute_error_limits[y,] = self.header.periodic_absolute_error_limit_table[i]
+                if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                    self.relative_error_limits[y,] = self.header.periodic_relative_error_limit_table[i]
 
     # Predictor variables
     local_sum = None # Symbol: sigma
@@ -75,6 +94,7 @@ class Predictor():
     double_resolution_predicted_sample_value = None # Symbol: s-tilde
     predicted_sample_value = None # Symbol: s-hat
     prediction_residual = None # Symbol: delta
+
     maximum_error = None # Symbol: m
     quantizer_index = None # Symbol: q
     clipped_quantizer_bin_center = None # Symbol: s'
@@ -289,24 +309,23 @@ class Predictor():
     
 
     def __calculate_maximum_error(self, x, y, z, t):
-        # Assumes periodic_error_updating_flag = NOT_USED
         if self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.LOSSLESS:
             self.maximum_error[y, x, z] = 0
 
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
-            self.maximum_error[y, x, z] = self.header.absolute_error_limit_table[z]
+            self.maximum_error[y, x, z] = self.absolute_error_limits[y,z]
 
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
             self.maximum_error[y, x, z] =  \
-                int(self.header.relative_error_limit_table[z] * \
+                int(self.relative_error_limits[y,z] * \
                 self.predicted_sample_value[y, x, z] // \
                 self.image_constants.dynamic_range)
             
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             self.maximum_error[y, x, z] = \
                 min( \
-                    self.header.absolute_error_limit_table[z], \
-                    int(self.header.relative_error_limit_table[z] * \
+                    self.absolute_error_limits[y,z], \
+                    int(self.relative_error_limits[y,z] * \
                     self.predicted_sample_value[y, x, z] // \
                     self.image_constants.dynamic_range) \
                 )
@@ -446,7 +465,6 @@ class Predictor():
         np.savetxt(output_folder + "/predictor-05-double_resolution_predicted_sample_value.csv", self.double_resolution_predicted_sample_value.reshape(csv_image_shape), delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/predictor-06-predicted_sample_value.csv", self.predicted_sample_value.reshape(csv_image_shape), delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/predictor-07-prediction_residual.csv", self.prediction_residual.reshape(csv_image_shape), delimiter=",", fmt='%d')
-        np.savetxt(output_folder + "/predictor-08-maximum_error.csv", self.maximum_error.reshape(csv_image_shape), delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/predictor-09-quantizer_index.csv", self.quantizer_index.reshape(csv_image_shape), delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/predictor-10-clipped_quantizer_bin_center.csv", self.clipped_quantizer_bin_center.reshape(csv_image_shape), delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/predictor-11-double_resolution_sample_representative.csv", self.double_resolution_sample_representative.reshape(csv_image_shape), delimiter=",", fmt='%d')
@@ -457,4 +475,7 @@ class Predictor():
         np.savetxt(output_folder + "/predictor-16-image_sample.csv", self.image_sample.reshape(csv_image_shape), delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/predictor-17-weight_update_scaling_exponent.csv", self.weight_update_scaling_exponent.reshape((self.header.y_size, self.header.x_size)), delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/predictor-18-scaled_prediction_endpoint_difference.csv", self.scaled_prediction_endpoint_difference.reshape(csv_image_shape), delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/predictor-20-absolute_error_limits.csv", self.absolute_error_limits, delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/predictor-21-relative_error_limits.csv", self.relative_error_limits, delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/predictor-22-maximum_error.csv", self.maximum_error.reshape(csv_image_shape), delimiter=",", fmt='%d')
     

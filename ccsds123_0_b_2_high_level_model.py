@@ -21,10 +21,11 @@ def get_memory_usage():
 
 def main():
     parser = argparse.ArgumentParser(description="Compress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging")
-    parser.add_argument("image_file", help="Path to the image file")
-    parser.add_argument("--header", default="", help="Path to the configuration file")
-    parser.add_argument("--accu" , default="", help="Path to the hybrid encoder accumulator initial values file")
-    parser.add_argument("--optional", default="", help="Path to the optional tables file")
+    parser.add_argument("image_file", help="Path to the image file.")
+    parser.add_argument("--header", default="", help="Path to the header file.")
+    parser.add_argument("--accu" , default="", help="Path to the hybrid encoder accumulator initial values file. Stored as unsigned integers in increasing band order, using D+gamma_0 bits, in a file that is zero padded to the nearest byte at the end.")
+    parser.add_argument("--optional", default="", help="Path to the optional tables file. These are tables that could also be stored in the header. Values are stored as they would be in the header. Tables are stored in the order they would be in the header.")
+    parser.add_argument("--error_limits", default="", help="Path to the error limits file for when using periodic error limit updating. Values are stored as 16-bit unsigned integers in the same order they would be in the header.")
     args = parser.parse_args()
 
     start_time = time.time()

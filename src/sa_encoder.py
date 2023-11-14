@@ -111,7 +111,35 @@ class SampleAdaptiveEncoder():
             return '0' * zeros + '1' + bitstring_j[-k:]
         else:
             return '0' * self.unary_length_limit + bitstring_j
-    
+        
+    def __encode_error_limits(self, y):
+        period_index = y // 2**self.header.error_update_period_exponent
+        if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+            if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                self.__add_to_bitstream(
+                    bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.absolute_error_limit_bit_depth),
+                    0, y, 0
+                )
+            elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                for z in range(self.header.z_size):
+                    self.__add_to_bitstream(
+                        bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.absolute_error_limit_bit_depth),
+                        0, y, z
+                    )
+
+        if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+            if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                self.__add_to_bitstream(
+                    bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.relative_error_limit_bit_depth),
+                    0, y, 0
+                )
+            elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                for z in range(self.header.z_size):
+                    self.__add_to_bitstream(
+                        bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.relative_error_limit_bit_depth),
+                        0, y, z
+                    )
+
     def __add_to_bitstream(self, bitstring, x, y, z):
         self.bitstream += bitstring
         self.bitstream_readable[y,x,z] = bitstring
@@ -127,7 +155,7 @@ class SampleAdaptiveEncoder():
                 if y % 2**self.header.error_update_period_exponent == 0 \
                     and self.header.periodic_error_updating_flag == \
                     hd.PeriodicErrorUpdatingFlag.USED:
-                    exit("Periodic error updating flag not implemented")
+                    self.__encode_error_limits(y)
                 
                 for i in range(ceil(self.header.z_size / self.header.sub_frame_interleaving_depth)):
                     for x in range(self.header.x_size):
