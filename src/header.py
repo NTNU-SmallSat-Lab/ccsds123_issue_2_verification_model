@@ -609,8 +609,8 @@ class Header:
         assert self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED and self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED
         assert (self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED and 0 <= self.error_update_period_exponent and self.error_update_period_exponent <= 9) or (self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED and self.error_update_period_exponent == 0)
         assert self.absolute_error_limit_assignment_method in ErrorLimitAssignmentMethod
-        assert 0 <= self.absolute_error_limit_bit_depth and self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0) <= min(self.get_dynamic_range_bits() - 1, 16)
-        assert (0 <= self.absolute_error_limit_value and self.absolute_error_limit_value <= 2**self.absolute_error_limit_bit_depth - 1) or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED
+        assert 0 <= self.absolute_error_limit_bit_depth and self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0) <= min(self.get_dynamic_range_bits() - 1, 16) or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.LOSSLESS or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.RELATIVE_ONLY
+        assert (0 <= self.absolute_error_limit_value and self.absolute_error_limit_value <= 2**self.absolute_error_limit_bit_depth - 1) or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED or self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT
         if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_ONLY or \
             self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
@@ -621,8 +621,8 @@ class Header:
                     for z in range(self.periodic_absolute_error_limit_table.shape[1]):
                         assert 0 <= self.periodic_absolute_error_limit_table[i, z] and self.periodic_absolute_error_limit_table[i, z] <= 2**self.absolute_error_limit_bit_depth - 1
         assert self.relative_error_limit_assignment_method in ErrorLimitAssignmentMethod
-        assert 0 <= self.relative_error_limit_bit_depth and self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0) <= min(self.get_dynamic_range_bits() - 1, 16)
-        assert (0 <= self.relative_error_limit_value and self.relative_error_limit_value <= 2**self.relative_error_limit_bit_depth - 1) or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED
+        assert 0 <= self.relative_error_limit_bit_depth and self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0) <= min(self.get_dynamic_range_bits() - 1, 16) or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.LOSSLESS or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_ONLY
+        assert (0 <= self.relative_error_limit_value and self.relative_error_limit_value <= 2**self.relative_error_limit_bit_depth - 1) or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED or self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT
         if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.RELATIVE_ONLY or \
             self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
