@@ -71,7 +71,8 @@ class Predictor():
         self.absolute_error_limits = np.full((self.header.y_size,self.header.z_size), -1, dtype=np.int64)
         self.relative_error_limits = np.full((self.header.y_size,self.header.z_size), -1, dtype=np.int64)
 
-        if self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.NOT_USED:
+        if self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.NOT_USED and \
+            self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.LOSSLESS:
             if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
                 self.absolute_error_limits[:,] = self.header.absolute_error_limit_table
             if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
