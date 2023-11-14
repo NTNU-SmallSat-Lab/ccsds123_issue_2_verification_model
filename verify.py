@@ -25,7 +25,6 @@ def main():
         print(f"Input hybrid tables file: {input_hybrid_tables[num]}")
         print(f"Golden compressed file: {golden_compressed_files[num]}")
 
-
         try:
             dut_compressor = ccsds123.CCSDS123(f"{test_vector_folder}/{input_raw_files[num]}")
             dut_compressor.set_header_file(f"{test_vector_folder}/{input_header_files[num]}")
@@ -47,6 +46,10 @@ def main():
             print(f"Files in test {num} are identical")
         else:
             print(f"Files in test {num} are different")
+            # Example: make compare_vector image=../Test1-20190201/sample-000001-u32be-4x11x45.raw header=../Test1-20190201/sample-000001-hdr.bin image_format=s32be correct=../Test1-20190201/sample-000001.flex
+            print(f"For more data, run: ")
+            print(f"make compare_vector image={test_vector_folder}/{input_raw_files[num]} header={test_vector_folder}/{input_header_files[num]} image_format=s32be correct={test_vector_folder}/{golden_compressed_files[num]}")
+
             exit()
 
 
