@@ -855,16 +855,16 @@ class Header:
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
             return bitstream
 
-        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
-            for i in range(self.periodic_absolute_error_limit_table.shape[0]):
+        for i in range(ceil((self.y_size + 2**16 * int(self.y_size == 0)) / 2**self.error_update_period_exponent)):
+
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
                 if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                     bitstream += bin(self.periodic_absolute_error_limit_table[i,0])[2:].zfill(16)
                 elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     for z in range(self.periodic_absolute_error_limit_table.shape[1]):
                         bitstream += bin(self.periodic_absolute_error_limit_table[i,z])[2:].zfill(16)
 
-        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
-            for i in range(self.periodic_relative_error_limit_table.shape[0]):
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
                 if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                     bitstream += bin(self.periodic_relative_error_limit_table[i,0])[2:].zfill(16)
                 elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
