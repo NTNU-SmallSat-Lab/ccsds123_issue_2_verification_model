@@ -68,6 +68,13 @@ compare_with_header_optional_tables:
 	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
+test_reading_tables:
+	make compare; \
+	cp output/header.bin .; \
+	cp output/optional_tables.bin .; \
+	cp output/error_limits.bin .; \
+	make compare_with_header_optional_tables optional_tables=optional_tables.bin header=header.bin error_limits=error_limits.bin
+
 # Example: make compare_vector image=../Test1-20190201/sample-000001-u32be-4x11x45.raw header=../Test1-20190201/sample-000001-hdr.bin image_format=s32be correct=../Test1-20190201/sample-000001.flex
 compare_vector:
 	make clean; \

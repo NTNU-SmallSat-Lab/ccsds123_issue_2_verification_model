@@ -156,18 +156,18 @@ class Header:
     relative_error_limit_bit_depth = 9 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
     relative_error_limit_value = 20 # R*. 0<=R*<=2^D_R-1.
     relative_error_limit_table = None # r_z. Array of size N_z
-    # TODO: Support periodic error updating
 
     # Sample Representative
     sample_representative_resolution = 4 # Theta. 0<=Theta<=4
-    band_varying_damping_flag = BandVaryingDampingFlag.BAND_INDEPENDENT
-    damping_table_flag = DampingTableFlag.NOT_INCLUDED
+    band_varying_damping_flag = BandVaryingDampingFlag.BAND_DEPENDENT
+    damping_table_flag = DampingTableFlag.INCLUDED
     fixed_damping_value = 0 # phi. Encode as 0 if damping_table_flag=INCLUDED, otherwise as phi. 0<=phi<=2^Theta-1
-    band_varying_offset_flag = BandVaryingOffsetFlag.BAND_INDEPENDENT
-    damping_offset_table_flag = OffsetTableFlag.NOT_INCLUDED
+    band_varying_offset_flag = BandVaryingOffsetFlag.BAND_DEPENDENT
+    damping_offset_table_flag = OffsetTableFlag.INCLUDED
     fixed_offset_value = 0 # psi. Encode as 0 if damping_offset_table_flag=INCLUDED, otherwise as psi. 0<=psi<=2^Theta-1. psi=0 if lossless
-    # TODO: Support damping table subblock
-    # TODO: Support offset table subblock
+
+    damping_table_array = None # phi_z. Array of size N_z
+    damping_offset_table_array = None # psi_z. Array of size N_z
 
     ########################
     # Entropy coder metadata
@@ -208,7 +208,8 @@ class Header:
                 self.set_relative_error_limit_table_array_to_default()
             elif self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
                 self.set_periodic_relative_error_limit_table_array_to_default()
-            
+        self.set_damping_table_array_to_default()
+        self.set_damping_offset_table_array_to_default()
         
         self.__check_legal_config()
         
@@ -242,6 +243,12 @@ class Header:
     
     def __init_relative_error_limit_table_array(self):
         self.relative_error_limit_table = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
+
+    def __init_damping_table_array(self):
+        self.damping_table_array = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
+    
+    def __init_damping_offset_table_array(self):
+        self.damping_offset_table_array = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
     
     def set_config_from_file(self, header_file_location, optional_tables_file_location=None, error_limits_file_location=None):
         header_file = bitarray()
@@ -426,9 +433,34 @@ class Header:
             header_file = header_file[24:]
 
             # Damping and offset table sublocks
-            if self.damping_table_flag == DampingTableFlag.INCLUDED or \
-                self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
-                exit("Damping tables not implemented")
+            if self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT:
+                self.__init_damping_table_array()
+                for i in range(self.damping_table_array.shape[0]):
+                    if self.damping_table_flag == DampingTableFlag.INCLUDED:
+                        self.damping_table_array[i] = int(header_file[:self.sample_representative_resolution].to01(), 2)
+                        header_file = header_file[self.sample_representative_resolution:]
+                    elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
+                        self.damping_table_array[i] = int(optional_tables_file[:self.sample_representative_resolution].to01(), 2)
+                        optional_tables_file = optional_tables_file[self.sample_representative_resolution:]
+                if self.damping_table_flag == DampingTableFlag.INCLUDED:
+                    header_file = header_file[len(header_file) % 8:]
+                elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
+                    optional_tables_file = optional_tables_file[len(header_file) % 8:]
+            
+            if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
+                self.__init_damping_offset_table_array()
+                for i in range(self.damping_offset_table_array.shape[0]):
+                    if self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
+                        self.damping_offset_table_array[i] = int(header_file[:self.sample_representative_resolution].to01(), 2)
+                        header_file = header_file[self.sample_representative_resolution:]
+                    elif self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED:
+                        self.damping_offset_table_array[i] = int(optional_tables_file[:self.sample_representative_resolution].to01(), 2)
+                        optional_tables_file = optional_tables_file[self.sample_representative_resolution:]
+                if self.damping_table_flag == DampingTableFlag.INCLUDED:
+                    header_file = header_file[len(header_file) % 8:]
+                elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
+                    optional_tables_file = optional_tables_file[len(header_file) % 8:]
+
         else:
             self.sample_representative_resolution = 0
             self.band_varying_damping_flag = BandVaryingDampingFlag.BAND_INDEPENDENT
@@ -581,14 +613,12 @@ class Header:
 
         assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4
         assert self.band_varying_damping_flag in BandVaryingDampingFlag
-        assert self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_INDEPENDENT # Not implemented
         assert self.damping_table_flag in DampingTableFlag
-        assert self.damping_table_flag == DampingTableFlag.NOT_INCLUDED # Table not implemented
+        assert self.damping_table_flag == DampingTableFlag.NOT_INCLUDED or self.damping_table_flag == DampingTableFlag.INCLUDED and self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT
         assert (self.damping_table_flag == DampingTableFlag.NOT_INCLUDED and 0 <= self.fixed_damping_value and self.fixed_damping_value <= 2**self.sample_representative_resolution - 1) or (self.damping_table_flag == DampingTableFlag.INCLUDED and self.fixed_damping_value == 0)
         assert self.band_varying_offset_flag in BandVaryingOffsetFlag
-        assert self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_INDEPENDENT # Not implemented
         assert self.damping_offset_table_flag in OffsetTableFlag
-        assert self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED # Table not implemented
+        assert self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED or self.damping_offset_table_flag == OffsetTableFlag.INCLUDED and self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT
         assert (self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED and 0 <= self.fixed_offset_value and self.fixed_offset_value <= 2**self.sample_representative_resolution - 1) or (self.damping_offset_table_flag == OffsetTableFlag.INCLUDED and self.fixed_offset_value == 0)
 
         assert (8 <= self.unary_length_limit and self.unary_length_limit < 32) or self.unary_length_limit == 0
@@ -740,25 +770,48 @@ class Header:
         return bitstream
     
     def __encode_predictor_sample_representative_structure(self):
+        header_bitstream = bitarray()
+        optional_tables_bitstream = bitarray()
+
+        header_bitstream += 5 * '0' # Reserved
+        header_bitstream += bin(self.sample_representative_resolution)[2:].zfill(3)
+        header_bitstream += 1 * '0' # Reserved
+        header_bitstream += bin(self.band_varying_damping_flag.value)[2:].zfill(1)
+        header_bitstream += bin(self.damping_table_flag.value)[2:].zfill(1)
+        header_bitstream += 1 * '0' # Reserved
+        header_bitstream += bin(self.fixed_damping_value)[2:].zfill(4)
+        header_bitstream += 1 * '0' # Reserved
+        header_bitstream += bin(self.band_varying_offset_flag.value)[2:].zfill(1)
+        header_bitstream += bin(self.damping_offset_table_flag.value)[2:].zfill(1)
+        header_bitstream += 1 * '0'
+        header_bitstream += bin(self.fixed_offset_value)[2:].zfill(4)
+        assert len(header_bitstream) == 8 * 3
+        
         bitstream = bitarray()
-        bitstream += 5 * '0' # Reserved
-        bitstream += bin(self.sample_representative_resolution)[2:].zfill(3)
-        bitstream += 1 * '0' # Reserved
-        bitstream += bin(self.band_varying_damping_flag.value)[2:].zfill(1)
-        bitstream += bin(self.damping_table_flag.value)[2:].zfill(1)
-        bitstream += 1 * '0' # Reserved
-        bitstream += bin(self.fixed_damping_value)[2:].zfill(4)
-        bitstream += 1 * '0' # Reserved
-        bitstream += bin(self.band_varying_offset_flag.value)[2:].zfill(1)
-        bitstream += bin(self.damping_offset_table_flag.value)[2:].zfill(1)
-        bitstream += 1 * '0'
-        bitstream += bin(self.fixed_offset_value)[2:].zfill(4)
-        assert len(bitstream) == 8 * 3
+        if self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT:
+            for z in range(self.damping_table_array.shape[0]):
+                bitstream += bin(self.damping_table_array[z])[2:].zfill(self.sample_representative_resolution)
+            fill_bits = (8 - len(bitstream) % 8) % 8
+            bitstream += fill_bits * '0'
+            assert len(bitstream) % 8 == 0
         if self.damping_table_flag == DampingTableFlag.INCLUDED:
-            exit("Damping table not implemented")
+            header_bitstream += bitstream
+        elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
+            optional_tables_bitstream += bitstream
+        
+        bitstream = bitarray()
+        if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
+            for z in range(self.damping_offset_table_array.shape[0]):
+                bitstream += bin(self.damping_offset_table_array[z])[2:].zfill(self.sample_representative_resolution)
+            fill_bits = (8 - len(bitstream) % 8) % 8
+            bitstream += fill_bits * '0'
+            assert len(bitstream) % 8 == 0
         if self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
-            exit("Damping offset table not implemented")
-        return bitstream
+            header_bitstream += bitstream
+        elif self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED:
+            optional_tables_bitstream += bitstream
+                
+        return header_bitstream, optional_tables_bitstream
 
     def __encode_entropy_coder_sample_adaptive_structure(self):
         bitstream = bitarray()
@@ -793,7 +846,6 @@ class Header:
     def __create_header_bitstream(self):
         header_bitstream = bitarray()
         optional_tables_bitstream = bitarray()
-        # bitstreams = bitarray()
 
         header_bitstream += self.__encode_essential_subpart_structure()
         bitstreams = self.__encode_predictor_primary_structure()
@@ -803,7 +855,9 @@ class Header:
         if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
             header_bitstream += self.__encode_predictor_quantization_structure()
         if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
-            header_bitstream += self.__encode_predictor_sample_representative_structure()        
+            bitstreams = self.__encode_predictor_sample_representative_structure()
+            header_bitstream += bitstreams[0]
+            optional_tables_bitstream += bitstreams[1]
         if self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE:
             header_bitstream += self.__encode_entropy_coder_sample_adaptive_structure()
         elif self.entropy_coder_type == EntropyCoderType.HYBRID:
@@ -873,6 +927,24 @@ class Header:
                     self.periodic_relative_error_limit_table[i,z] = (i * self.periodic_relative_error_limit_table.shape[1]) % (2**self.relative_error_limit_bit_depth - 1)
                 elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     self.periodic_relative_error_limit_table[i,z] = (i * self.periodic_relative_error_limit_table.shape[1] + z) % (2**self.relative_error_limit_bit_depth - 1)
+
+    def set_damping_table_array_to_default(self):
+        # The default values here are arbitrary, not set from standard
+        self.__init_damping_table_array()
+        if self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_INDEPENDENT:
+            self.damping_table_array[:] = self.fixed_damping_value
+        elif self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT:
+            for z in range(self.damping_table_array.shape[0]):
+                self.damping_table_array[z] = z % (2**self.sample_representative_resolution - 1)
+    
+    def set_damping_offset_table_array_to_default(self):
+        # The default values here are arbitrary, not set from standard
+        self.__init_damping_offset_table_array()
+        if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_INDEPENDENT:
+            self.damping_offset_table_array[:] = self.fixed_offset_value
+        elif self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
+            for z in range(self.damping_offset_table_array.shape[0]):
+                self.damping_offset_table_array[z] = z % (2**self.sample_representative_resolution - 1)
       
     def get_dynamic_range_bits(self):
         dynamic_range_bits = self.dynamic_range
@@ -923,4 +995,6 @@ class Header:
             np.savetxt(output_folder + "/header-00-periodic_absolute_error_limit_table.csv", self.periodic_absolute_error_limit_table, delimiter=",", fmt='%d')
         if type(self.periodic_relative_error_limit_table) is np.ndarray:
             np.savetxt(output_folder + "/header-01-periodic_relative_error_limit_table.csv", self.periodic_relative_error_limit_table, delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/header-02-damping_table_array.csv", self.damping_table_array, delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/header-03-damping_offset_table_array.csv", self.damping_offset_table_array, delimiter=",", fmt='%d')
     

@@ -252,9 +252,7 @@ class Predictor():
             prev_y -= 1
             prev_x = self.header.x_size - 1
         
-        assert t - 1 == prev_x + prev_y * self.header.x_size
-
-        
+        assert t - 1 == prev_x + prev_y * self.header.x_size      
 
         for i in range(self.weight_vector.shape[3]):
             self.weight_vector[y,x,z,i] = \
@@ -363,7 +361,7 @@ class Predictor():
                     self.image_constants.upper_sample_limit \
                 )
         
-        if self.header.fixed_damping_value == 0 and self.header.fixed_offset_value == 0:
+        if self.header.damping_table_array[z] == 0 and self.header.damping_offset_table_array[z] == 0:
             self.double_resolution_sample_representative[y, x, z] = \
                 2 * self.clipped_quantizer_bin_center[y, x, z]
             
@@ -372,14 +370,14 @@ class Predictor():
         else:
             # Assumes band_varying_damping_flag = BAND_INDEPENDENT and band_varying_offset_flag = BAND_INDEPENDENT
             self.double_resolution_sample_representative[y, x, z] = \
-                (4 * (2**self.header.sample_representative_resolution - self.header.fixed_damping_value) * \
+                (4 * (2**self.header.sample_representative_resolution - self.header.damping_table_array[z]) * \
                 (self.clipped_quantizer_bin_center[y, x, z] * 2**self.weight_component_resolution - \
                 sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * \
-                self.header.fixed_offset_value * \
+                self.header.damping_offset_table_array[z] * \
                 2**(self.weight_component_resolution - self.header.sample_representative_resolution)) + \
-                self.header.fixed_damping_value * \
+                self.header.damping_table_array[z] * \
                 self.high_resolution_predicted_sample_value[y, x, z] - \
-                self.header.fixed_damping_value * 2**(self.weight_component_resolution + 1)) // \
+                self.header.damping_table_array[z] * 2**(self.weight_component_resolution + 1)) // \
                 2**(self.weight_component_resolution + self.header.sample_representative_resolution + 1)
 
             self.sample_representative[y, x, z] = \
