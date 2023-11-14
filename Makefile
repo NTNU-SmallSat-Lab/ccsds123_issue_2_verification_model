@@ -70,7 +70,7 @@ test_reading_tables:
 # Example: make compare_vector image=../Test1-20190201/sample-000001-u32be-4x11x45.raw header=../Test1-20190201/sample-000001-hdr.bin image_format=s32be correct=../Test1-20190201/sample-000001.flex
 compare_vector:
 	make clean; \
-	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header); \
+	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header) --optional $(optional_tables) --error_limits $(error_limits) --accu $(accu); \
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
 	cp $(correct) test/golden.bin
