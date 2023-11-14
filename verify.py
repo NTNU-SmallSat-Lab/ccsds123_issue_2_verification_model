@@ -10,12 +10,28 @@ def main():
 
     input_raw_files = [file for file in test_vector_files if file.endswith(".raw")]
     input_header_files = [file for file in test_vector_files if file.endswith("hdr.bin")]
+    input_optional_tables = [file for file in test_vector_files if file.endswith("optional_tables.bin")]
+    input_error_limits = [file for file in test_vector_files if file.endswith("error_limits.bin")]
+    input_hybrid_tables = [file for file in test_vector_files if file.endswith("hybrid_initial_accumulators.bin")]
     golden_compressed_files = [file for file in test_vector_files if file.endswith(".flex")]
 
+
     for num in range(len(input_raw_files)):
+        print(f"Test {num}")
+        print(f"Input raw file: {input_raw_files[num]}")
+        print(f"Input header file: {input_header_files[num]}")
+        print(f"Input optional tables file: {input_optional_tables[num]}")
+        print(f"Input error limits file: {input_error_limits[num]}")
+        print(f"Input hybrid tables file: {input_hybrid_tables[num]}")
+        print(f"Golden compressed file: {golden_compressed_files[num]}")
+
+
         try:
             dut_compressor = ccsds123.CCSDS123(f"{test_vector_folder}/{input_raw_files[num]}")
             dut_compressor.set_header_file(f"{test_vector_folder}/{input_header_files[num]}")
+            dut_compressor.set_optional_tables_file(f"{test_vector_folder}/{input_optional_tables[num]}")
+            dut_compressor.set_error_limits_file(f"{test_vector_folder}/{input_error_limits[num]}")
+            dut_compressor.set_hybrid_accu_init_file(f"{test_vector_folder}/{input_hybrid_tables[num]}")
             dut_compressor.compress_image()
         except:
             print(f"Test {num} failed")
