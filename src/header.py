@@ -630,6 +630,7 @@ class Header:
                         assert 0 <= self.periodic_relative_error_limit_table[i, z] and self.periodic_relative_error_limit_table[i, z] <= 2**self.relative_error_limit_bit_depth - 1
 
         assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4
+        assert 0 < self.sample_representative_resolution and self.sample_representative_resolution <= 4 and self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED or self.sample_representative_flag == SampleRepresentativeFlag.NOT_INCLUDED
         assert self.band_varying_damping_flag in BandVaryingDampingFlag
         assert self.damping_table_flag in DampingTableFlag
         assert self.damping_table_flag == DampingTableFlag.NOT_INCLUDED or self.damping_table_flag == DampingTableFlag.INCLUDED and self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT
@@ -638,6 +639,14 @@ class Header:
         assert self.damping_offset_table_flag in OffsetTableFlag
         assert self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED or self.damping_offset_table_flag == OffsetTableFlag.INCLUDED and self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT
         assert (self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED and 0 <= self.fixed_offset_value and self.fixed_offset_value <= 2**self.sample_representative_resolution - 1) or (self.damping_offset_table_flag == OffsetTableFlag.INCLUDED and self.fixed_offset_value == 0)
+        assert self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS or self.fixed_offset_value == 0
+        assert self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS or self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_INDEPENDENT
+        if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
+            for damping in self.damping_table_array:
+                assert 0 <= damping and damping <= 2**self.sample_representative_resolution - 1
+        if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
+            for offset in self.damping_offset_table_array:
+                assert 0 <= offset and offset <= 2**self.sample_representative_resolution - 1
 
         assert (8 <= self.unary_length_limit and self.unary_length_limit < 32) or self.unary_length_limit == 0
         assert max(4, self.initial_count_exponent + 8 * int(self.initial_count_exponent == 0) - 1) <= self.rescaling_counter_size + 4 and self.rescaling_counter_size + 4 <= 11
