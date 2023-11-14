@@ -475,6 +475,8 @@ class Header:
             self.band_varying_offset_flag = BandVaryingOffsetFlag.BAND_INDEPENDENT
             self.damping_offset_table_flag = OffsetTableFlag.NOT_INCLUDED
             self.fixed_offset_value = 0
+            self.set_damping_table_array_to_default()
+            self.set_damping_offset_table_array_to_default()
         
             # Entropy coder metadata
         # Sample-adaptive entropy coder
@@ -500,6 +502,8 @@ class Header:
                     header_file = header_file[len(header_file) % 8:]
                 elif self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED:
                     optional_tables_file = optional_tables_file[len(header_file) % 8:]
+            else:
+                self.set_accumulator_init_table_to_default()
         
         # Hybrid entropy coder
         elif self.entropy_coder_type == EntropyCoderType.HYBRID:
