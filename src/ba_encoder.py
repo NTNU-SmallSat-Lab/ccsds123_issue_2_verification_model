@@ -54,9 +54,11 @@ class BlockAdaptiveEncoder():
             # This is a zero block
             if start_of_segment:
                 self.zero_block_count[num] = 1
+                if num == 0:
+                    return
             else:
                 self.zero_block_count[num] = self.zero_block_count[num - 1] + 1
-            return
+                return
         
         # Check if previous was a zero block
         if self.zero_block_count[num - 1] > 0:
@@ -69,6 +71,8 @@ class BlockAdaptiveEncoder():
                 code += '0' * self.zero_block_count[num - 1] + '1'
                 assert self.zero_block_count[num - 1] <= self.segment_size
             self.__add_to_bitstream(code, num - 1)
+            if start_of_segment:
+                return
 
         self.encoding_results[num][0] = self.__encode_no_compression(num)
         self.encoding_results[num][1] = self.__encode_second_extension(num)
@@ -181,6 +185,14 @@ class BlockAdaptiveEncoder():
                 if y % 2**self.header.error_update_period_exponent == 0:
                     self.__encode_error_limits(y, num)
             self.__encode_block(num)
+        
+        if self.zero_block_count[-1] > 0:
+            code = '0' * (self.id_bits + 1)
+            if self.zero_block_count[-1] <= 4:
+                code += '0' * (self.zero_block_count[-1] - 1) + '1'
+            else:
+                code += '00001'
+            self.__add_to_bitstream(code, self.blocks.shape[0] - 1)
         
         print("")
     
