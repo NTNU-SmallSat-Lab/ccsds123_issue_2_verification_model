@@ -54,12 +54,14 @@ compare_with_header:
 	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
+# Example: make compare_with_header_optional_tables optional_tables=optional_tables.bin header=header.bin error_limits=error_limits.bin
 compare_with_header_optional_tables:
 	make clean; \
-	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header) --optional $(optional_tables); \
+	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header) --optional $(optional_tables) --error_limits $(error_limits); \
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
-	lcnl_encoder -o $(optional_tables) $(header) $(image_format) $(image) test/golden.bin
+	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -o $(optional_tables) -q $(error_limits) output/header.bin $(image_format) /dev/stdin test/golden.bin; \
+	# lcnl_encoder -q $(error_limits) -o $(optional_tables) $(header) $(image_format) $(image) test/golden.bin
 	@echo "Header: "; \
 	python tools/files_identical_check.py test/header.bin $(header)
 	@echo "\nCompressed image: "; \

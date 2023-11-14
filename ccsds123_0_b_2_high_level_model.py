@@ -37,6 +37,8 @@ def main():
         image.set_hybrid_accu_init_file(args.accu)
     if len(args.optional) > 0:
         image.set_optional_tables_file(args.optional)
+    if len(args.error_limits) > 0:
+        image.set_error_limits_file(args.error_limits)
 
     image.compress_image()
 

@@ -243,7 +243,7 @@ class Header:
     def __init_relative_error_limit_table_array(self):
         self.relative_error_limit_table = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
     
-    def set_config_from_file(self, header_file_location, optional_tables_file_location=None):
+    def set_config_from_file(self, header_file_location, optional_tables_file_location=None, error_limits_file_location=None):
         header_file = bitarray()
         optional_tables_file = bitarray()
         
@@ -253,6 +253,7 @@ class Header:
         if optional_tables_file_location is not None:
             with open(optional_tables_file_location, "rb") as file:
                 optional_tables_file.fromfile(file)
+        
             # Image metadata 
         # Essential subpart
         self.user_defined_data = int(header_file[0:8].to01(), 2)
@@ -468,6 +469,41 @@ class Header:
             header_file = header_file[16:]
 
         assert len(header_file) == 0
+
+        # Read error limit file for periodic error limit updating
+        if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
+            error_limits_file = bitarray()
+            if error_limits_file is not None:
+                with open(error_limits_file_location, "rb") as file:
+                    error_limits_file.fromfile(file)
+            else:
+                exit("Error limits file not provided")
+
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                self.__init_periodic_absolute_error_limit_table_array()
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                self.__init_periodic_relative_error_limit_table_array()
+            
+            for i in range(ceil((self.y_size + 2**16 * int(self.y_size == 0)) / 2**self.error_update_period_exponent)):
+
+                if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                    if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                        self.periodic_absolute_error_limit_table[i,:] = int(error_limits_file[:16].to01(), 2)
+                        error_limits_file = error_limits_file[16:]
+                    elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                        for z in range(self.periodic_absolute_error_limit_table.shape[1]):
+                            self.periodic_absolute_error_limit_table[i,z] = int(error_limits_file[:16].to01(), 2)
+                            error_limits_file = error_limits_file[16:]
+
+                if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                    if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                        self.periodic_relative_error_limit_table[i,:] = int(error_limits_file[:16].to01(), 2)
+                        error_limits_file = error_limits_file[16:]
+                    elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                        for z in range(self.periodic_relative_error_limit_table.shape[1]):
+                            self.periodic_relative_error_limit_table[i,z] = int(error_limits_file[:16].to01(), 2)
+                            error_limits_file = error_limits_file[16:]
+
         self.__check_legal_config()
 
     
