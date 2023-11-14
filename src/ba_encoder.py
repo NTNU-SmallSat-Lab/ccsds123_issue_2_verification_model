@@ -190,11 +190,11 @@ class BlockAdaptiveEncoder():
         
         if self.zero_block_count[-1] > 0:
             code = '0' * (self.id_bits + 1)
-                # I can't see anywhere in the standards that specifies that the ROS codeword should be encoded if the last segment ends with a zero block, but it seems to be the case from test vector Test1-20190201/sample-000008
-            # if self.zero_block_count[-1] <= 4: 
-            #     code += '0' * (self.zero_block_count[-1] - 1) + '1'
-            # else:
-            code += '00001'
+                # I can't see anywhere in the standards that specifies that the ROS codeword should be encoded if the last segment ends with a zero block at one less block than otherwise, but it seems to be the case from test vector Test1-20190201/sample-000005 and Test1-20190201/sample-000008
+            if self.zero_block_count[-1] <= 3: 
+                code += '0' * (self.zero_block_count[-1] - 1) + '1'
+            else:
+                code += '00001'
             self.__add_to_bitstream(code, self.blocks.shape[0] - 1)
         
         print("")
