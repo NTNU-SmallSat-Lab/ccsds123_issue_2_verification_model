@@ -109,7 +109,7 @@ class Header:
     sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
     entropy_coder_type = EntropyCoderType.SAMPLE_ADAPTIVE
-    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_ONLY
+    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
     supplementary_information_table_count = 0 # tau. 0<=tau<=15. Supplementary information tables are not implemented
 
     # TODO: Support supplementary information tables
@@ -143,18 +143,18 @@ class Header:
     # Quantization
     # Error limit update
     periodic_error_updating_flag = PeriodicErrorUpdatingFlag.USED
-    error_update_period_exponent = 2 # u. Encode as 0 if periodic_error_updating_flag=NOT_USED, otherwise as u. 0<=u<=9
+    error_update_period_exponent = 3 # u. Encode as 0 if periodic_error_updating_flag=NOT_USED, otherwise as u. 0<=u<=9
     periodic_absolute_error_limit_table = None
     periodic_relative_error_limit_table = None
     # Absolute error limit
     absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_DEPENDENT
-    absolute_error_limit_bit_depth = 3 # D_A. Encode as D_A%16. 1<=D_A<=min{D − 1,16}
+    absolute_error_limit_bit_depth = 5 # D_A. Encode as D_A%16. 1<=D_A<=min{D − 1,16}
     absolute_error_limit_value = 2 # A*. 0<=A*<=2^D_A-1.
     absolute_error_limit_table = None # a_z. Array of size N_z
     # Relative error limit
-    relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-    relative_error_limit_bit_depth = 8 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
-    relative_error_limit_value = 200 # R*. 0<=R*<=2^D_R-1.
+    relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_DEPENDENT
+    relative_error_limit_bit_depth = 9 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
+    relative_error_limit_value = 20 # R*. 0<=R*<=2^D_R-1.
     relative_error_limit_table = None # r_z. Array of size N_z
     # TODO: Support periodic error updating
 
