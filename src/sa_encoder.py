@@ -181,7 +181,7 @@ class SampleAdaptiveEncoder():
         
         # Pad to word size
         word_bits = 8 * (self.header.output_word_size + 8 * (self.header.output_word_size == 0))
-        fill_bits = word_bits - (len(self.bitstream)) % word_bits
+        fill_bits = (word_bits - (len(self.bitstream)) % word_bits) % word_bits
         self.bitstream += '0' * fill_bits
 
         with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
