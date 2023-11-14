@@ -330,7 +330,7 @@ class Header:
                 optional_tables_file = optional_tables_file[len(header_file) % 8:] 
         
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
-            self.__init_weight_exponent_offset_table_array
+            self.__init_weight_exponent_offset_table_array()
             for z in range(self.weight_exponent_offset_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
                     if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
