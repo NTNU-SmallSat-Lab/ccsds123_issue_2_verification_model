@@ -27,17 +27,8 @@ compare:
 	python ccsds123_0_b_2_high_level_model.py $(image); \
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
-	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -o output/optional_tables.bin -q output/error_limits.bin output/header.bin $(image_format) /dev/stdin test/golden.bin; \
-	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
-	make print > test/comparison.txt
-
-compare_hybrid:
-	make clean; \
-	python ccsds123_0_b_2_high_level_model.py $(image); \
-	cp output/header.bin test/; \
-	cp output/z-output-bitstream.bin test/hlm.bin; \
 	cp output/hybrid_initial_accumulator.bin test/hybrid_initial_accumulator.bin; \
-	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -o output/optional_tables.bin -a test/hybrid_initial_accumulator.bin output/header.bin $(image_format) /dev/stdin test/golden.bin; \
+	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -o output/optional_tables.bin -q output/error_limits.bin -a test/hybrid_initial_accumulator.bin output/header.bin $(image_format) /dev/stdin test/golden.bin; \
 	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
@@ -60,7 +51,8 @@ compare_with_header_optional_tables:
 	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header) --optional $(optional_tables) --error_limits $(error_limits); \
 	cp output/header.bin test/; \
 	cp output/z-output-bitstream.bin test/hlm.bin; \
-	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -o $(optional_tables) -q $(error_limits) output/header.bin $(image_format) /dev/stdin test/golden.bin; \
+	cp output/hybrid_initial_accumulator.bin test/hybrid_initial_accumulator.bin; \
+	lcnl_bsq_reader output/header.bin $(image_format) $(image) | lcnl_encoder -o $(optional_tables) -q $(error_limits) -a test/hybrid_initial_accumulator.bin output/header.bin $(image_format) /dev/stdin test/golden.bin; \
 	# lcnl_encoder -q $(error_limits) -o $(optional_tables) $(header) $(image_format) $(image) test/golden.bin
 	@echo "Header: "; \
 	python tools/files_identical_check.py test/header.bin $(header)

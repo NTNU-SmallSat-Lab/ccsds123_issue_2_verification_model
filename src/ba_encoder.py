@@ -109,6 +109,36 @@ class BlockAdaptiveEncoder():
     def __add_to_bitstream(self, bitstring, num):
         self.bitstream += bitstring
         self.bitstream_readable[num] = bitstring
+    
+
+    def __encode_error_limits(self, y, num):
+        period_index = y // 2**self.header.error_update_period_exponent
+        if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+            if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                self.__add_to_bitstream(
+                    bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.absolute_error_limit_bit_depth),
+                    num
+                )
+            elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                for z in range(self.header.z_size):
+                    self.__add_to_bitstream(
+                        bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.absolute_error_limit_bit_depth),
+                        num
+                    )
+
+        if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+            if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                self.__add_to_bitstream(
+                    bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.relative_error_limit_bit_depth),
+                    num
+                )
+            elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                for z in range(self.header.z_size):
+                    self.__add_to_bitstream(
+                        bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.relative_error_limit_bit_depth),
+                        num
+                    )
+
 
     def run_encoder(self):
         self.__init_encoder_constants()
@@ -120,11 +150,6 @@ class BlockAdaptiveEncoder():
 
             # TODO: Do this cleaner and more efficiently
             for y in range(self.header.y_size):
-                if y % 2**self.header.error_update_period_exponent == 0 \
-                    and self.header.periodic_error_updating_flag == \
-                    hd.PeriodicErrorUpdatingFlag.USED:
-                    exit("Periodic error updating flag not implemented")
-                
                 for i in range(ceil(self.header.z_size / self.header.sub_frame_interleaving_depth)):
                     for x in range(self.header.x_size):
                         z_start = i * self.header.sub_frame_interleaving_depth
@@ -145,8 +170,16 @@ class BlockAdaptiveEncoder():
             self.blocks = np.pad(self.blocks, (0, padding), mode='constant', constant_values=0)
             self.blocks = self.blocks.reshape(self.blocks_shape)
 
+        prev_y = -1
         for num in range(self.blocks.shape[0]):
             print(f"\rProcessing block num={num+1}/{self.blocks.shape[0]}", end="")
+            y = num * self.block_size // (self.header.x_size * self.header.z_size)
+            if self.header.periodic_error_updating_flag == \
+                hd.PeriodicErrorUpdatingFlag.USED and \
+                y != prev_y:
+                prev_y = y
+                if y % 2**self.header.error_update_period_exponent == 0:
+                    self.__encode_error_limits(y, num)
             self.__encode_block(num)
         
         print("")
@@ -161,6 +194,8 @@ class BlockAdaptiveEncoder():
 
         with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
             self.bitstream.tofile(file)
+        with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
+            bitarray().tofile(file) # Create empty file. To simplify creating scripts compatible with all entropy coder types
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
         np.savetxt(output_folder + "/ba-encoder-00-blocks.csv", self.blocks.reshape(self.blocks_shape), delimiter=",", fmt='%d')

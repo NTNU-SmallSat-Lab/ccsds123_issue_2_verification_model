@@ -186,6 +186,8 @@ class SampleAdaptiveEncoder():
 
         with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
             self.bitstream.tofile(file)
+        with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
+            bitarray().tofile(file) # Create empty file. To simplify creating scripts compatible with all entropy coder types
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
         np.savetxt(output_folder + "/sa-encoder-00-accumulator-init-parameter-1.csv", self.accumulator_init_parameter_1, delimiter=",", fmt='%d')
