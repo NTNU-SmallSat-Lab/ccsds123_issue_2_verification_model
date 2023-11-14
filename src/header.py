@@ -603,7 +603,7 @@ class Header:
             for i in range(self.weight_init_table.shape[0]):
                 for j in range(self.weight_init_table.shape[1]):
                     assert 0 <= self.weight_init_table[i, j] and self.weight_init_table[i, j] <= 2**self.weight_init_resolution - 1
-        assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
+        assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 4 + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
 
         assert self.periodic_error_updating_flag in PeriodicErrorUpdatingFlag
         assert self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED and self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED
