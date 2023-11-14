@@ -1,11 +1,21 @@
 from src import ccsds123
 import os
 import keyboard
+import argparse
 
 test_vector_folder = "../Test1-20190201"
 
 
 def main():
+
+    parser = argparse.ArgumentParser(description="Verify the CCSDS 123.0-B-2 High level model using CCSDS provided test vectors")
+    parser.add_argument("--start", help="Test vector number to start at")
+    args = parser.parse_args()
+
+    start_num = 0
+    if len(args.start) > 0:
+        start_num = int(args.start)
+
     test_vector_files = os.listdir(test_vector_folder)
 
     input_raw_files = [file for file in test_vector_files if file.endswith(".raw")]
@@ -16,7 +26,7 @@ def main():
     golden_compressed_files = [file for file in test_vector_files if file.endswith(".flex")]
 
 
-    for num in range(6, len(input_raw_files)):
+    for num in range(start_num, len(input_raw_files)):
         os.system('cls' if os.name == 'nt' else 'clear')
         print(f"Test {num}")
         print(f"Input raw file: {input_raw_files[num]}")
