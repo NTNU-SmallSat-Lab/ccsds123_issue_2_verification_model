@@ -300,7 +300,7 @@ class Header:
         header_file = header_file[40:]
         
         # Weight tables subpart
-        if self.weight_init_method == WeightInitMethod.CUSTOM and len(optional_tables_file) > 0:
+        if self.weight_init_method == WeightInitMethod.CUSTOM:
             self.__init_weight_init_table_array()
             for z in range(self.weight_init_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
@@ -316,7 +316,7 @@ class Header:
             elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
                 optional_tables_file = optional_tables_file[len(header_file) % 8:] 
         
-        if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO and len(optional_tables_file) > 0:
+        if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             self.__init_weight_exponent_offset_table_array
             for z in range(self.weight_exponent_offset_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
