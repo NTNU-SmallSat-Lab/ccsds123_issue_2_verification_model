@@ -143,7 +143,7 @@ class Header:
     # Quantization
     # Error limit update
     periodic_error_updating_flag = PeriodicErrorUpdatingFlag.USED
-    error_update_period_exponent = 3 # u. Encode as 0 if periodic_error_updating_flag=NOT_USED, otherwise as u. 0<=u<=9
+    error_update_period_exponent = 0 # u. Encode as 0 if periodic_error_updating_flag=NOT_USED, otherwise as u. 0<=u<=9
     periodic_absolute_error_limit_table = None
     periodic_relative_error_limit_table = None
     # Absolute error limit
@@ -177,9 +177,11 @@ class Header:
     rescaling_counter_size = 5 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=γ<=11
     initial_count_exponent = 5 # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
     # Remaining sample-adaptive entropy coder
-    accumulator_init_constant = 4 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
+    accumulator_init_constant = 15 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
     accumulator_init_table_flag = AccumulatorInitTableFlag.NOT_INCLUDED
-    # TODO: Support accumulator initialization table
+    
+    accumulator_init_table = None # k''_z. Array of size N_z
+    
 
     # Block-adaptive entropy coder
     block_size = 2 # B. 0: J=8, 1: J=16, 2: J=32, 3: J=64
@@ -210,6 +212,7 @@ class Header:
                 self.set_periodic_relative_error_limit_table_array_to_default()
         self.set_damping_table_array_to_default()
         self.set_damping_offset_table_array_to_default()
+        self.set_accumulator_init_table_to_default()
         
         self.__check_legal_config()
         
@@ -249,6 +252,9 @@ class Header:
     
     def __init_damping_offset_table_array(self):
         self.damping_offset_table_array = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
+    
+    def __init_accumulator_init_table(self):
+        self.accumulator_init_table = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
     
     def set_config_from_file(self, header_file_location, optional_tables_file_location=None, error_limits_file_location=None):
         header_file = bitarray()
@@ -481,8 +487,19 @@ class Header:
             header_file = header_file[16:]
 
             # Accumulator initialization table subblock
-            if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
-                exit("Accumulator initialization table not implemented")
+            if self.accumulator_init_constant == 15:
+                self.__init_accumulator_init_table()
+                for z in range(self.accumulator_init_table.shape[0]):
+                    if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
+                        self.accumulator_init_table[z] = int(header_file[:4].to01(), 2)
+                        header_file = header_file[4:]
+                    elif self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED:
+                        self.accumulator_init_table[z] = int(optional_tables_file[:4].to01(), 2)
+                        optional_tables_file = optional_tables_file[4:]
+                if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
+                    header_file = header_file[len(header_file) % 8:]
+                elif self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED:
+                    optional_tables_file = optional_tables_file[len(header_file) % 8:]
         
         # Hybrid entropy coder
         elif self.entropy_coder_type == EntropyCoderType.HYBRID:
@@ -501,6 +518,7 @@ class Header:
             header_file = header_file[16:]
 
         assert len(header_file) == 0
+        assert len(optional_tables_file) == 0
 
         # Read error limit file for periodic error limit updating
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
@@ -624,9 +642,9 @@ class Header:
         assert (8 <= self.unary_length_limit and self.unary_length_limit < 32) or self.unary_length_limit == 0
         assert max(4, self.initial_count_exponent + 8 * int(self.initial_count_exponent == 0) - 1) <= self.rescaling_counter_size + 4 and self.rescaling_counter_size + 4 <= 11
         assert 0 <= self.initial_count_exponent and self.initial_count_exponent < 8
-        assert (0 <= self.accumulator_init_constant and self.accumulator_init_constant <= min(self.get_dynamic_range_bits() - 2, 14)) or (self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED and self.accumulator_init_constant == 15)
+        assert 0 <= self.accumulator_init_constant and self.accumulator_init_constant <= min(self.get_dynamic_range_bits() - 2, 14) or self.accumulator_init_constant == 15
+        assert self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED or (self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED and self.accumulator_init_constant == 15)
         assert self.accumulator_init_table_flag in AccumulatorInitTableFlag
-        assert self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED # Table not implemented
     
     def __encode_essential_subpart_structure(self):
         bitstream = bitarray()
@@ -814,16 +832,30 @@ class Header:
         return header_bitstream, optional_tables_bitstream
 
     def __encode_entropy_coder_sample_adaptive_structure(self):
+        header_bitstream = bitarray()
+        optional_tables_bitstream = bitarray()
+        
+        header_bitstream += bin(self.unary_length_limit)[2:].zfill(5)
+        header_bitstream += bin(self.rescaling_counter_size)[2:].zfill(3)
+        header_bitstream += bin(self.initial_count_exponent)[2:].zfill(3)
+        header_bitstream += bin(self.accumulator_init_constant)[2:].zfill(4)
+        header_bitstream += bin(self.accumulator_init_table_flag.value)[2:].zfill(1)
+        assert len(header_bitstream) == 8 * 2
+
         bitstream = bitarray()
-        bitstream += bin(self.unary_length_limit)[2:].zfill(5)
-        bitstream += bin(self.rescaling_counter_size)[2:].zfill(3)
-        bitstream += bin(self.initial_count_exponent)[2:].zfill(3)
-        bitstream += bin(self.accumulator_init_constant)[2:].zfill(4)
-        bitstream += bin(self.accumulator_init_table_flag.value)[2:].zfill(1)
-        assert len(bitstream) == 8 * 2
+        if self.accumulator_init_constant == 15:
+            for z in range(self.accumulator_init_table.shape[0]):
+                bitstream += bin(self.accumulator_init_table[z])[2:].zfill(4)
+            fill_bits = (8 - len(bitstream) % 8) % 8
+            bitstream += fill_bits * '0'
+            assert len(bitstream) % 8 == 0
+        
         if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
-            exit("Accumulator initialization table not implemented")   
-        return bitstream
+            header_bitstream += bitstream
+        elif self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED:
+            optional_tables_bitstream += bitstream
+   
+        return header_bitstream, optional_tables_bitstream
     
     def __encode_entropy_coder_hybrid_structure(self):
         bitstream = bitarray()
@@ -859,7 +891,9 @@ class Header:
             header_bitstream += bitstreams[0]
             optional_tables_bitstream += bitstreams[1]
         if self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE:
-            header_bitstream += self.__encode_entropy_coder_sample_adaptive_structure()
+            bitstreams =  self.__encode_entropy_coder_sample_adaptive_structure()
+            header_bitstream += bitstreams[0]
+            optional_tables_bitstream += bitstreams[1]
         elif self.entropy_coder_type == EntropyCoderType.HYBRID:
             header_bitstream += self.__encode_entropy_coder_hybrid_structure()
         elif self.entropy_coder_type == EntropyCoderType.BLOCK_ADAPTIVE:
@@ -945,6 +979,15 @@ class Header:
         elif self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
             for z in range(self.damping_offset_table_array.shape[0]):
                 self.damping_offset_table_array[z] = z % (2**self.sample_representative_resolution - 1)
+    
+    def set_accumulator_init_table_to_default(self):
+        # The default values here are arbitrary, not set from standard
+        self.__init_accumulator_init_table()
+        if self.accumulator_init_constant == 15:
+            for z in range(self.accumulator_init_table.shape[0]):
+                self.accumulator_init_table[z] = z % min(self.get_dynamic_range_bits() - 2, 14)
+        else:
+            self.accumulator_init_table[:] = self.accumulator_init_constant
       
     def get_dynamic_range_bits(self):
         dynamic_range_bits = self.dynamic_range
@@ -997,4 +1040,5 @@ class Header:
             np.savetxt(output_folder + "/header-01-periodic_relative_error_limit_table.csv", self.periodic_relative_error_limit_table, delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/header-02-damping_table_array.csv", self.damping_table_array, delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/header-03-damping_offset_table_array.csv", self.damping_offset_table_array, delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/header-04-accumulator_init_table.csv", self.accumulator_init_table, delimiter=",", fmt='%d')
     

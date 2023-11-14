@@ -27,10 +27,7 @@ class SampleAdaptiveEncoder():
         self.rescaling_counter_size = self.header.rescaling_counter_size + 4
         self.initial_count_exponent = self.header.initial_count_exponent + 8 * (self.header.initial_count_exponent == 0)
 
-        if self.header.accumulator_init_constant != 15:
-            self.accumulator_init_parameter_2 = np.full((self.header.z_size), self.header.accumulator_init_constant, dtype=np.int64)
-        else:
-            exit("Accumulator init table not implemented")        
+        self.accumulator_init_parameter_2 = self.header.accumulator_init_table
         self.accumulator_init_parameter_1 = \
             (self.accumulator_init_parameter_2 <= 30 - self.image_constants.dynamic_range_bits).astype(int) * self.accumulator_init_parameter_2 + \
             (self.accumulator_init_parameter_2 > 30 - self.image_constants.dynamic_range_bits).astype(int) * (2 * self.accumulator_init_parameter_2 + self.image_constants.dynamic_range_bits - 30)
