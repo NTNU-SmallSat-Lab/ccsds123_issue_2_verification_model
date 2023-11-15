@@ -221,21 +221,21 @@ class Predictor():
                 self.local_difference_vector[y,x,z,offset + i] = self.local_difference_vector[y, x, z - 1, offset + i - 1]
         
 
-    def __init_weights(self, z):
+    def __init_weights(self, x, y, z):
         if self.header.weight_init_method == hd.WeightInitMethod.DEFAULT:
             offset = 0
             if self.header.prediction_mode == hd.PredictionMode.FULL:
-                self.weight_vector[0,1,z,0] = 0
-                self.weight_vector[0,1,z,1] = 0
-                self.weight_vector[0,1,z,2] = 0
+                self.weight_vector[y,x,z,0] = 0
+                self.weight_vector[y,x,z,1] = 0
+                self.weight_vector[y,x,z,2] = 0
                 offset += 3
 
             if z > 0 and self.spectral_bands_used[z] > 0:
-                self.weight_vector[0,1,z,offset] = 2**self.weight_component_resolution * 7 // 8
+                self.weight_vector[y,x,z,offset] = 2**self.weight_component_resolution * 7 // 8
                 for i in range(1, self.spectral_bands_used[z]):
-                        self.weight_vector[0,1,z,offset + i] = self.weight_vector[0,1,z,offset + i - 1] // 8
+                        self.weight_vector[y,x,z,offset + i] = self.weight_vector[y,x,z,offset + i - 1] // 8
         else:
-            self.weight_vector[0,1,z] = \
+            self.weight_vector[y,x,z] = \
                 2**(self.weight_component_resolution + 3 - self.header.weight_init_resolution) * \
                 self.header.weight_init_table[z] + \
                 np.ceil(2**(self.weight_component_resolution + 2 - self.header.weight_init_resolution) - 1)
@@ -244,7 +244,7 @@ class Predictor():
         if t == 0:
             return
         if t == 1:
-            self.__init_weights(z)
+            self.__init_weights(x, y, z)
             return
         
         prev_y = y
