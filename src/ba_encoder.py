@@ -25,8 +25,8 @@ class BlockAdaptiveEncoder():
         block_sizes = [8, 16, 32, 64]
         self.block_size = block_sizes[self.header.block_size]
         self.reference_sample_interval = self.header.reference_sample_interval + 2**12 * int(self.header.reference_sample_interval == 0)
-        id_bits_limit = 1 if self.header.restricted_code_options_flag == hd.RestrictedCodeOptionsFlag.RESTRICTED else 3
-        self.id_bits = max(ceil(log2(self.image_constants.dynamic_range_bits)), id_bits_limit)
+        id_bits_lower_limit = 1 if self.header.restricted_code_options_flag == hd.RestrictedCodeOptionsFlag.RESTRICTED else 3
+        self.id_bits = max(ceil(log2(self.image_constants.dynamic_range_bits)), id_bits_lower_limit)
 
     blocks = None
     blocks_shape = None
@@ -71,7 +71,7 @@ class BlockAdaptiveEncoder():
                 code += '0' * self.zero_block_count[num - 1] + '1'
                 assert self.zero_block_count[num - 1] <= self.segment_size
             self.__add_to_bitstream(code, num - 1)
-            if start_of_segment:
+            if start_of_segment and np.all(self.blocks[num] == 0):
                 return
 
         self.encoding_results[num][0] = self.__encode_no_compression(num)
@@ -81,7 +81,7 @@ class BlockAdaptiveEncoder():
 
         lowest_value = 4096
         lowest_index = 0
-        for i in range (self.encoding_results.shape[1]):
+        for i in range(self.encoding_results.shape[1]):
             if len(self.encoding_results[num][i]) < lowest_value:
                 lowest_value = len(self.encoding_results[num][i])
                 lowest_index = i
