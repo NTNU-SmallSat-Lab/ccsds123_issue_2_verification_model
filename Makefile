@@ -16,6 +16,8 @@ print:
 	xxd -b -l $(bin_length) test/golden.bin
 	@echo "\nHigh-level model:"; \
 	xxd -b -l $(bin_length) test/hlm.bin
+	@echo "\header:"; \
+	xxd -b -c 1 test/header.bin | cut -d' ' -f 2 | tr -d '\n'
 	@echo "\nGolden model:"; \
 	xxd -b -c 1 test/golden.bin | cut -d' ' -f 2 | tr -d '\n'
 	@echo "\nHigh-level model:"; \
