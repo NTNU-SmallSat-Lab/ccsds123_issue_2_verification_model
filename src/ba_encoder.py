@@ -20,6 +20,7 @@ class BlockAdaptiveEncoder():
     reference_sample_interval = None # Symbol: r
     id_bits = None # bits used for compression type identification. Zero-block and second extension have 1 more bit
     segment_size = 64 # Symbol: s. Number of blocks in a segment
+    max_sample_split_bits = 0 # Maximum value for k
     
     def __init_encoder_constants(self):
         block_sizes = [8, 16, 32, 64]
@@ -27,6 +28,11 @@ class BlockAdaptiveEncoder():
         self.reference_sample_interval = self.header.reference_sample_interval + 2**12 * int(self.header.reference_sample_interval == 0)
         id_bits_lower_limit = 1 if self.header.restricted_code_options_flag == hd.RestrictedCodeOptionsFlag.RESTRICTED else 3
         self.id_bits = max(ceil(log2(self.image_constants.dynamic_range_bits)), id_bits_lower_limit)
+        if self.header.restricted_code_options_flag == hd.RestrictedCodeOptionsFlag.RESTRICTED: 
+            self.max_sample_split_bits = -1 if int(self.image_constants.dynamic_range_bits <= 2) else 1
+        elif self.header.restricted_code_options_flag == hd.RestrictedCodeOptionsFlag.UNRESTRICTED:
+            self.max_sample_split_bits = 5 if int(self.image_constants.dynamic_range_bits <= 8) else 13
+            self.max_sample_split_bits = self.max_sample_split_bits if int(self.image_constants.dynamic_range_bits <= 16) else 29
 
     blocks = None
     blocks_shape = None
@@ -41,7 +47,7 @@ class BlockAdaptiveEncoder():
         image_size = image_shape[0] * image_shape[1] * image_shape[2]
         self.blocks = np.zeros((image_size // self.block_size + int(image_size % self.block_size != 0), self.block_size), dtype=np.int64)
         self.blocks_shape = self.blocks.shape
-        compressors_results_num = self.image_constants.dynamic_range_bits # Second extension, bits-2 times sample splitting, no compression. zero block results are not stored
+        compressors_results_num = 1 + self.max_sample_split_bits + 1 + 1 # Second extension, sample splitting + 1 for k=0, no compression
         self.encoding_results = np.full((self.blocks.shape[0], compressors_results_num), fill_value='', dtype='U4096')
         self.zero_block_count = np.zeros((self.blocks.shape[0]), dtype=np.int64)
 
@@ -50,7 +56,8 @@ class BlockAdaptiveEncoder():
 
     def __encode_block(self, num):
         start_of_segment = (num % self.reference_sample_interval) % self.segment_size == 0
-        if np.all(self.blocks[num] == 0):
+        zero_block = np.all(self.blocks[num] == 0)
+        if zero_block:
             # This is a zero block
             if start_of_segment:
                 self.zero_block_count[num] = 1
@@ -71,12 +78,12 @@ class BlockAdaptiveEncoder():
                 code += '0' * self.zero_block_count[num - 1] + '1'
                 assert self.zero_block_count[num - 1] <= self.segment_size
             self.__add_to_bitstream(code, num - 1)
-            if start_of_segment and np.all(self.blocks[num] == 0):
-                return
+        if start_of_segment and zero_block:
+            return
 
         self.encoding_results[num][0] = self.__encode_no_compression(num)
         self.encoding_results[num][1] = self.__encode_second_extension(num)
-        for k in range(self.image_constants.dynamic_range_bits - 2):
+        for k in range(self.max_sample_split_bits + 1):
             self.encoding_results[num][k + 2] = self.__encode_sample_splitting(num, k)
 
         lowest_value = 4096
