@@ -118,23 +118,23 @@ class SampleAdaptiveEncoder():
         period_index = y // 2**self.header.error_update_period_exponent
         if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
             if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-                code = bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.absolute_error_limit_bit_depth)
+                code = bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value())
                 self.periodic_error_updating_bitstream_readable[y] += code
                 self.__add_to_bitstream(code, 0, y, 0)
             elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.header.z_size):
-                    code = bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.absolute_error_limit_bit_depth)
+                    code = bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value())
                     self.periodic_error_updating_bitstream_readable[y] += code
                     self.__add_to_bitstream(code, 0, y, z)
 
         if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
             if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-                code = bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.relative_error_limit_bit_depth)
+                code = bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.get_relative_error_limit_bit_depth_value())
                 self.periodic_error_updating_bitstream_readable[y] += code
                 self.__add_to_bitstream(code, 0, y, 0)
             elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.header.z_size):
-                    code = bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.relative_error_limit_bit_depth)
+                    code = bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.get_relative_error_limit_bit_depth_value())
                     self.periodic_error_updating_bitstream_readable[y] += code
                     self.__add_to_bitstream(code, 0, y, z)
 
