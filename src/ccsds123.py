@@ -64,6 +64,11 @@ class CCSDS123():
         self.accu_init_file = accu_init_file
         self.use_accu_init_file = True
 
+    def set_header(self):
+        self.header = hd.Header(self.image_file)
+        if self.use_header_file:
+            self.header.set_config_from_file(self.header_file, self.optional_tables_file, self.error_limits_file)
+
     def compress_image(self):
         start_time = time.time()
 

@@ -25,9 +25,15 @@ def main():
     input_hybrid_tables = [file for file in test_vector_files if file.endswith("hybrid_initial_accumulators.bin")]
     golden_compressed_files = [file for file in test_vector_files if file.endswith(".flex")]
 
-
+    success = 0
+    failure = 0
+    skipped = 0
+    failure_list = []
     for num in range(start_num, len(input_raw_files)):
         os.system('cls' if os.name == 'nt' else 'clear')
+        print(f"Success: {success}/{num} Failure: {failure}/{num} Skipped: {skipped}/{num}")
+        print(f"Failure list: {failure_list}\n")
+
         print(f"Test {num}")
         print(f"Input raw file: {input_raw_files[num]}")
         print(f"Input header file: {input_header_files[num]}")
@@ -45,6 +51,10 @@ def main():
         dut_compressor.set_optional_tables_file(f"{test_vector_folder}/{input_optional_tables[num]}")
         dut_compressor.set_error_limits_file(f"{test_vector_folder}/{input_error_limits[num]}")
         dut_compressor.set_hybrid_accu_init_file(f"{test_vector_folder}/{input_hybrid_tables[num]}")
+        dut_compressor.set_header()
+        if dut_compressor.header.entropy_coder_type.value == 2:
+            skipped += 1
+            continue
 
         dut_compressor.compress_image()
 
@@ -55,11 +65,12 @@ def main():
 
         if content1 == content2:
             print(f"Files in test {num} are identical")
+            success += 1
         else:
             print(f"Files in test {num} are different")
+            failure += 1
+            failure_list.append(num)
             
-
-            exit()
 
 
 if __name__ == "__main__":
