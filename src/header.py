@@ -27,6 +27,17 @@ class QuantizerFidelityControlMethod(Enum):
     RELATIVE_ONLY = 2
     ABSOLUTE_AND_RELATIVE = 3
 
+class TableType(Enum):
+    UNSIGNED_INTEGER = 0
+    SIGNED_INTEGER = 1
+    FLOAT = 2
+
+class TableStructure(Enum):
+    ZERO_DIMENSIONAL = 0
+    ONE_DIMENSIONAL = 1
+    TWO_DIMENSIONAL_ZX = 2
+    TWO_DIMENSIONAL_YX = 3
+
 class SampleRepresentativeFlag(Enum):
     NOT_INCLUDED = 0 # phi = psi = 0 for all bands
     INCLUDED = 1
@@ -89,6 +100,13 @@ class RestrictedCodeOptionsFlag(Enum):
     UNRESTRICTED = 0
     RESTRICTED = 1
 
+class SupplementaryInformationTable:
+    table_type = TableType.UNSIGNED_INTEGER
+    table_purpose = 0
+    table_structure = TableStructure.ZERO_DIMENSIONAL
+    user_defined_data = 0
+    
+    table_data_subblock = bitarray()
 
 class Header:
     """
@@ -110,7 +128,8 @@ class Header:
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
     entropy_coder_type = EntropyCoderType.SAMPLE_ADAPTIVE
     quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-    supplementary_information_table_count = 0 # tau. 0<=tau<=15. Supplementary information tables are not implemented
+    supplementary_information_table_count = 0 # tau. 0<=tau<=15
+    supplementary_information_tables = []
 
     # TODO: Support supplementary information tables
 
@@ -262,7 +281,7 @@ class Header:
         
         with open(header_file_location, "rb") as file:
             header_file.fromfile(file)
-        
+
         if optional_tables_file_location is not None:
             with open(optional_tables_file_location, "rb") as file:
                 optional_tables_file.fromfile(file)
@@ -290,8 +309,43 @@ class Header:
         header_file = header_file[96:]
 
         # Supplementary information tables
-        if self.supplementary_information_table_count > 0:
-            exit("Supplementary information tables not implemented")
+        self.supplementary_information_tables = [SupplementaryInformationTable() for i in range(self.supplementary_information_table_count)]
+        for i in range(self.supplementary_information_table_count):
+            self.supplementary_information_tables[i].table_type = TableType(int(header_file[0:2].to01(), 2))
+            assert header_file[2:4].to01() == '00' # Reserved
+            self.supplementary_information_tables[i].table_purpose = int(header_file[4:8].to01(), 2)
+            assert header_file[8:9].to01() == '0' # Reserved
+            self.supplementary_information_tables[i].table_structure = TableStructure(int(header_file[9:11].to01(), 2))
+            assert header_file[11:12].to01() == '0' # Reserved
+            self.supplementary_information_tables[i].user_defined_data = int(header_file[12:16].to01(), 2)
+            header_file = header_file[16:]
+
+            table_size = 0
+            if self.supplementary_information_tables[i].table_structure == TableStructure.ZERO_DIMENSIONAL:
+                table_size = 1
+            elif self.supplementary_information_tables[i].table_structure == TableStructure.ONE_DIMENSIONAL:
+                table_size = self.z_size + 2**16 * int(self.z_size == 0)
+            elif self.supplementary_information_tables[i].table_structure == TableStructure.TWO_DIMENSIONAL_ZX:
+                table_size = (self.z_size + 2**16 * int(self.z_size == 0)) * (self.x_size + 2**16 * int(self.x_size == 0))
+            elif self.supplementary_information_tables[i].table_structure == TableStructure.TWO_DIMENSIONAL_YX:
+                table_size = (self.y_size + 2**16 * int(self.y_size == 0)) * (self.x_size + 2**16 * int(self.x_size == 0))
+
+            data_subblock_bits = 0
+            if self.supplementary_information_tables[i].table_type != TableType.FLOAT:
+                bit_depth = int(header_file[0:5].to01(), 2)
+                bit_depth += 2**5 * int(bit_depth == 0)
+                data_subblock_bits = bit_depth * table_size + 5
+                
+                
+            elif self.supplementary_information_tables[i].table_type == TableType.FLOAT:
+                significand_bit_depth = int(header_file[0:5].to01(), 2)
+                exponent_bit_depth = int(header_file[5:8].to01(), 2)
+                bit_depth = significand_bit_depth + exponent_bit_depth + 8 * int(exponent_bit_depth == 0) + 1
+                data_subblock_bits = bit_depth * table_size + 8 + exponent_bit_depth + 8 * int(exponent_bit_depth == 0) # Exponent bias is included
+            
+            data_subblock_bits += (8 - data_subblock_bits % 8) % 8 # Add fill bits
+            self.supplementary_information_tables[i].table_data_subblock = header_file[0:data_subblock_bits]
+            header_file = header_file[data_subblock_bits:]
         
             # Predictor metadata
         # Predictor primary structure
@@ -522,7 +576,8 @@ class Header:
             header_file = header_file[16:]
 
         assert len(header_file) == 0
-        assert len(optional_tables_file) == 0
+        # If there is anything left, it should be zero-padding
+        assert len(optional_tables_file) == 0 or len(optional_tables_file) < 8 and int(optional_tables_file.to01(), 2) == 0
 
         # Read error limit file for periodic error limit updating
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
@@ -575,7 +630,7 @@ class Header:
         assert self.entropy_coder_type in EntropyCoderType
         assert self.quantizer_fidelity_control_method in QuantizerFidelityControlMethod
         assert 0 <= self.supplementary_information_table_count and self.supplementary_information_table_count <= 15
-        assert self.supplementary_information_table_count == 0 # Not implemented
+        assert self.supplementary_information_table_count == len(self.supplementary_information_tables)
 
         assert self.sample_representative_flag in SampleRepresentativeFlag
         assert 0 <= self.prediction_bands_num and self.prediction_bands_num < 16
@@ -679,6 +734,20 @@ class Header:
         bitstream += 2 * '0' # Reserved
         bitstream += bin(self.supplementary_information_table_count)[2:].zfill(4)
         assert len(bitstream) == 12 * 8
+        return bitstream
+    
+    def __encode_supplementary_information_table_structure(self, index):
+        bitstream = bitarray()
+        bitstream += bin(self.supplementary_information_tables[index].table_type.value)[2:].zfill(2)
+        bitstream += 2 * '0' # Reserved
+        bitstream += bin(self.supplementary_information_tables[index].table_purpose)[2:].zfill(4)
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.supplementary_information_tables[index].table_structure.value)[2:].zfill(2)
+        bitstream += 1 * '0' # Reserved
+        bitstream += bin(self.supplementary_information_tables[index].user_defined_data)[2:].zfill(4)
+        assert len(bitstream) == 2 * 8
+        bitstream += self.supplementary_information_tables[index].table_data_subblock
+        assert len(bitstream) % 8 == 0
         return bitstream
     
     def __encode_predictor_primary_structure(self):
@@ -893,6 +962,10 @@ class Header:
         optional_tables_bitstream = bitarray()
 
         header_bitstream += self.__encode_essential_subpart_structure()
+
+        for index in range(self.supplementary_information_table_count):
+            header_bitstream += self.__encode_supplementary_information_table_structure(index)
+
         bitstreams = self.__encode_predictor_primary_structure()
         header_bitstream += bitstreams[0]
         optional_tables_bitstream += bitstreams[1]
