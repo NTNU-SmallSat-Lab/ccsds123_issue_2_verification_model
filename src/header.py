@@ -537,6 +537,8 @@ class Header:
                     header_file = header_file[len(header_file) % 8:]
                 elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
                     optional_tables_file = optional_tables_file[len(optional_tables_file) % 8:]
+            elif self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_INDEPENDENT:
+                self.set_damping_table_array_to_default()
             
             assert len(header_file) % 8 == 0
             assert len(optional_tables_file) % 8 == 0
@@ -554,6 +556,8 @@ class Header:
                     header_file = header_file[len(header_file) % 8:]
                 elif self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED:
                     optional_tables_file = optional_tables_file[len(optional_tables_file) % 8:]
+            elif self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_INDEPENDENT:
+                self.set_damping_offset_table_array_to_default()
 
         else:
             self.sample_representative_resolution = 0
