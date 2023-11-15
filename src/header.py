@@ -285,6 +285,11 @@ class Header:
         if optional_tables_file_location is not None:
             with open(optional_tables_file_location, "rb") as file:
                 optional_tables_file.fromfile(file)
+        else:
+            optional_tables_file = bitarray() # Empty bitarray
+        
+        assert len(header_file) % 8 == 0
+        assert len(optional_tables_file) % 8 == 0
         
             # Image metadata 
         # Essential subpart
@@ -307,6 +312,8 @@ class Header:
         self.supplementary_information_table_count = int(header_file[92:96].to01(), 2)
 
         header_file = header_file[96:]
+        assert len(header_file) % 8 == 0
+        assert len(optional_tables_file) % 8 == 0
 
         # Supplementary information tables
         self.supplementary_information_tables = [SupplementaryInformationTable() for i in range(self.supplementary_information_table_count)]
@@ -347,6 +354,9 @@ class Header:
             self.supplementary_information_tables[i].table_data_subblock = header_file[0:data_subblock_bits]
             header_file = header_file[data_subblock_bits:]
         
+        assert len(header_file) % 8 == 0
+        assert len(optional_tables_file) % 8 == 0
+
             # Predictor metadata
         # Predictor primary structure
         assert header_file[0:1].to01() == '0'
@@ -365,6 +375,9 @@ class Header:
         self.weight_init_table_flag = WeightInitTableFlag(int(header_file[34:35].to01(), 2))
         self.weight_init_resolution = int(header_file[35:40].to01(), 2)
         header_file = header_file[40:]
+
+        assert len(header_file) % 8 == 0
+        assert len(optional_tables_file) % 8 == 0
         
         # Weight tables subpart
         if self.weight_init_method == WeightInitMethod.CUSTOM:
@@ -381,8 +394,11 @@ class Header:
             if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
                 header_file = header_file[len(header_file) % 8:] 
             elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
-                optional_tables_file = optional_tables_file[len(header_file) % 8:] 
+                optional_tables_file = optional_tables_file[len(optional_tables_file) % 8:] 
         
+        assert len(header_file) % 8 == 0
+        assert len(optional_tables_file) % 8 == 0
+
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             self.__init_weight_exponent_offset_table_array()
             for z in range(self.weight_exponent_offset_table.shape[0]):
@@ -396,11 +412,14 @@ class Header:
                         self.weight_exponent_offset_table[z, j] = int(number[0] == '1') * -2**3 + int(number[1:4], 2) 
                         optional_tables_file = optional_tables_file[4:]
             # Skip fill bits
-            if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+            if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
                 header_file = header_file[len(header_file) % 8:] 
-            elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
-                optional_tables_file = optional_tables_file[len(header_file) % 8:]
+            elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
+                optional_tables_file = optional_tables_file[len(optional_tables_file) % 8:]
         
+        assert len(header_file) % 8 == 0
+        assert len(optional_tables_file) % 8 == 0
+
         # Predictor quantization structure
         if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
 
@@ -414,6 +433,9 @@ class Header:
             else:
                 self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
                 self.error_update_period_exponent = 0
+            
+            assert len(header_file) % 8 == 0
+            assert len(optional_tables_file) % 8 == 0
 
             # Predictor quantization absolute error limit structure
             if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
@@ -440,6 +462,9 @@ class Header:
                 self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
                 self.absolute_error_limit_bit_depth = 0
                 self.absolute_error_limit_value = 0
+            
+            assert len(header_file) % 8 == 0
+            assert len(optional_tables_file) % 8 == 0
             
             # Predictor quantization relative error limit structure
             if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
@@ -476,6 +501,9 @@ class Header:
             self.relative_error_limit_bit_depth = 1
             self.relative_error_limit_value = 0
 
+        assert len(header_file) % 8 == 0
+        assert len(optional_tables_file) % 8 == 0
+
         # Predictor sample representative structure
         if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
             assert header_file[0:5].to01() == '00000'
@@ -492,6 +520,9 @@ class Header:
             self.fixed_offset_value = int(header_file[20:24].to01(), 2)
             header_file = header_file[24:]
 
+            assert len(header_file) % 8 == 0
+            assert len(optional_tables_file) % 8 == 0
+
             # Damping and offset table sublocks
             if self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT:
                 self.__init_damping_table_array()
@@ -505,7 +536,10 @@ class Header:
                 if self.damping_table_flag == DampingTableFlag.INCLUDED:
                     header_file = header_file[len(header_file) % 8:]
                 elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
-                    optional_tables_file = optional_tables_file[len(header_file) % 8:]
+                    optional_tables_file = optional_tables_file[len(optional_tables_file) % 8:]
+            
+            assert len(header_file) % 8 == 0
+            assert len(optional_tables_file) % 8 == 0
             
             if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
                 self.__init_damping_offset_table_array()
@@ -516,10 +550,10 @@ class Header:
                     elif self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED:
                         self.damping_offset_table_array[i] = int(optional_tables_file[:self.sample_representative_resolution].to01(), 2)
                         optional_tables_file = optional_tables_file[self.sample_representative_resolution:]
-                if self.damping_table_flag == DampingTableFlag.INCLUDED:
+                if self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
                     header_file = header_file[len(header_file) % 8:]
-                elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
-                    optional_tables_file = optional_tables_file[len(header_file) % 8:]
+                elif self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED:
+                    optional_tables_file = optional_tables_file[len(optional_tables_file) % 8:]
 
         else:
             self.sample_representative_resolution = 0
@@ -531,6 +565,9 @@ class Header:
             self.fixed_offset_value = 0
             self.set_damping_table_array_to_default()
             self.set_damping_offset_table_array_to_default()
+        
+        assert len(header_file) % 8 == 0
+        assert len(optional_tables_file) % 8 == 0
         
             # Entropy coder metadata
         # Sample-adaptive entropy coder
@@ -555,7 +592,7 @@ class Header:
                 if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
                     header_file = header_file[len(header_file) % 8:]
                 elif self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED:
-                    optional_tables_file = optional_tables_file[len(header_file) % 8:]
+                    optional_tables_file = optional_tables_file[len(optional_tables_file) % 8:]
             else:
                 self.set_accumulator_init_table_to_default()
         
@@ -574,10 +611,9 @@ class Header:
             self.restricted_code_options_flag = RestrictedCodeOptionsFlag(int(header_file[3:4].to01(), 2))
             self.reference_sample_interval = int(header_file[4:16].to01(), 2)
             header_file = header_file[16:]
-
+        
         assert len(header_file) == 0
-        # If there is anything left, it should be zero-padding
-        assert len(optional_tables_file) == 0 or len(optional_tables_file) <= 8 and int(optional_tables_file.to01(), 2) == 0
+        assert len(optional_tables_file) == 0
 
         # Read error limit file for periodic error limit updating
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
