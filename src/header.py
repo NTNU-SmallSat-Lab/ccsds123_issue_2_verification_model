@@ -249,7 +249,7 @@ class Header:
         self.weight_init_table = np.zeros(weight_init_table_shape, dtype=np.int64)
     
     def __init_weight_exponent_offset_table_array(self):
-        weight_exponent_offset_table_shape = (self.z_size + 2**16 * int(self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
+        weight_exponent_offset_table_shape = (self.z_size + 2**16 * int(self.z_size == 0), self.prediction_bands_num + int(self.prediction_mode == PredictionMode.FULL))
         self.weight_exponent_offset_table = np.zeros(weight_exponent_offset_table_shape, dtype=np.int64)
 
     def __init_periodic_absolute_error_limit_table_array(self):
@@ -386,7 +386,7 @@ class Header:
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             self.__init_weight_exponent_offset_table_array()
             for z in range(self.weight_exponent_offset_table.shape[0]):
-                for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                for j in range(min(z, self.prediction_bands_num) + int(self.prediction_mode == PredictionMode.FULL)):
                     if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
                         number = header_file[0:4].to01() # extract 4 bit two's complement number
                         self.weight_exponent_offset_table[z, j] = int(number[0] == '1') * -2**3 + int(number[1:4], 2) 
@@ -645,7 +645,7 @@ class Header:
         assert -6 <= self.weight_update_final_parameter - 6 and self.weight_update_final_parameter - 6 <= 9
         assert self.weight_exponent_offset_table_flag in WeightExponentOffsetTableFlag
         assert self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED or (self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED and self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO)
-        assert self.weight_exponent_offset_flag == WeightExponentOffsetFlag.ALL_ZERO or self.weight_exponent_offset_table.shape == (self.z_size + 2**16 * (self.z_size == 0), self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL))
+        assert self.weight_exponent_offset_flag == WeightExponentOffsetFlag.ALL_ZERO or self.weight_exponent_offset_table.shape == (self.z_size + 2**16 * (self.z_size == 0), self.prediction_bands_num + int(self.prediction_mode == PredictionMode.FULL))
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             for i in range(self.weight_exponent_offset_table.shape[0]):
                 for j in range(self.weight_exponent_offset_table.shape[1]):
@@ -794,7 +794,7 @@ class Header:
             
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             for z in range(self.weight_exponent_offset_table.shape[0]):
-                for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                for j in range(min(z, self.prediction_bands_num) + int(self.prediction_mode == PredictionMode.FULL)):
                     # Transform into two's complement
                     number = self.weight_exponent_offset_table[z, j]
                     if bin(number)[0] == '-':
@@ -1012,7 +1012,7 @@ class Header:
         # The default values here are arbitrary, not set from standard
         self.__init_weight_exponent_offset_table_array()
         for z in range(self.weight_exponent_offset_table.shape[0]):
-            for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+            for j in range(min(z, self.prediction_bands_num) + int(self.prediction_mode == PredictionMode.FULL)):
                 self.weight_exponent_offset_table[z, j] = self.weight_exponent_offset_value
     
     def set_absolute_error_limit_table_array_to_default(self):

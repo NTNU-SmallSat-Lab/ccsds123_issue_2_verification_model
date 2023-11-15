@@ -56,11 +56,15 @@ class Predictor():
                     self.weight_update_initial_parameter, self.weight_update_final_parameter \
                 ) + self.image_constants.dynamic_range_bits - self.weight_component_resolution
             
-        if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.ALL_ZERO:
+        if self.local_difference_values_num > 0:
             self.weight_exponent_offset = np.full((self.header.z_size, self.local_difference_values_num), 0.0, dtype=np.float64)
-        else:
-            self.weight_exponent_offset = self.header.weight_exponent_offset_table.astype(dtype=np.float64)
-        
+            if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.NOT_ALL_ZERO:
+                if self.header.prediction_mode == hd.PredictionMode.FULL:
+                    self.weight_exponent_offset[:, 0:3] = self.header.weight_exponent_offset_table[:, 0].astype(dtype=np.float64)
+                    self.weight_exponent_offset[:, 3:] = self.header.weight_exponent_offset_table[:, 1:].astype(dtype=np.float64)
+                elif self.header.prediction_mode == hd.PredictionMode.REDUCED:
+                    self.weight_exponent_offset = self.header.weight_exponent_offset_table.astype(dtype=np.float64)
+            
         self.weight_min = -2**(self.weight_component_resolution + 2)
         self.weight_max = 2**(self.weight_component_resolution + 2) - 1
 
