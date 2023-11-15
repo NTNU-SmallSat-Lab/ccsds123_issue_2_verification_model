@@ -577,7 +577,7 @@ class Header:
 
         assert len(header_file) == 0
         # If there is anything left, it should be zero-padding
-        assert len(optional_tables_file) == 0 or len(optional_tables_file) < 8 and int(optional_tables_file.to01(), 2) == 0
+        assert len(optional_tables_file) == 0 or len(optional_tables_file) <= 8 and int(optional_tables_file.to01(), 2) == 0
 
         # Read error limit file for periodic error limit updating
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
