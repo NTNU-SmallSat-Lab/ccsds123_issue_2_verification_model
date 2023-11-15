@@ -181,26 +181,26 @@ class HybridEncoder():
         if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
             if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                 self.__add_to_bitstream(
-                    bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.absolute_error_limit_bit_depth),
+                    bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value()),
                     0, y, 0
                 )
             elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.header.z_size):
                     self.__add_to_bitstream(
-                        bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.absolute_error_limit_bit_depth),
+                        bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value()),
                         0, y, z
                     )
 
         if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
             if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                 self.__add_to_bitstream(
-                    bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.relative_error_limit_bit_depth),
+                    bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.get_relative_error_limit_bit_depth_value()),
                     0, y, 0
                 )
             elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.header.z_size):
                     self.__add_to_bitstream(
-                        bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.relative_error_limit_bit_depth),
+                        bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.get_relative_error_limit_bit_depth_value()),
                         0, y, z
                     )
 
