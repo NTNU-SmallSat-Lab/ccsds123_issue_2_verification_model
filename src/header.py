@@ -713,6 +713,11 @@ class Header:
         assert 0 <= self.accumulator_init_constant and self.accumulator_init_constant <= min(self.get_dynamic_range_bits() - 2, 14) or self.accumulator_init_constant == 15
         assert self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED or (self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED and self.accumulator_init_constant == 15)
         assert self.accumulator_init_table_flag in AccumulatorInitTableFlag
+
+        assert self.block_size in range(4)
+        assert self.restricted_code_options_flag in RestrictedCodeOptionsFlag
+        assert self.restricted_code_options_flag == RestrictedCodeOptionsFlag.UNRESTRICTED or self.restricted_code_options_flag == RestrictedCodeOptionsFlag.RESTRICTED and self.dynamic_range in range(1,5) and self.large_d_flag == LargeDFlag.SMALL_D
+        assert self.reference_sample_interval in range(2**12)
     
     def __encode_essential_subpart_structure(self):
         bitstream = bitarray()
