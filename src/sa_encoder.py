@@ -38,19 +38,23 @@ class SampleAdaptiveEncoder():
     variable_length_code = None # Symbol: k
     bitstream = None
     bitstream_readable = None
+    periodic_error_updating_bitstream_readable = None
 
     def __init_encoder_arrays(self):
         image_shape = self.mapped_quantizer_index.shape
         self.accumulator = np.zeros(image_shape, dtype=np.int64)
         self.counter = np.zeros(image_shape[:2], dtype=np.int64)
         self.variable_length_code = np.zeros(image_shape, dtype=np.int64)
-
-        if image_shape[1] > 1:
-            self.counter[0,1] = 2**self.initial_count_exponent
-            self.accumulator[0,1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[0,1] // 2**7)
+        
+        if image_shape[0] > 1 or image_shape[1] > 1:
+            x_t1 = 0 if self.header.x_size == 1 else 1
+            y_t1 = 1 if self.header.x_size == 1 else 0
+            self.counter[y_t1,x_t1] = 2**self.initial_count_exponent
+            self.accumulator[y_t1,x_t1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[y_t1,x_t1] // 2**7)
 
         self.bitstream = bitarray()
         self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U512')
+        self.periodic_error_updating_bitstream_readable = np.full((image_shape[0]), fill_value='', dtype='U512')
 
     def __encode_sample(self, x, y, z):
         if y == 0 and x == 0:
@@ -63,8 +67,9 @@ class SampleAdaptiveEncoder():
         if prev_x < 0:
             prev_y -= 1
             prev_x = self.header.x_size - 1
+        t = y * self.header.x_size + x
 
-        if y == 0 and x == 1:
+        if t == 1:
             pass
         elif self.counter[prev_y,prev_x] == 2**self.rescaling_counter_size - 1:
             self.counter[y,x] = (self.counter[prev_y,prev_x] + 1) // 2
@@ -97,7 +102,7 @@ class SampleAdaptiveEncoder():
             if self.counter[y,x] * 2**k <= self.accumulator[y,x,z] + self.counter[y,x] * 49 // 2**7:
                 k_method_2 = k
                 break
-        assert k_method_2 == self.variable_length_code[y,x,z]            
+        assert k_method_2 == self.variable_length_code[y,x,z]         
                     
     def __gpo2(self, j, k):
         bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
@@ -113,29 +118,25 @@ class SampleAdaptiveEncoder():
         period_index = y // 2**self.header.error_update_period_exponent
         if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
             if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-                self.__add_to_bitstream(
-                    bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.absolute_error_limit_bit_depth),
-                    0, y, 0
-                )
+                code = bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.absolute_error_limit_bit_depth)
+                self.periodic_error_updating_bitstream_readable[y] += code
+                self.__add_to_bitstream(code, 0, y, 0)
             elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.header.z_size):
-                    self.__add_to_bitstream(
-                        bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.absolute_error_limit_bit_depth),
-                        0, y, z
-                    )
+                    code = bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.absolute_error_limit_bit_depth)
+                    self.periodic_error_updating_bitstream_readable[y] += code
+                    self.__add_to_bitstream(code, 0, y, z)
 
         if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
             if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-                self.__add_to_bitstream(
-                    bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.relative_error_limit_bit_depth),
-                    0, y, 0
-                )
+                code = bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.relative_error_limit_bit_depth)
+                self.periodic_error_updating_bitstream_readable[y] += code
+                self.__add_to_bitstream(code, 0, y, 0)
             elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.header.z_size):
-                    self.__add_to_bitstream(
-                        bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.relative_error_limit_bit_depth),
-                        0, y, z
-                    )
+                    code = bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.relative_error_limit_bit_depth)
+                    self.periodic_error_updating_bitstream_readable[y] += code
+                    self.__add_to_bitstream(code, 0, y, z)
 
     def __add_to_bitstream(self, bitstring, x, y, z):
         self.bitstream += bitstring
@@ -193,3 +194,4 @@ class SampleAdaptiveEncoder():
         np.savetxt(output_folder + "/sa-encoder-03-counter.csv", self.counter.reshape(csv_image_shape[:1]), delimiter=",", fmt='%d') 
         np.savetxt(output_folder + "/sa-encoder-04-bitstream-readable.csv", self.bitstream_readable.reshape(csv_image_shape), delimiter=",", fmt='%s')
         np.savetxt(output_folder + "/sa-encoder-05-variable-length-code.csv", self.variable_length_code.reshape(csv_image_shape), delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/sa-encoder-06-periodic-error-updating-bitstream-readable.csv", self.periodic_error_updating_bitstream_readable, delimiter=",", fmt='%s')
