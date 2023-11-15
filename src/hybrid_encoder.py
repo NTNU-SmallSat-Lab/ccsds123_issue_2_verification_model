@@ -66,6 +66,7 @@ class HybridEncoder():
                 data = file.read()
                 data = ''.join([bin(byte)[2:].zfill(8) for byte in data])
                 num_bits = self.image_constants.dynamic_range_bits + self.initial_count_exponent
+                data = data[:num_bits * self.header.z_size] # Remove fill bits
                 data = [int(data[i:i+num_bits], 2) for i in range(0, len(data), num_bits)]
                 assert len(data) == self.header.z_size
                 self.accumulator[0,0] = np.array(data)
