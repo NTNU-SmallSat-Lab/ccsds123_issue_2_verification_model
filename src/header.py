@@ -385,10 +385,12 @@ class Header:
             for z in range(self.weight_init_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
                     if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
-                        self.weight_init_table[z, j] = int(header_file[0:self.weight_init_resolution].to01(), 2)
+                        number = header_file[0:self.weight_init_resolution].to01() # extract 4 bit two's complement number
+                        self.weight_init_table[z, j] = int(number[0] == '1') * -2**(self.weight_init_resolution - 1) + int(number[1:], 2)
                         header_file = header_file[self.weight_init_resolution:]
                     elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
-                        self.weight_init_table[z, j] = int(optional_tables_file[0:self.weight_init_resolution].to01(), 2)
+                        number = optional_tables_file[0:self.weight_init_resolution].to01() # extract 4 bit two's complement number
+                        self.weight_init_table[z, j] = int(number[0] == '1') * -2**(self.weight_init_resolution - 1) + int(number[1:], 2)
                         optional_tables_file = optional_tables_file[self.weight_init_resolution:]
             # Skip fill bits
             if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
@@ -697,7 +699,7 @@ class Header:
         if self.weight_init_method == WeightInitMethod.CUSTOM:
             for i in range(self.weight_init_table.shape[0]):
                 for j in range(self.weight_init_table.shape[1]):
-                    assert 0 <= self.weight_init_table[i, j] and self.weight_init_table[i, j] <= 2**self.weight_init_resolution - 1
+                    assert -2**(self.weight_init_resolution - 1) <= self.weight_init_table[i, j] and self.weight_init_table[i, j] <= 2**(self.weight_init_resolution - 1) - 1
         assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 4 + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
 
         assert self.periodic_error_updating_flag in PeriodicErrorUpdatingFlag
@@ -818,10 +820,15 @@ class Header:
         if self.weight_init_method == WeightInitMethod.CUSTOM:
             for z in range(self.weight_init_table.shape[0]):
                 for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
+                    # Transform into two's complement
+                    number = self.weight_init_table[z, j]
+                    if bin(number)[0] == '-':
+                        number += 2**self.weight_init_resolution
+                    number = bin(number)[2:].zfill(self.weight_init_resolution)
                     if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
-                        header_bitstream += bin(self.weight_init_table[z, j])[2:].zfill(self.weight_init_resolution)
+                        header_bitstream += number
                     elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
-                        optional_tables_bitstream += bin(self.weight_init_table[z, j])[2:].zfill(self.weight_init_resolution)
+                        optional_tables_bitstream += number
             if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
                 fill_bits = (8 - len(header_bitstream) % 8) % 8
                 header_bitstream += fill_bits * '0'
