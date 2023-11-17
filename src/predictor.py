@@ -60,7 +60,7 @@ class Predictor():
             self.weight_exponent_offset = np.full((self.header.z_size, self.local_difference_values_num), 0.0, dtype=np.float64)
             if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.NOT_ALL_ZERO:
                 if self.header.prediction_mode == hd.PredictionMode.FULL:
-                    for i in range(self.header.z_size):
+                    for i in range(3): # Set the directional offsets
                         self.weight_exponent_offset[:, i] = self.header.weight_exponent_offset_table[:, 0].astype(dtype=np.float64)
                     self.weight_exponent_offset[:, 3:] = self.header.weight_exponent_offset_table[:, 1:].astype(dtype=np.float64)
                 elif self.header.prediction_mode == hd.PredictionMode.REDUCED:
