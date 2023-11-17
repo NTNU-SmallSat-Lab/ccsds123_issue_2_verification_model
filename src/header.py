@@ -131,8 +131,6 @@ class Header:
     supplementary_information_table_count = 0 # tau. 0<=tau<=15
     supplementary_information_tables = []
 
-    # TODO: Support supplementary information tables
-
     #####################
     # Predicator metadata
     #####################
@@ -236,7 +234,6 @@ class Header:
         self.__check_legal_config()
         
     def __set_config_according_to_image_name(self, image_name):
-        # TODO: Actually learn regex and do this properly
         self.x_size = int(re.findall('x(.*).raw', image_name)[0].split("x")[-1]) 
         self.y_size = int(re.findall('x(.+)x', image_name)[0])
         self.z_size = int(image_name.split('x')[0].split('-')[-1])
