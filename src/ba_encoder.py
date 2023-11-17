@@ -21,6 +21,7 @@ class BlockAdaptiveEncoder():
     id_bits = None # bits used for compression type identification. Zero-block and second extension have 1 more bit
     segment_size = 64 # Symbol: s. Number of blocks in a segment
     max_sample_split_bits = 0 # Maximum value for k
+    periodic_error_update_values_num = 0
     
     def __init_encoder_constants(self):
         block_sizes = [8, 16, 32, 64]
@@ -33,6 +34,24 @@ class BlockAdaptiveEncoder():
         elif self.header.restricted_code_options_flag == hd.RestrictedCodeOptionsFlag.UNRESTRICTED:
             self.max_sample_split_bits = 5 if int(self.image_constants.dynamic_range_bits <= 8) else 13
             self.max_sample_split_bits = self.max_sample_split_bits if int(self.image_constants.dynamic_range_bits <= 16) else 29
+        
+        if self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.USED:
+            updates_num = ceil(self.header.y_size / 2**self.header.error_update_period_exponent)
+            errors_per_update_num = 0
+            
+            if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    errors_per_update_num += 1
+                elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    errors_per_update_num += self.header.z_size
+            if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    errors_per_update_num += 1
+                elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    errors_per_update_num += self.header.z_size
+            
+            self.periodic_error_update_values_num = updates_num * errors_per_update_num
+
 
     blocks = None
     blocks_shape = None
@@ -44,8 +63,8 @@ class BlockAdaptiveEncoder():
 
     def __init_encoder_arrays(self):
         image_shape = self.mapped_quantizer_index.shape
-        image_size = image_shape[0] * image_shape[1] * image_shape[2]
-        self.blocks = np.zeros((image_size // self.block_size + int(image_size % self.block_size != 0), self.block_size), dtype=np.int64)
+        values_to_encoder = image_shape[0] * image_shape[1] * image_shape[2] + self.periodic_error_update_values_num
+        self.blocks = np.zeros((values_to_encoder // self.block_size + int(values_to_encoder % self.block_size != 0), self.block_size), dtype=np.int64)
         self.blocks_shape = self.blocks.shape
         compressors_results_num = 1 + self.max_sample_split_bits + 1 + 1 # Second extension, sample splitting + 1 for k=0, no compression
         self.encoding_results = np.full((self.blocks.shape[0], compressors_results_num), fill_value='', dtype='U4096')
@@ -124,35 +143,6 @@ class BlockAdaptiveEncoder():
     def __add_to_bitstream(self, bitstring, num):
         self.bitstream += bitstring
         self.bitstream_readable[num] = bitstring
-    
-
-    # def __encode_error_limits(self, y, num):
-    #     period_index = y // 2**self.header.error_update_period_exponent
-    #     if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
-    #         if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-    #             self.__add_to_bitstream(
-    #                 bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value()),
-    #                 num
-    #             )
-    #         elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
-    #             for z in range(self.header.z_size):
-    #                 self.__add_to_bitstream(
-    #                     bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value()),
-    #                     num
-    #                 )
-
-    #     if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
-    #         if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-    #             self.__add_to_bitstream(
-    #                 bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.get_relative_error_limit_bit_depth_value()),
-    #                 num
-    #             )
-    #         elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
-    #             for z in range(self.header.z_size):
-    #                 self.__add_to_bitstream(
-    #                     bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.get_relative_error_limit_bit_depth_value()),
-    #                     num
-    #                 )
 
 
     def run_encoder(self):
@@ -165,6 +155,31 @@ class BlockAdaptiveEncoder():
 
             # TODO: Do this cleaner and more efficiently
             for y in range(self.header.y_size):
+
+                if y % 2**self.header.error_update_period_exponent == 0 \
+                    and self.header.periodic_error_updating_flag == \
+                    hd.PeriodicErrorUpdatingFlag.USED:
+
+                    period_index = y // 2**self.header.error_update_period_exponent
+                    
+                    if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                        if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                            self.blocks[index] = self.header.periodic_absolute_error_limit_table[period_index][0]
+                            index += 1
+                        elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                            for z in range(self.header.z_size):
+                                self.blocks[index] = self.header.periodic_absolute_error_limit_table[period_index][z]
+                                index += 1
+
+                    if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                        if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                            self.blocks[index] = self.header.periodic_relative_error_limit_table[period_index][0]
+                            index += 1
+                        elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                            for z in range(self.header.z_size):
+                                self.blocks[index] = self.header.periodic_relative_error_limit_table[period_index][z]
+                                index += 1
+                
                 for i in range(ceil(self.header.z_size / self.header.sub_frame_interleaving_depth)):
                     for x in range(self.header.x_size):
                         z_start = i * self.header.sub_frame_interleaving_depth
@@ -189,20 +204,11 @@ class BlockAdaptiveEncoder():
         for num in range(self.blocks.shape[0]):
             print(f"\rProcessing block num={num+1}/{self.blocks.shape[0]}", end="")
 
-                # The standard does not specify how the periodic error limits should be encoded. I added a solution based on the other coders, but test vector Test1-20190201/sample-000002 does not encode the periodic error limits at all, hence it is commented out
-            # y = num * self.block_size // (self.header.x_size * self.header.z_size)
-            # if self.header.periodic_error_updating_flag == \
-            #     hd.PeriodicErrorUpdatingFlag.USED and \
-            #     y != prev_y:
-            #     prev_y = y
-            #     if y % 2**self.header.error_update_period_exponent == 0:
-            #         self.__encode_error_limits(y, num)
             self.__encode_block(num)
         
         if self.zero_block_count[-1] > 0:
             code = '0' * (self.id_bits + 1)
-                # I can't see anywhere in the standards that specifies that the ROS codeword should be encoded if the last segment ends with a zero block at one less block than otherwise, but it seems to be the case from test vector Test1-20190201/sample-000005 and Test1-20190201/sample-000008
-            if self.zero_block_count[-1] <= 3: 
+            if self.zero_block_count[-1] <= 4:
                 code += '0' * (self.zero_block_count[-1] - 1) + '1'
             else:
                 code += '00001'
