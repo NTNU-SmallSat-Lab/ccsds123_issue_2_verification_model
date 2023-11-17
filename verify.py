@@ -1,7 +1,7 @@
 from src import ccsds123
 import os
-import keyboard
 import argparse
+import sys
 
 test_vector_folder = "../Test1-20190201"
 
@@ -9,12 +9,16 @@ test_vector_folder = "../Test1-20190201"
 def main():
 
     parser = argparse.ArgumentParser(description="Verify the CCSDS 123.0-B-2 High level model using CCSDS provided test vectors")
-    parser.add_argument("--start", help="Test vector number to start at")
+    parser.add_argument("--start", default="", help="Test vector number to start at")
+    parser.add_argument("--len", default="", help="Test vector number to end at")
     args = parser.parse_args()
 
     start_num = 0
+    length = 0
     if len(args.start) > 0:
         start_num = int(args.start)
+    if len(args.len) > 0:
+        length = int(args.len)
 
     test_vector_files = os.listdir(test_vector_folder)
 
@@ -25,11 +29,22 @@ def main():
     input_hybrid_tables = [file for file in test_vector_files if file.endswith("hybrid_initial_accumulators.bin")]
     golden_compressed_files = [file for file in test_vector_files if file.endswith(".flex")]
 
+    input_raw_files.sort()
+    input_header_files.sort()
+    input_optional_tables.sort()
+    input_error_limits.sort()
+    input_hybrid_tables.sort()
+    golden_compressed_files.sort()
+
+    end_num = len(input_raw_files)
+    if length != 0:
+        end_num = start_num + length
+
     success = 0
     failure = 0
     skipped = 0
     failure_list = []
-    for num in range(start_num, len(input_raw_files)):
+    for num in range(start_num, end_num):
         os.system('cls' if os.name == 'nt' else 'clear')
         print(f"Success: {success}/{num} Failure: {failure}/{num} Skipped: {skipped}/{num}")
         print(f"Failure list: {failure_list}\n")
@@ -52,9 +67,9 @@ def main():
         dut_compressor.set_error_limits_file(f"{test_vector_folder}/{input_error_limits[num]}")
         dut_compressor.set_hybrid_accu_init_file(f"{test_vector_folder}/{input_hybrid_tables[num]}")
         dut_compressor.set_header()
-        if dut_compressor.header.entropy_coder_type.value == 2:
-            skipped += 1
-            continue
+        # if dut_compressor.header.entropy_coder_type.value == 2:
+        #     skipped += 1
+        #     continue
 
         dut_compressor.compress_image()
 

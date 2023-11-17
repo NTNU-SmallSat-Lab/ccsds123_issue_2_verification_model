@@ -85,3 +85,9 @@ compare_vector:
 clean:
 	rm -f test/*
 	rm -f output/*
+
+push_to_server:
+	scp verify.py $(server):$(folder)
+	scp ccsds123_0_b_2_high_level_model.py $(server):$(folder)
+	scp Makefile $(server):$(folder)
+	scp -r src $(server):$(folder)
