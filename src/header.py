@@ -850,11 +850,11 @@ class Header:
                         header_bitstream += number
                     elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
                         optional_tables_bitstream += number
-            if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
+            if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
                 fill_bits = (8 - len(header_bitstream) % 8) % 8
                 header_bitstream += fill_bits * '0'
                 assert len(header_bitstream) % 8 == 0
-            elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
+            elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
                 fill_bits = (8 - len(optional_tables_bitstream) % 8) % 8
                 optional_tables_bitstream += fill_bits * '0'
                 assert len(optional_tables_bitstream) % 8 == 0
