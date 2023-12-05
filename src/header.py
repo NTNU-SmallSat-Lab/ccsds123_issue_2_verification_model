@@ -1164,7 +1164,7 @@ class Header:
         
         return bitstream
 
-    def save(self, output_folder):
+    def save_data(self, output_folder):
         bitstreams = self.get_header_bitstreams()
         with open(output_folder + "/header.bin", "wb") as file:
             bitstreams[0].tofile(file)
