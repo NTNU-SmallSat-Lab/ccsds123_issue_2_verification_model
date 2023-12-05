@@ -110,7 +110,7 @@ class SupplementaryInformationTable:
 
 class Header:
     """
-    Header class for storing image metadata and configuration options.
+    Header class for storing image metadata and configuration options. Header configurations are stored in parameters as they are in the standard. For example, when dynamic range is 16, it is stored as D%16=0. 
     """
 
     ################

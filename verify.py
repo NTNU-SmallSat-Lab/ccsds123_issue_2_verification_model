@@ -3,18 +3,17 @@ import os
 import argparse
 import sys
 
-test_vector_folder = "../Test1-20190201"
-
-
 def main():
 
     parser = argparse.ArgumentParser(description="Verify the CCSDS 123.0-B-2 High level model using CCSDS provided test vectors")
+    parser.add_argument("folder", help="Path to the folder containing the test vectors")
     parser.add_argument("--start", default="", help="Test vector number to start at")
     parser.add_argument("--len", default="", help="Test vector number to end at")
     args = parser.parse_args()
 
     start_num = 0
     length = 0
+    test_vector_folder = args.folder
     if len(args.start) > 0:
         start_num = int(args.start)
     if len(args.len) > 0:
