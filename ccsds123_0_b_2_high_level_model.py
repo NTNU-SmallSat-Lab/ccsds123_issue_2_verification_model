@@ -9,6 +9,9 @@ def get_memory_usage():
     memory_info = process.memory_info()
     return memory_info.rss / (1024 * 1024) # MegaBytes
 
+def get_file_size(file_path):
+    return os.path.getsize(file_path)
+
 def main():
     parser = argparse.ArgumentParser(description="Compress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging")
     parser.add_argument("image_file", help="Path to the raw uncompressed image file. The filename must be on the format <name>-<datatype>-<z_size>x<y_size>x<x_size>.raw like CCSDS TestData images. For example Landsat_mountain-u16be-6x50x100.raw.")
@@ -35,6 +38,8 @@ def main():
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
     print(f"Memory usage: {get_memory_usage():.2f} MB")
+    print(f"Compression ratio: {get_file_size(args.image_file) / get_file_size('output/z-output-bitstream.bin'):.2f}")
+    
 
 if __name__ == "__main__":
     main()
