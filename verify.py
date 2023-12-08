@@ -34,6 +34,8 @@ def main():
     input_hybrid_tables.sort()
     golden_compressed_files.sort()
 
+    comparison_files_hlm = ["output/z-output-bitstream.bin", "output/header.bin", "output/optional_tables.bin", "output/error_limits.bin", "output/hybrid_initial_accumulator.bin"]
+
     end_num = len(input_raw_files)
     if length != 0:
         end_num = start_num + length
@@ -59,6 +61,8 @@ def main():
         print(f"make compare_vector image={test_vector_folder}/{input_raw_files[num]} header={test_vector_folder}/{input_header_files[num]} image_format=s32be correct={test_vector_folder}/{golden_compressed_files[num]} optional_tables={test_vector_folder}/{input_optional_tables[num]} error_limits={test_vector_folder}/{input_error_limits[num]} accu={test_vector_folder}/{input_hybrid_tables[num]} ")
         print(f"header_tool -t {test_vector_folder}/{input_optional_tables[num]} -d {test_vector_folder}/{input_header_files[num]}")
 
+        comparison_files_golden = [f"{test_vector_folder}/{golden_compressed_files[num]}", f"{test_vector_folder}/{input_header_files[num]}", f"{test_vector_folder}/{input_optional_tables[num]}", f"{test_vector_folder}/{input_error_limits[num]}", f"{test_vector_folder}/{input_hybrid_tables[num]}"]
+
         dut_compressor = ccsds123.CCSDS123(f"{test_vector_folder}/{input_raw_files[num]}")
         dut_compressor.set_header_file(f"{test_vector_folder}/{input_header_files[num]}")
         dut_compressor.set_optional_tables_file(f"{test_vector_folder}/{input_optional_tables[num]}")
@@ -72,8 +76,22 @@ def main():
             open(f"{test_vector_folder}/{golden_compressed_files[num]}", 'rb') as file2:
             content1 = file1.read()
             content2 = file2.read()
+        
+        with open("output/header.bin", 'rb') as file1, \
+            open(f"{test_vector_folder}/{input_header_files[num]}", 'rb') as file2:
+            content1 = file1.read()
+            content2 = file2.read()
 
-        if content1 == content2:
+        correct = 0
+        for i in range(len(comparison_files_golden)):
+            with open(comparison_files_golden[i], 'rb') as file1, \
+                open(comparison_files_hlm[i], 'rb') as file2:
+                content1 = file1.read()
+                content2 = file2.read()
+                if content1 == content2:
+                    correct += 1
+
+        if correct == len(comparison_files_golden):
             print(f"Files in test {num} are identical")
             success += 1
         else:
