@@ -51,7 +51,7 @@ class SampleAdaptiveEncoder():
             self.accumulator[y_t1,x_t1] = np.floor((3 * 2**(self.accumulator_init_parameter_1 + 6) - 49) * self.counter[y_t1,x_t1] // 2**7)
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U64')
+        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U40')
         self.periodic_error_updating_bitstream_readable = np.full((image_shape[0]), fill_value='', dtype='U512')
 
     def __encode_sample(self, x, y, z):

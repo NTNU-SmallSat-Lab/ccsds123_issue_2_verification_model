@@ -71,7 +71,7 @@ class BlockAdaptiveEncoder():
         self.zero_block_count = np.zeros((self.blocks.shape[0]), dtype=np.int64)
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.full((self.blocks.shape[0]), fill_value='', dtype='U64')
+        self.bitstream_readable = np.full((self.blocks.shape[0]), fill_value='', dtype='U40')
 
     def __encode_block(self, num):
         start_of_segment = (num % self.reference_sample_interval) % self.segment_size == 0
