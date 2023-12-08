@@ -1,5 +1,4 @@
 from . import header as hd
-from . import constants as const
 from .utils import clip, sign, sign_positive, modulo_star
 import numpy as np
 from math import floor

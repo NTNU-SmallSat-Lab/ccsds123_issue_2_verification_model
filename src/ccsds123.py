@@ -5,7 +5,6 @@ from . import sa_encoder as sa_enc
 from . import hybrid_encoder as hyb_enc
 from . import ba_encoder as ba_enc
 import numpy as np
-import re
 import time
 
 class CCSDS123():
@@ -43,8 +42,6 @@ class CCSDS123():
     def __load_raw_image(self):
         """Load a raw image into a N_x * N_y by N_z array"""
 
-        if "le" == re.findall('-(.*)-', self.image_file)[0][-2:]:
-            print("Little endian is not tested")
         self.image_sample = np.fromfile(self.image_file, dtype=self.__get_sample_format())
         self.image_sample = self.image_sample.astype(dtype=np.int64)
         self.image_sample = self.image_sample.reshape((self.header.z_size, self.header.y_size, self.header.x_size)) # Reshape to z,y,x (BSQ) 3D array

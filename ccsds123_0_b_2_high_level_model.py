@@ -1,6 +1,4 @@
-from src import header as hd
 from src import ccsds123
-import numpy as np
 import time
 import os
 import psutil

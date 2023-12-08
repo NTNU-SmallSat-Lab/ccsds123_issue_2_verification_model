@@ -1,5 +1,4 @@
 from . import header as hd
-from . import constants as const
 import numpy as np
 from bitarray import bitarray
 from math import ceil, log2

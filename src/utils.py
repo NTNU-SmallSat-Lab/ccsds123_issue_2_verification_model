@@ -1,4 +1,3 @@
-
 def clip(x, min, max):
     if x < min:
         return min

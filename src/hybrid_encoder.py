@@ -1,5 +1,4 @@
 from . import header as hd
-from . import constants as const
 from .hybrid_encoder_tables import *
 import numpy as np
 from bitarray import bitarray
