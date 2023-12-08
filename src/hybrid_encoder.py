@@ -50,11 +50,11 @@ class HybridEncoder():
         self.variable_length_code = np.full(image_shape, fill_value=-1, dtype=np.int64)
         self.active_prefix = [''] * 16
         self.code_index = np.full(image_shape, fill_value=-1, dtype=np.int64)
-        self.input_symbol = np.full(image_shape, fill_value='', dtype='U64')
-        self.codewords = np.full(image_shape, fill_value='', dtype='U64')
-        self.codewords_binary = np.full(image_shape, fill_value='', dtype='U64')
+        self.input_symbol = np.full(image_shape, fill_value='', dtype='U16')
+        self.codewords = np.full(image_shape, fill_value='', dtype='U16')
+        self.codewords_binary = np.full(image_shape, fill_value='', dtype='U16')
         self.entropy_type = np.full(image_shape, fill_value=2, dtype=np.uint8)
-        self.current_active_prefix = np.full(image_shape, fill_value='-', dtype='U64')
+        self.current_active_prefix = np.full(image_shape, fill_value='-', dtype='U16')
         self.prefix_match_index = np.full(image_shape, fill_value=-2, dtype=np.int64)
 
         self.counter[0,0] = 2**self.initial_count_exponent
