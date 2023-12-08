@@ -122,12 +122,12 @@ class Header:
     z_size = 0 # N_z. Encode as N_z%2^16. 1<=N_z<=2^16-1
     sample_type = SampleType.UNSIGNED_INTEGER
     large_d_flag = LargeDFlag.SMALL_D
-    dynamic_range = 10 # D. Encode as D%16. 1<=D<=32
+    dynamic_range = 0 # D. Encode as D%16. 1<=D<=32
     sample_encoding_order = SampleEncodingOrder.BI
     sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
     entropy_coder_type = EntropyCoderType.SAMPLE_ADAPTIVE
-    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
+    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.LOSSLESS
     supplementary_information_table_count = 0 # tau. 0<=tau<=15
     supplementary_information_tables = []
 
@@ -139,7 +139,7 @@ class Header:
     prediction_mode = PredictionMode.REDUCED
     weight_exponent_offset_flag = WeightExponentOffsetFlag.ALL_ZERO
     local_sum_type = LocalSumType.WIDE_NEIGHBOR_ORIENTED
-    register_size = 0 # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
+    register_size = 48 # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
     weight_component_resolution = 15 # Omega. Encode as Omega-4. 4<=Omega<=19
     weight_update_change_interval = 6 # t_inc. Encode as log2(t_inc)-4. 2^4<=t_inc<=2^11
     weight_update_initial_parameter = 6 # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
@@ -159,28 +159,28 @@ class Header:
 
     # Quantization
     # Error limit update
-    periodic_error_updating_flag = PeriodicErrorUpdatingFlag.USED
+    periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
     error_update_period_exponent = 0 # u. Encode as 0 if periodic_error_updating_flag=NOT_USED, otherwise as u. 0<=u<=9
     periodic_absolute_error_limit_table = None
     periodic_relative_error_limit_table = None
     # Absolute error limit
-    absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_DEPENDENT
+    absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
     absolute_error_limit_bit_depth = 5 # D_A. Encode as D_A%16. 1<=D_A<=min{D − 1,16}
     absolute_error_limit_value = 2 # A*. 0<=A*<=2^D_A-1.
     absolute_error_limit_table = None # a_z. Array of size N_z
     # Relative error limit
-    relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_DEPENDENT
+    relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
     relative_error_limit_bit_depth = 9 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
     relative_error_limit_value = 20 # R*. 0<=R*<=2^D_R-1.
     relative_error_limit_table = None # r_z. Array of size N_z
 
     # Sample Representative
     sample_representative_resolution = 4 # Theta. 0<=Theta<=4
-    band_varying_damping_flag = BandVaryingDampingFlag.BAND_DEPENDENT
-    damping_table_flag = DampingTableFlag.INCLUDED
+    band_varying_damping_flag = BandVaryingDampingFlag.BAND_INDEPENDENT
+    damping_table_flag = DampingTableFlag.NOT_INCLUDED
     fixed_damping_value = 0 # phi. Encode as 0 if damping_table_flag=INCLUDED, otherwise as phi. 0<=phi<=2^Theta-1
-    band_varying_offset_flag = BandVaryingOffsetFlag.BAND_DEPENDENT
-    damping_offset_table_flag = OffsetTableFlag.INCLUDED
+    band_varying_offset_flag = BandVaryingOffsetFlag.BAND_INDEPENDENT
+    damping_offset_table_flag = OffsetTableFlag.NOT_INCLUDED
     fixed_offset_value = 0 # psi. Encode as 0 if damping_offset_table_flag=INCLUDED, otherwise as psi. 0<=psi<=2^Theta-1. psi=0 if lossless
 
     damping_table_array = None # phi_z. Array of size N_z
