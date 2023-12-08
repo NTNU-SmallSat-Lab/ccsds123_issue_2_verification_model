@@ -18,6 +18,5 @@ def sign_positive(x):
         return 1
     return -1
 
-# Unsure what the proper name of this operation is
 def modulo_star(x, R):
     return ((x + 2**(R-1)) % 2**R) - 2**(R-1)
