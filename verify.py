@@ -1,7 +1,6 @@
 from src import ccsds123
 import os
 import argparse
-import sys
 
 def main():
 

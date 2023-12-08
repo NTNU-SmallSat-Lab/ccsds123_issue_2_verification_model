@@ -4,7 +4,6 @@ import numpy as np
 from bitarray import bitarray
 from math import ceil, log2
 
-
 class HybridEncoder():
 
     header = None

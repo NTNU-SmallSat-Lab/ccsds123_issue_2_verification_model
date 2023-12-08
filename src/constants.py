@@ -1,6 +1,5 @@
 from . import header as hd
 
-
 class ImageConstants():
     """Class to hold constants across the compression process"""
     header = None
