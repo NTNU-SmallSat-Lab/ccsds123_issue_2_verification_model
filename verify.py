@@ -66,9 +66,6 @@ def main():
         dut_compressor.set_error_limits_file(f"{test_vector_folder}/{input_error_limits[num]}")
         dut_compressor.set_hybrid_accu_init_file(f"{test_vector_folder}/{input_hybrid_tables[num]}")
         dut_compressor.set_header()
-        # if dut_compressor.header.entropy_coder_type.value == 2:
-        #     skipped += 1
-        #     continue
 
         dut_compressor.compress_image()
 

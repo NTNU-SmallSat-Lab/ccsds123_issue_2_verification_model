@@ -1,18 +1,11 @@
-
 *.jpg
-
 *.raw
-
-src/__pycache__/
-
 *.csv
-
-.VSCodeCounter/
-
 *.bin
 
+src/__pycache__/
+.VSCodeCounter/
 from_golden_model/
+Test1-20190201/
 
 test/comparison.txt
-
-Test1-20190201/

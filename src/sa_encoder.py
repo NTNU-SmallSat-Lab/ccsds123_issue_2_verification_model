@@ -97,12 +97,6 @@ class SampleAdaptiveEncoder():
                     (log2((self.accumulator[y,x,z] + self.counter[y,x] * 49 // 2**7) // self.counter[y,x])),
                     self.image_constants.dynamic_range_bits - 2
                 )
-        k_method_2 = 0
-        for k in range(self.image_constants.dynamic_range_bits - 2, -1, -1):
-            if self.counter[y,x] * 2**k <= self.accumulator[y,x,z] + self.counter[y,x] * 49 // 2**7:
-                k_method_2 = k
-                break
-        assert k_method_2 == self.variable_length_code[y,x,z]         
                     
     def __gpo2(self, j, k):
         bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
