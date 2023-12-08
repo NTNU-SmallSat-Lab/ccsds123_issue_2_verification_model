@@ -54,7 +54,7 @@ class HybridEncoder():
         self.codewords = np.full(image_shape, fill_value='', dtype='U64')
         self.codewords_binary = np.full(image_shape, fill_value='', dtype='U64')
         self.entropy_type = np.full(image_shape, fill_value=2, dtype=np.uint8)
-        self.current_active_prefix = np.full(image_shape, fill_value='-', dtype='U512')
+        self.current_active_prefix = np.full(image_shape, fill_value='-', dtype='U64')
         self.prefix_match_index = np.full(image_shape, fill_value=-2, dtype=np.int64)
 
         self.counter[0,0] = 2**self.initial_count_exponent
@@ -73,7 +73,7 @@ class HybridEncoder():
             self.accumulator[0,0] = 4 * self.counter[0,0]
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U512')
+        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U64')
 
     def __encode_sample(self, x, y, z):
         if y == 0 and x == 0:

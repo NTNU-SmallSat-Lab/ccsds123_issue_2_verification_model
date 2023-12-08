@@ -66,11 +66,12 @@ class BlockAdaptiveEncoder():
         self.blocks = np.zeros((values_to_encoder // self.block_size + int(values_to_encoder % self.block_size != 0), self.block_size), dtype=np.int64)
         self.blocks_shape = self.blocks.shape
         compressors_results_num = 1 + self.max_sample_split_bits + 1 + 1 # Second extension, sample splitting + 1 for k=0, no compression
-        self.encoding_results = np.full((self.blocks.shape[0], compressors_results_num), fill_value='', dtype='U4096')
+        self.encoding_result = np.full((compressors_results_num), fill_value='', dtype='U4096')
+        self.encoding_results = np.full((self.blocks.shape[0], compressors_results_num), fill_value='', dtype='U64')
         self.zero_block_count = np.zeros((self.blocks.shape[0]), dtype=np.int64)
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.full((self.blocks.shape[0]), fill_value='', dtype='U4096')
+        self.bitstream_readable = np.full((self.blocks.shape[0]), fill_value='', dtype='U64')
 
     def __encode_block(self, num):
         start_of_segment = (num % self.reference_sample_interval) % self.segment_size == 0
@@ -99,18 +100,19 @@ class BlockAdaptiveEncoder():
         if start_of_segment and zero_block:
             return
 
-        self.encoding_results[num][0] = self.__encode_no_compression(num)
-        self.encoding_results[num][1] = self.__encode_second_extension(num)
+        self.encoding_result[0] = self.__encode_no_compression(num)
+        self.encoding_result[1] = self.__encode_second_extension(num)
         for k in range(self.max_sample_split_bits + 1):
-            self.encoding_results[num][k + 2] = self.__encode_sample_splitting(num, k)
+            self.encoding_result[k + 2] = self.__encode_sample_splitting(num, k)
 
         lowest_value = 4096
         lowest_index = 0
-        for i in range(self.encoding_results.shape[1]):
-            if len(self.encoding_results[num][i]) < lowest_value:
-                lowest_value = len(self.encoding_results[num][i])
+        for i in range(self.encoding_result.shape[0]):
+            if len(self.encoding_result[i]) < lowest_value:
+                lowest_value = len(self.encoding_result[i])
                 lowest_index = i
-        self.__add_to_bitstream(self.encoding_results[num][lowest_index], num)      
+        self.__add_to_bitstream(self.encoding_result[lowest_index], num)
+        self.encoding_results = self.encoding_result.astype('U64')
 
         
     def __encode_no_compression(self, num):
