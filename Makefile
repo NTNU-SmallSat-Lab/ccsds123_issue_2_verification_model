@@ -83,6 +83,19 @@ compare_vector:
 	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
 	make print > test/comparison.txt
 
+compare_with_optionals:
+	make clean; \
+	python ccsds123_0_b_2_high_level_model.py $(image) --header $(header) --optional $(optional_tables) --error_limits $(error_limits) --accu $(accu); \
+	cp output/header.bin test/; \
+	cp output/z-output-bitstream.bin test/hlm.bin; \
+	lcnl_bsq_reader $(header) $(image_format) $(image) | lcnl_encoder -o $(optional_tables) -q $(error_limits) -a $(accu) $(header) $(image_format) /dev/stdin test/golden.bin; \
+	# cp $(correct) test/golden.bin
+	@echo "Header: "; \
+	python tools/files_identical_check.py test/header.bin $(header)
+	@echo "\nhlm and correct image: "; \
+	python tools/files_identical_check.py test/golden.bin test/hlm.bin; \
+	make print > test/comparison.txt
+
 clean:
 	rm -f test/*
 	rm -f output/*

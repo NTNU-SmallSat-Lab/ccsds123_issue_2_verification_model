@@ -126,7 +126,7 @@ class Header:
     sample_encoding_order = SampleEncodingOrder.BI
     sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
-    entropy_coder_type = EntropyCoderType.HYBRID
+    entropy_coder_type = EntropyCoderType.SAMPLE_ADAPTIVE
     quantizer_fidelity_control_method = QuantizerFidelityControlMethod.LOSSLESS
     supplementary_information_table_count = 0 # tau. 0<=tau<=15
     supplementary_information_tables = []
@@ -194,7 +194,7 @@ class Header:
     rescaling_counter_size = 5 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=γ<=11
     initial_count_exponent = 5 # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
     # Remaining sample-adaptive entropy coder
-    accumulator_init_constant = 15 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
+    accumulator_init_constant = 5 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
     accumulator_init_table_flag = AccumulatorInitTableFlag.NOT_INCLUDED
     
     accumulator_init_table = None # k''_z. Array of size N_z

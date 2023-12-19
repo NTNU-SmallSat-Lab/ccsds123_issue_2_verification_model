@@ -42,7 +42,7 @@ All outputs from the tool are placed in the `/output/` folder.
 ### Example: Simple compression of image
 To compress an image, run from the repo root folder:
 
-`python ccsds123_0_b_2_high_level_model.py <raw_image_path>`
+`python ccsds123_0_b_2_high_level_model.py <image_file>`
 
 Concrete example:
 
@@ -61,6 +61,20 @@ Note:
 The CCSDS 123.0-B-2 High-Level Model is verified by testing against the CCSDS provided test vector set `Test1-20190201` available from [TestVectors-B2](https://cwe.ccsds.org/sls/docs/Forms/AllItems.aspx?RootFolder=%2fsls%2fdocs%2fsls%2ddc%2f123%2e0%2dB%2dInfo%2fTestData%2fTestVectors%2dB2&FolderCTID=0x012000439B56FF51847E41B5728F9730D7B55F). Users can do this for themselves, to gain confidence in the tool or to verify changes they have done themselves, by downloading and extracting the set `Test1-20190201` and running:
 
 `python verify.py <test_vector_folder_path>`
+
+The included Makefile can also be used to verify the model against the trusted CNES-provided tool. The tool directory has to be added to PATH for this to be used. To compare the model to the CNES tool with the model built-in header configuration run from the terminal:
+
+`make compare image=<image_file>`
+
+To compare with optional files, run:
+
+`make compare_with_optionals image=<image_file> image_format=<image_format> header=<header_file> optional_tables=<optional_tables_file> error_limits=<error_limits_file> accu=<hybrid_initial_accumulator_file>`
+
+Point to empty files if some optional files are not used.
+Concrete example:
+
+`make compare_with_optionals image=raw_images/Landsat_mountain-u16be-6x50x100.raw image_format=u16be header=header.bin optional_tables=optional_tables.bin error_limits=error_limits.bin accu=accu.bin`
+
 
 ## Other useful notes
 - Hyperspectral test images can be found on [CCSDS TestData](https://cwe.ccsds.org/sls/docs/Forms/AllItems.aspx?RootFolder=%2Fsls%2Fdocs%2FSLS%2DDC%2F123%2E0%2DB%2DInfo%2FTestData). 
