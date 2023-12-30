@@ -191,7 +191,7 @@ class Header:
     ########################
     # Sample-adaptive entropy coder and Hybrid entropy coder
     unary_length_limit = 16 # U_max. Encode as U_max%32. 8<=U_max<=32
-    rescaling_counter_size = 5 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=γ<=11
+    rescaling_counter_size = 5 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=gamma*<=11
     initial_count_exponent = 5 # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
     # Remaining sample-adaptive entropy coder
     accumulator_init_constant = 0 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
@@ -201,7 +201,7 @@ class Header:
     
 
     # Block-adaptive entropy coder
-    block_size = 2 # B. 0: J=8, 1: J=16, 2: J=32, 3: J=64
+    block_size = 2 # J. 0: J=8, 1: J=16, 2: J=32, 3: J=64
     restricted_code_options_flag = RestrictedCodeOptionsFlag.UNRESTRICTED
     reference_sample_interval = 0 # r. Encode as r%2**12.
 
