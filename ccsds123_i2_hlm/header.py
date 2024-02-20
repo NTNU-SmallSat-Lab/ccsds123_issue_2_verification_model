@@ -194,7 +194,7 @@ class Header:
     rescaling_counter_size = 5 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=γ<=11
     initial_count_exponent = 5 # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
     # Remaining sample-adaptive entropy coder
-    accumulator_init_constant = 5 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
+    accumulator_init_constant = 15 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
     accumulator_init_table_flag = AccumulatorInitTableFlag.NOT_INCLUDED
     
     accumulator_init_table = None # k''_z. Array of size N_z
