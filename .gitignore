@@ -2,10 +2,14 @@
 *.raw
 *.csv
 *.bin
+*.egg-info
 
-src/__pycache__/
+__pycache__/
 .VSCodeCounter/
+.vscode/
 from_golden_model/
 Test1-20190201/
+build/
+
 
 test/comparison.txt

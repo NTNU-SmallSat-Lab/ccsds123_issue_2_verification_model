@@ -1,6 +1,7 @@
 import numpy as np
+from pathlib import Path
 
-table_folder = "src/hybrid_encoder_tables/"
+table_folder = str(Path(__file__).resolve().parent) + "/hybrid_encoder_tables/"
 
 input_symbol_limit = np.array([12,10,8,6,6,4,4,4,2,2,2,2,2,2,2,0])
 threshold = np.array([303336,225404,166979,128672,95597,69670,50678,34898,23331,14935,9282,5510,3195,1928,1112,408])

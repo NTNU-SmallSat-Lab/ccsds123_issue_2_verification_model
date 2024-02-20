@@ -126,7 +126,7 @@ class Header:
     sample_encoding_order = SampleEncodingOrder.BI
     sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 1 # B. Encode as B%8. 1<=B<=8
-    entropy_coder_type = EntropyCoderType.SAMPLE_ADAPTIVE
+    entropy_coder_type = EntropyCoderType.HYBRID
     quantizer_fidelity_control_method = QuantizerFidelityControlMethod.LOSSLESS
     supplementary_information_table_count = 0 # tau. 0<=tau<=15
     supplementary_information_tables = []
@@ -135,15 +135,15 @@ class Header:
     # Predicator metadata
     #####################
     sample_representative_flag = SampleRepresentativeFlag.INCLUDED
-    prediction_bands_num = 1 # P. 0<=P<=15
+    prediction_bands_num = 3 # P. 0<=P<=15
     prediction_mode = PredictionMode.REDUCED
     weight_exponent_offset_flag = WeightExponentOffsetFlag.ALL_ZERO
-    local_sum_type = LocalSumType.WIDE_NEIGHBOR_ORIENTED
+    local_sum_type = LocalSumType.NARROW_NEIGHBOR_ORIENTED
     register_size = 48 # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
     weight_component_resolution = 15 # Omega. Encode as Omega-4. 4<=Omega<=19
     weight_update_change_interval = 6 # t_inc. Encode as log2(t_inc)-4. 2^4<=t_inc<=2^11
-    weight_update_initial_parameter = 6 # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
-    weight_update_final_parameter = 10 # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
+    weight_update_initial_parameter = 3 # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
+    weight_update_final_parameter = 11 # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
     weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag.NOT_INCLUDED
     weight_init_method = WeightInitMethod.DEFAULT
     weight_init_table_flag = WeightInitTableFlag.NOT_INCLUDED
@@ -208,8 +208,9 @@ class Header:
     header_bitstream = None
     optional_tables_bitstream = None
 
-    def __init__(self, image_name):
-        self.__set_config_according_to_image_name(image_name)
+    def __init__(self, image_name = ""):
+        if image_name != "":
+            self.__set_config_according_to_image_name(image_name)
 
         if self.weight_init_method == WeightInitMethod.CUSTOM:
             self.set_weight_init_table_array_to_default()
@@ -231,7 +232,8 @@ class Header:
         self.set_damping_offset_table_array_to_default()
         self.set_accumulator_init_table_to_default()
         
-        self.__check_legal_config()
+        if image_name != "":
+            self.__check_legal_config()
         
     def __set_config_according_to_image_name(self, image_name):
         self.x_size = int(re.findall('x(.*).raw', image_name)[0].split("x")[-1]) 

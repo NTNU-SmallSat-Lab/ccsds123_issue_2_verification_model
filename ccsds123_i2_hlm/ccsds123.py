@@ -6,6 +6,7 @@ from . import hybrid_encoder as hyb_enc
 from . import ba_encoder as ba_enc
 import numpy as np
 import time
+from pathlib import Path
 
 class CCSDS123():
     """
@@ -16,7 +17,7 @@ class CCSDS123():
     image_file = None
     image_name = None
     image_sample = None # Symbol: s
-    output_folder = "output"
+    output_folder = str(Path(__file__).resolve().parent.parent) + "/output"
     header_file = None
     optional_tables_file = None
     error_limits_file = None
