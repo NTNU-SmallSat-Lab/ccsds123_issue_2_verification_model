@@ -104,4 +104,4 @@ push_to_server:
 	scp verify.py $(server):$(folder)
 	scp ccsds123_0_b_2_high_level_model.py $(server):$(folder)
 	scp Makefile $(server):$(folder)
-	scp -r src $(server):$(folder)
+	scp -r ccsds123_i2_hlm $(server):$(folder)

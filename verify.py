@@ -1,4 +1,4 @@
-from src import ccsds123
+from ccsds123_i2_hlm import ccsds123
 import os
 import argparse
 
