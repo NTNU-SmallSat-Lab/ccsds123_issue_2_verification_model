@@ -208,8 +208,8 @@ class Header:
     header_bitstream = None
     optional_tables_bitstream = None
 
-    def __init__(self, image_name = ""):
-        if image_name != "":
+    def __init__(self, image_name = None):
+        if image_name != None:
             self.__set_config_according_to_image_name(image_name)
 
         if self.weight_init_method == WeightInitMethod.CUSTOM:
@@ -232,7 +232,7 @@ class Header:
         self.set_damping_offset_table_array_to_default()
         self.set_accumulator_init_table_to_default()
         
-        if image_name != "":
+        if image_name != None:
             self.__check_legal_config()
         
     def __set_config_according_to_image_name(self, image_name):
