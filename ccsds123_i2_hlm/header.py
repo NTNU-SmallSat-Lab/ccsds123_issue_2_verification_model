@@ -194,7 +194,7 @@ class Header:
     rescaling_counter_size = 5 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=γ<=11
     initial_count_exponent = 5 # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
     # Remaining sample-adaptive entropy coder
-    accumulator_init_constant = 15 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
+    accumulator_init_constant = 0 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
     accumulator_init_table_flag = AccumulatorInitTableFlag.NOT_INCLUDED
     
     accumulator_init_table = None # k''_z. Array of size N_z
@@ -388,6 +388,7 @@ class Header:
                         self.weight_init_table[z, j] = int(number[0] == '1') * -2**(self.weight_init_resolution - 1) + int(number[1:], 2)
                         header_file = header_file[self.weight_init_resolution:]
                     elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
+                        assert optional_tables_file_location is not None
                         number = optional_tables_file[0:self.weight_init_resolution].to01() # extract 4 bit two's complement number
                         self.weight_init_table[z, j] = int(number[0] == '1') * -2**(self.weight_init_resolution - 1) + int(number[1:], 2)
                         optional_tables_file = optional_tables_file[self.weight_init_resolution:]
@@ -409,6 +410,7 @@ class Header:
                         self.weight_exponent_offset_table[z, j] = int(number[0] == '1') * -2**3 + int(number[1:4], 2) 
                         header_file = header_file[4:]
                     elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
+                        assert optional_tables_file_location is not None
                         number = optional_tables_file[0:4].to01() # extract 4 bit two's complement number
                         self.weight_exponent_offset_table[z, j] = int(number[0] == '1') * -2**3 + int(number[1:4], 2) 
                         optional_tables_file = optional_tables_file[4:]
@@ -532,6 +534,7 @@ class Header:
                         self.damping_table_array[i] = int(header_file[:self.sample_representative_resolution].to01(), 2)
                         header_file = header_file[self.sample_representative_resolution:]
                     elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
+                        assert optional_tables_file_location is not None
                         self.damping_table_array[i] = int(optional_tables_file[:self.sample_representative_resolution].to01(), 2)
                         optional_tables_file = optional_tables_file[self.sample_representative_resolution:]
                 if self.damping_table_flag == DampingTableFlag.INCLUDED:
@@ -551,6 +554,7 @@ class Header:
                         self.damping_offset_table_array[i] = int(header_file[:self.sample_representative_resolution].to01(), 2)
                         header_file = header_file[self.sample_representative_resolution:]
                     elif self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED:
+                        assert optional_tables_file_location is not None
                         self.damping_offset_table_array[i] = int(optional_tables_file[:self.sample_representative_resolution].to01(), 2)
                         optional_tables_file = optional_tables_file[self.sample_representative_resolution:]
                 if self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
@@ -592,6 +596,7 @@ class Header:
                         self.accumulator_init_table[z] = int(header_file[:4].to01(), 2)
                         header_file = header_file[4:]
                     elif self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED:
+                        assert optional_tables_file_location is not None
                         self.accumulator_init_table[z] = int(optional_tables_file[:4].to01(), 2)
                         optional_tables_file = optional_tables_file[4:]
                 if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
@@ -622,12 +627,11 @@ class Header:
 
         # Read error limit file for periodic error limit updating
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
+            assert error_limits_file_location is not None
+
             error_limits_file = bitarray()
-            if error_limits_file is not None:
-                with open(error_limits_file_location, "rb") as file:
-                    error_limits_file.fromfile(file)
-            else:
-                exit("Error limits file not provided")
+            with open(error_limits_file_location, "rb") as file:
+                error_limits_file.fromfile(file)
 
             if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
                 self.__init_periodic_absolute_error_limit_table_array()
