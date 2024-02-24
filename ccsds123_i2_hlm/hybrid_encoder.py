@@ -73,7 +73,7 @@ class HybridEncoder():
             self.accumulator[0,0] = 4 * self.counter[0,0]
 
         self.bitstream = bitarray()
-        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U40')
+        self.bitstream_readable = np.full(image_shape, fill_value='', dtype='U86')
 
     def __encode_sample(self, x, y, z):
         if y == 0 and x == 0:
