@@ -275,15 +275,15 @@ class HybridEncoder():
         
 
     def save_data(self, output_folder, header_bitstream):
-        self.bitstream = header_bitstream + self.bitstream
+        full_bitstream = header_bitstream + self.bitstream
         
         # Pad to word size
         word_bits = 8 * (self.header.output_word_size + 8 * (self.header.output_word_size == 0))
-        fill_bits = (word_bits - (len(self.bitstream)) % word_bits) % word_bits
-        self.bitstream += '0' * fill_bits
+        fill_bits = (word_bits - (len(full_bitstream)) % word_bits) % word_bits
+        full_bitstream += '0' * fill_bits
 
         with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
-            self.bitstream.tofile(file)
+            full_bitstream.tofile(file)
       
         # Save the initial accumulator value
         accu = bitarray()
