@@ -230,7 +230,7 @@ class HybridEncoder():
             code = bin(self.accumulator[self.header.y_size - 1, self.header.x_size - 1,z])[2:]
             code = code.zfill(2 + self.image_constants.dynamic_range_bits + self.rescaling_counter_size)
             self.__add_to_bitstream(code, self.header.x_size - 1, self.header.y_size - 1, z)
-            self.accumulator_final[z] = code
+            self.accumulator_final[z] = self.accumulator[self.header.y_size - 1, self.header.x_size - 1,z]
 
         self.__add_to_bitstream('1', self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1)
     
