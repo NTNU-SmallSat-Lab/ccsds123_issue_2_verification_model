@@ -60,7 +60,7 @@ class HybridEncoder():
         self.high_entropy_codes = np.full(image_shape, fill_value='', dtype='U64')
         self.rescale_bits = np.full(image_shape, fill_value='', dtype='U1')
         self.flush_codes = np.full((16), fill_value='', dtype='U10')
-        self.accumulator_final = np.zeros((self.header.z_size), dtype=np.int64)
+        self.accumulator_final = np.full((self.header.z_size), fill_value='', dtype='U46')
         self.codewords = np.full(image_shape, fill_value='', dtype='U16')
         self.codewords_binary = np.full(image_shape, fill_value='', dtype='U16')
         self.entropy_type = np.full(image_shape, fill_value=2, dtype=np.uint8)
@@ -183,9 +183,10 @@ class HybridEncoder():
         return bin(int(codeword.split("'h")[1], 16))[2:].zfill(int(codeword.split("'h")[0]))
 
 
-    def __add_to_bitstream(self, bitstring, x, y, z):
+    def __add_to_bitstream(self, bitstring, x=None, y=None, z=None):
         self.bitstream += bitstring
-        self.bitstream_readable[y,x,z] += bitstring
+        if x is not None and y is not None and z is not None:
+            self.bitstream_readable[y,x,z] += bitstring
 
 
     def __encode_error_limits(self, y):
@@ -221,18 +222,16 @@ class HybridEncoder():
         for i in range(16):
             index = np.where(flush_table_prefix[i] == self.active_prefix[i])[0][0] if self.active_prefix[i] != '' else 0
             code = self.__table_codeword_to_binary(flush_table_word[i][index])
-            self.__add_to_bitstream(
-                code, self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1
-            )
+            self.__add_to_bitstream(code)
             self.flush_codes[i] = code
         
         for z in range(self.header.z_size):
             code = bin(self.accumulator[self.header.y_size - 1, self.header.x_size - 1,z])[2:]
             code = code.zfill(2 + self.image_constants.dynamic_range_bits + self.rescaling_counter_size)
-            self.__add_to_bitstream(code, self.header.x_size - 1, self.header.y_size - 1, z)
-            self.accumulator_final[z] = self.accumulator[self.header.y_size - 1, self.header.x_size - 1,z]
+            self.__add_to_bitstream(code)
+            self.accumulator_final[z] = code
 
-        self.__add_to_bitstream('1', self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1)
+        self.__add_to_bitstream('1')
     
 
     def set_hybrid_accu_init_file(self, accu_init_file):
@@ -310,4 +309,4 @@ class HybridEncoder():
         np.savetxt(output_folder + "/hybrid-encoder-12-high_entropy_codes.csv", self.high_entropy_codes.reshape(csv_image_shape), delimiter=",", fmt='%s')
         np.savetxt(output_folder + "/hybrid-encoder-13-rescale_bits.csv", self.rescale_bits.reshape(csv_image_shape), delimiter=",", fmt='%s')
         np.savetxt(output_folder + "/hybrid-encoder-14-flush_codes.csv", self.flush_codes, delimiter=",", fmt='%s')
-        np.savetxt(output_folder + "/hybrid-encoder-15-accumulator_final.csv", self.accumulator_final, delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/hybrid-encoder-15-accumulator_final.csv", self.accumulator_final, delimiter=",", fmt='%s')
