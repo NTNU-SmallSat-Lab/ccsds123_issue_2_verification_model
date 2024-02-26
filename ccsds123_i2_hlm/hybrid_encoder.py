@@ -36,6 +36,11 @@ class HybridEncoder():
     active_prefix = None
     code_index = None # Symbol: i
     input_symbol = None # Symbol: iota
+    low_entropy_codes = None
+    high_entropy_codes = None
+    rescale_bits = None 
+    flush_codes = None
+    accumulator_final = None
     codewords = None
     codewords_binary = None
     entropy_type = None
@@ -51,6 +56,11 @@ class HybridEncoder():
         self.active_prefix = [''] * 16
         self.code_index = np.full(image_shape, fill_value=-1, dtype=np.int64)
         self.input_symbol = np.full(image_shape, fill_value='', dtype='U16')
+        self.low_entropy_codes = np.full(image_shape, fill_value='', dtype='U85')
+        self.high_entropy_codes = np.full(image_shape, fill_value='', dtype='U64')
+        self.rescale_bits = np.full(image_shape, fill_value='', dtype='U1')
+        self.flush_codes = np.full((16), fill_value='', dtype='U10')
+        self.accumulator_final = np.zeros((self.header.z_size), dtype=np.int64)
         self.codewords = np.full(image_shape, fill_value='', dtype='U16')
         self.codewords_binary = np.full(image_shape, fill_value='', dtype='U16')
         self.entropy_type = np.full(image_shape, fill_value=2, dtype=np.uint8)
@@ -95,6 +105,7 @@ class HybridEncoder():
                     // 2
             accumulator_lsb = bin(self.accumulator[prev_y,prev_x,z])[-1]
             self.__add_to_bitstream(accumulator_lsb, x, y, z)
+            self.rescale_bits[y,x,z] = accumulator_lsb
         else:
             self.counter[y,x] = self.counter[prev_y,prev_x] + 1
             self.accumulator[y,x,z] = \
@@ -116,9 +127,9 @@ class HybridEncoder():
             )
         assert self.variable_length_code[y,x,z] >= 2
 
-        self.__add_to_bitstream(
-            self.__reverse_gpo2(self.mapped_quantizer_index[y,x,z], self.variable_length_code[y,x,z]),
-            x, y, z)
+        code = self.__reverse_gpo2(self.mapped_quantizer_index[y,x,z], self.variable_length_code[y,x,z])
+        self.__add_to_bitstream(code, x, y, z)
+        self.high_entropy_codes[y,x,z] = code
 
     
     def __reverse_gpo2(self, j, k):
@@ -146,7 +157,9 @@ class HybridEncoder():
         else:
             input_symbol = 'X'
             residual_value = self.mapped_quantizer_index[y,x,z] - input_symbol_limit[code_index] - 1
-            self.__add_to_bitstream(self.__reverse_gpo2(residual_value, 0), x, y, z)
+            code = self.__reverse_gpo2(residual_value, 0)
+            self.__add_to_bitstream(code, x, y, z)
+            self.low_entropy_codes[y,x,z] += code
         
         self.active_prefix[code_index] += input_symbol
         self.current_active_prefix[y,x,z] = self.active_prefix[code_index]
@@ -161,6 +174,7 @@ class HybridEncoder():
             codeword_binary = self.__table_codeword_to_binary(codeword)
             self.codewords_binary[y,x,z] = codeword_binary
             self.__add_to_bitstream(codeword_binary, x, y, z)
+            self.low_entropy_codes[y,x,z] += codeword_binary
 
             self.active_prefix[code_index] = ''
 
@@ -206,15 +220,17 @@ class HybridEncoder():
     def __encode_image_tail(self):
         for i in range(16):
             index = np.where(flush_table_prefix[i] == self.active_prefix[i])[0][0] if self.active_prefix[i] != '' else 0
+            code = self.__table_codeword_to_binary(flush_table_word[i][index])
             self.__add_to_bitstream(
-                self.__table_codeword_to_binary(flush_table_word[i][index]),
-                self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1
+                code, self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1
             )
+            self.flush_codes[i] = code
         
         for z in range(self.header.z_size):
             code = bin(self.accumulator[self.header.y_size - 1, self.header.x_size - 1,z])[2:]
             code = code.zfill(2 + self.image_constants.dynamic_range_bits + self.rescaling_counter_size)
             self.__add_to_bitstream(code, self.header.x_size - 1, self.header.y_size - 1, z)
+            self.accumulator_final[z] = code
 
         self.__add_to_bitstream('1', self.header.x_size - 1, self.header.y_size - 1, self.header.z_size - 1)
     
