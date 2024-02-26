@@ -306,3 +306,8 @@ class HybridEncoder():
         np.savetxt(output_folder + "/hybrid-encoder-08-entropy-type.csv", self.entropy_type.reshape(csv_image_shape), delimiter=",", fmt='%d')
         np.savetxt(output_folder + "/hybrid-encoder-09-bitstream-readable.csv", self.bitstream_readable.reshape(csv_image_shape), delimiter=",", fmt='%s')
         np.savetxt(output_folder + "/hybrid-encoder-10-prefix-match-index.csv", self.prefix_match_index.reshape(csv_image_shape), delimiter=",", fmt='%d')
+        np.savetxt(output_folder + "/hybrid-encoder-11-low_entropy_codes.csv", self.low_entropy_codes.reshape(csv_image_shape), delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-12-high_entropy_codes.csv", self.high_entropy_codes.reshape(csv_image_shape), delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-13-rescale_bits.csv", self.rescale_bits.reshape(csv_image_shape), delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-14-flush_codes.csv", self.flush_codes, delimiter=",", fmt='%s')
+        np.savetxt(output_folder + "/hybrid-encoder-15-accumulator_final.csv", self.accumulator_final, delimiter=",", fmt='%d')
