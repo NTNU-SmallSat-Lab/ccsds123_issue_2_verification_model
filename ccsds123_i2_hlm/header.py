@@ -2,7 +2,7 @@ from enum import Enum
 import re
 import numpy as np
 from bitarray import bitarray
-from math import ceil
+from math import ceil, log2
 
 class SampleType(Enum):
         UNSIGNED_INTEGER = 0
@@ -110,24 +110,24 @@ class SupplementaryInformationTable:
 
 class Header:
     """
-    Header class for storing image metadata and configuration options. Header configurations are stored in parameters as they are in the standard. For example, when dynamic range is 16, it is stored as D%16=0. 
+    Header class for storing image metadata and configuration options. Header configurations are stored in parameters as they are in the standard. For example, when dynamic range is 16, it is stored as D%16=0. Use the set-methods to store the actual value as the encoded value.
     """
 
     ################
     # Image metadata
     ################
     user_defined_data = 0
-    x_size = 0 # N_x. Encode as N_x%2^16. 1<=N_x<=2^16-1
-    y_size = 0 # N_y. Encode as N_y%2^16. 1<=N_y<=2^16-1
-    z_size = 0 # N_z. Encode as N_z%2^16. 1<=N_z<=2^16-1
+    x_size = 0 # N_x. Encode as N_x%2^16. 1<=N_x<=2^16
+    y_size = 0 # N_y. Encode as N_y%2^16. 1<=N_y<=2^16
+    z_size = 0 # N_z. Encode as N_z%2^16. 1<=N_z<=2^16
     sample_type = SampleType.UNSIGNED_INTEGER
     large_d_flag = LargeDFlag.SMALL_D
-    dynamic_range = 0 # D. Encode as D%16. 1<=D<=32
+    dynamic_range = 0 # D. Encode as D%16. 2<=D<=32
     sample_encoding_order = SampleEncodingOrder.BI
     sub_frame_interleaving_depth = 1 # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
-    output_word_size = 1 # B. Encode as B%8. 1<=B<=8
+    output_word_size = 0 # B. Encode as B%8. 1<=B<=8
     entropy_coder_type = EntropyCoderType.HYBRID
-    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.LOSSLESS
+    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
     supplementary_information_table_count = 0 # tau. 0<=tau<=15
     supplementary_information_tables = []
 
@@ -138,12 +138,12 @@ class Header:
     prediction_bands_num = 3 # P. 0<=P<=15
     prediction_mode = PredictionMode.REDUCED
     weight_exponent_offset_flag = WeightExponentOffsetFlag.ALL_ZERO
-    local_sum_type = LocalSumType.NARROW_NEIGHBOR_ORIENTED
-    register_size = 48 # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
+    local_sum_type = LocalSumType.NARROW_COLUMN_ORIENTED
+    register_size = 0 # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
     weight_component_resolution = 15 # Omega. Encode as Omega-4. 4<=Omega<=19
-    weight_update_change_interval = 6 # t_inc. Encode as log2(t_inc)-4. 2^4<=t_inc<=2^11
-    weight_update_initial_parameter = 3 # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
-    weight_update_final_parameter = 11 # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
+    weight_update_change_interval = 2 # t_inc. Encode as log2(t_inc)-4. 2^4<=t_inc<=2^11
+    weight_update_initial_parameter = 5 # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
+    weight_update_final_parameter = 10 # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
     weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag.NOT_INCLUDED
     weight_init_method = WeightInitMethod.DEFAULT
     weight_init_table_flag = WeightInitTableFlag.NOT_INCLUDED
@@ -166,22 +166,22 @@ class Header:
     # Absolute error limit
     absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
     absolute_error_limit_bit_depth = 5 # D_A. Encode as D_A%16. 1<=D_A<=min{D − 1,16}
-    absolute_error_limit_value = 2 # A*. 0<=A*<=2^D_A-1.
+    absolute_error_limit_value = 4 # A*. 0<=A*<=2^D_A-1.
     absolute_error_limit_table = None # a_z. Array of size N_z
     # Relative error limit
     relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-    relative_error_limit_bit_depth = 9 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
-    relative_error_limit_value = 20 # R*. 0<=R*<=2^D_R-1.
+    relative_error_limit_bit_depth = 7 # D_R. Encode as D_R%16. 1<=D_R<=min{D − 1,16}
+    relative_error_limit_value = 16 # R*. 0<=R*<=2^D_R-1.
     relative_error_limit_table = None # r_z. Array of size N_z
 
     # Sample Representative
-    sample_representative_resolution = 4 # Theta. 0<=Theta<=4
+    sample_representative_resolution = 3 # Theta. 0<=Theta<=4
     band_varying_damping_flag = BandVaryingDampingFlag.BAND_INDEPENDENT
     damping_table_flag = DampingTableFlag.NOT_INCLUDED
-    fixed_damping_value = 0 # phi. Encode as 0 if damping_table_flag=INCLUDED, otherwise as phi. 0<=phi<=2^Theta-1
+    fixed_damping_value = 3 # phi. Encode as 0 if damping_table_flag=INCLUDED, otherwise as phi. 0<=phi<=2^Theta-1
     band_varying_offset_flag = BandVaryingOffsetFlag.BAND_INDEPENDENT
     damping_offset_table_flag = OffsetTableFlag.NOT_INCLUDED
-    fixed_offset_value = 0 # psi. Encode as 0 if damping_offset_table_flag=INCLUDED, otherwise as psi. 0<=psi<=2^Theta-1. psi=0 if lossless
+    fixed_offset_value = 7 # psi. Encode as 0 if damping_offset_table_flag=INCLUDED, otherwise as psi. 0<=psi<=2^Theta-1. psi=0 if lossless
 
     damping_table_array = None # phi_z. Array of size N_z
     damping_offset_table_array = None # psi_z. Array of size N_z
@@ -190,9 +190,9 @@ class Header:
     # Entropy coder metadata
     ########################
     # Sample-adaptive entropy coder and Hybrid entropy coder
-    unary_length_limit = 16 # U_max. Encode as U_max%32. 8<=U_max<=32
-    rescaling_counter_size = 5 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=gamma*<=11
-    initial_count_exponent = 5 # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
+    unary_length_limit = 18 # U_max. Encode as U_max%32. 8<=U_max<=32
+    rescaling_counter_size = 2 # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=gamma*<=11
+    initial_count_exponent = 1 # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
     # Remaining sample-adaptive entropy coder
     accumulator_init_constant = 0 # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
     accumulator_init_table_flag = AccumulatorInitTableFlag.NOT_INCLUDED
@@ -233,7 +233,7 @@ class Header:
         self.set_accumulator_init_table_to_default()
         
         if image_name != None:
-            self.__check_legal_config()
+            self.check_legal_config()
         
     def __set_config_according_to_image_name(self, image_name):
         self.x_size = int(re.findall('x(.*).raw', image_name)[0].split("x")[-1]) 
@@ -658,10 +658,10 @@ class Header:
                             self.periodic_relative_error_limit_table[i,z] = int(error_limits_file[:16].to01(), 2)
                             error_limits_file = error_limits_file[16:]
 
-        self.__check_legal_config()
+        self.check_legal_config()
 
     
-    def __check_legal_config(self):
+    def check_legal_config(self):
         assert 0 <= self.user_defined_data and self.user_defined_data < 2**8
         assert 0 <= self.x_size and self.x_size < 2**16
         assert 0 <= self.y_size and self.y_size < 2**16
@@ -734,7 +734,7 @@ class Header:
                         assert 0 <= self.periodic_relative_error_limit_table[i, z] and self.periodic_relative_error_limit_table[i, z] <= 2**self.get_relative_error_limit_bit_depth_value() - 1
 
         assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4
-        assert 0 < self.sample_representative_resolution and self.sample_representative_resolution <= 4 and self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED or self.sample_representative_flag == SampleRepresentativeFlag.NOT_INCLUDED
+        assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4 and self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED or self.sample_representative_flag == SampleRepresentativeFlag.NOT_INCLUDED
         assert self.band_varying_damping_flag in BandVaryingDampingFlag
         assert self.damping_table_flag in DampingTableFlag
         assert self.damping_table_flag == DampingTableFlag.NOT_INCLUDED or self.damping_table_flag == DampingTableFlag.INCLUDED and self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT
@@ -1128,7 +1128,115 @@ class Header:
                 self.accumulator_init_table[z] = z % min(self.get_dynamic_range_bits() - 2, 14)
         else:
             self.accumulator_init_table[:] = self.accumulator_init_constant
+
+    def set_user_defined_data(self, user_defined_data):
+        self.user_defined_data = user_defined_data
+    def set_x_size(self, x_size):
+        self.x_size = x_size % 2**16
+    def set_y_size(self, y_size):
+        self.y_size = y_size % 2**16
+    def set_z_size(self, z_size):
+        self.z_size = z_size % 2**16
+    def set_sample_type(self, sample_type):
+        self.sample_type = sample_type
+    def set_dynamic_range(self, dynamic_range):
+        self.large_d_flag = LargeDFlag.LARGE_D if dynamic_range > 16 else LargeDFlag.SMALL_D
+        self.dynamic_range = dynamic_range % 16
+    def set_sample_encoding_order(self, sample_encoding_order):
+        self.sample_encoding_order = sample_encoding_order
+    def set_sub_frame_interleaving_depth(self, sub_frame_interleaving_depth):
+        self.sub_frame_interleaving_depth = sub_frame_interleaving_depth % 2**16
+    def set_output_word_size(self, output_word_size):
+        self.output_word_size = output_word_size % 8
+    def set_entropy_coder_type(self, entropy_coder_type):
+        self.entropy_coder_type = entropy_coder_type
+    def set_quantizer_fidelity_control_method(self, quantizer_fidelity_control_method):
+        self.quantizer_fidelity_control_method = quantizer_fidelity_control_method
+    def set_supplementary_information_table_count(self, supplementary_information_table_count):
+        self.supplementary_information_table_count = supplementary_information_table_count
+    def set_sample_representative_flag(self, sample_representative_flag):
+        self.sample_representative_flag = sample_representative_flag
+    def set_prediction_bands_num(self, prediction_bands_num):
+        self.prediction_bands_num = prediction_bands_num
+    def set_prediction_mode(self, prediction_mode):
+        self.prediction_mode = prediction_mode
+    def set_weight_exponent_offset_flag(self, weight_exponent_offset_flag):
+        self.weight_exponent_offset_flag = weight_exponent_offset_flag
+    def set_local_sum_type(self, local_sum_type):
+        self.local_sum_type = local_sum_type
+    def set_register_size(self, register_size):
+        self.register_size = register_size % 64
+    def set_weight_component_resolution(self, weight_component_resolution):
+        self.weight_component_resolution = weight_component_resolution - 4
+    def set_weight_update_change_interval(self, weight_update_change_interval):
+        self.weight_update_change_interval = int(log2(weight_update_change_interval)) - 4
+    def set_weight_update_initial_parameter(self, weight_update_initial_parameter):
+        self.weight_update_initial_parameter = weight_update_initial_parameter + 6
+    def set_weight_update_final_parameter(self, weight_update_final_parameter):
+        self.weight_update_final_parameter = weight_update_final_parameter + 6
+    def set_weight_exponent_offset_table_flag(self, weight_exponent_offset_table_flag):
+        self.weight_exponent_offset_table_flag = weight_exponent_offset_table_flag
+    def set_weight_init_method(self, weight_init_method):
+        self.weight_init_method = weight_init_method
+    def set_weight_init_table_flag(self, weight_init_table_flag):
+        self.weight_init_table_flag = weight_init_table_flag
+    def set_weight_init_resolution(self, weight_init_resolution):
+        self.weight_init_resolution = weight_init_resolution
+    def set_periodic_error_updating_flag(self, periodic_error_updating_flag):
+        self.periodic_error_updating_flag = periodic_error_updating_flag
+    def set_error_update_period_exponent(self, error_update_period_exponent):
+        self.error_update_period_exponent = error_update_period_exponent
+    def set_absolute_error_limit_assignment_method(self, absolute_error_limit_assignment_method):
+        self.absolute_error_limit_assignment_method = absolute_error_limit_assignment_method
+    def set_absolute_error_limit_bit_depth(self, absolute_error_limit_bit_depth):
+        self.absolute_error_limit_bit_depth = absolute_error_limit_bit_depth % 16
+    def set_absolute_error_limit_value(self, absolute_error_limit_value):
+        self.absolute_error_limit_value = absolute_error_limit_value
+        self.set_absolute_error_limit_table_array_to_default()
+    def set_relative_error_limit_assignment_method(self, relative_error_limit_assignment_method):
+        self.relative_error_limit_assignment_method = relative_error_limit_assignment_method
+    def set_relative_error_limit_bit_depth(self, relative_error_limit_bit_depth):
+        self.relative_error_limit_bit_depth = relative_error_limit_bit_depth % 16
+    def set_relative_error_limit_value(self, relative_error_limit_value):
+        self.relative_error_limit_value = relative_error_limit_value
+        self.set_relative_error_limit_table_array_to_default()
+    def set_sample_representative_resolution(self, sample_representative_resolution):
+        self.sample_representative_resolution = sample_representative_resolution
+    def set_band_varying_damping_flag(self, band_varying_damping_flag):
+        self.band_varying_damping_flag = band_varying_damping_flag
+    def set_damping_table_flag(self, damping_table_flag):
+        self.damping_table_flag = damping_table_flag
+    def set_fixed_damping_value(self, fixed_damping_value):
+        self.fixed_damping_value = fixed_damping_value
+    def set_band_varying_offset_flag(self, band_varying_offset_flag):
+        self.band_varying_offset_flag = band_varying_offset_flag
+    def set_damping_offset_table_flag(self, damping_offset_table_flag):
+        self.damping_offset_table_flag = damping_offset_table_flag
+    def set_fixed_offset_value(self, fixed_offset_value):
+        self.fixed_offset_value = fixed_offset_value
+    def set_unary_length_limit(self, unary_length_limit):
+        self.unary_length_limit = unary_length_limit % 32
+    def set_rescaling_counter_size(self, rescaling_counter_size):
+        self.rescaling_counter_size = rescaling_counter_size - 4
+    def set_initial_count_exponent(self, initial_count_exponent):
+        self.initial_count_exponent = initial_count_exponent % 8
+    def set_accumulator_init_constant(self, accumulator_init_constant):
+        self.accumulator_init_constant = accumulator_init_constant
+    def set_accumulator_init_table_flag(self, accumulator_init_table_flag):
+        self.accumulator_init_table_flag = accumulator_init_table_flag
+    def set_block_size(self, block_size):
+        self.block_size = block_size
+    def set_restricted_code_options_flag(self, restricted_code_options_flag):
+        self.restricted_code_options_flag = restricted_code_options_flag
+    def set_reference_sample_interval(self, reference_sample_interval):
+        self.reference_sample_interval = reference_sample_interval % 2**12
       
+    def get_x_size(self):
+        return self.x_size if self.x_size != 0 else 2**16
+    def get_y_size(self):
+        return self.y_size if self.y_size != 0 else 2**16 
+    def get_z_size(self):
+        return self.z_size if self.z_size != 0 else 2**16 
     def get_dynamic_range_bits(self):
         dynamic_range_bits = self.dynamic_range
         if dynamic_range_bits == 0:
@@ -1136,12 +1244,18 @@ class Header:
         if self.large_d_flag == LargeDFlag.LARGE_D:
             dynamic_range_bits += 16
         return dynamic_range_bits
-    
+    def get_weight_component_resolution(self):
+        return self.weight_component_resolution + 4
+    def get_weight_update_initial_parameter(self):
+        return self.weight_update_initial_parameter - 6
+    def get_weight_update_final_parameter(self):
+        return self.weight_update_final_parameter - 6
     def get_absolute_error_limit_bit_depth_value(self):
         return self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0)
-
     def get_relative_error_limit_bit_depth_value(self):
         return self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0)
+    def get_initial_count_exponent(self):
+        return self.initial_count_exponent if self.initial_count_exponent != 0 else 8
     
     def get_header_bitstreams(self):
         self.__create_header_bitstream()
@@ -1169,16 +1283,25 @@ class Header:
                         bitstream += bin(self.periodic_relative_error_limit_table[i,z])[2:].zfill(16)
         
         return bitstream
+    
+    def save_header_binary(self, filename):
+        bitstreams = self.get_header_bitstreams()
+        with open(filename, "wb") as file:
+            bitstreams[0].tofile(file)
+
+    def save_optional_tables_binary(self, filename):
+        bitstreams = self.get_header_bitstreams()
+        with open(filename, "wb") as file:
+            bitstreams[1].tofile(file)
+
+    def save_error_limits_binary(self, filename):
+        with open(filename, "wb") as file:
+            self.get_error_limits_bitstream().tofile(file)
 
     def save_data(self, output_folder):
-        bitstreams = self.get_header_bitstreams()
-        with open(output_folder + "/header.bin", "wb") as file:
-            bitstreams[0].tofile(file)
-        with open(output_folder + "/optional_tables.bin", "wb") as file:
-            bitstreams[1].tofile(file)
-        
-        with open(output_folder + "/error_limits.bin", "wb") as file:
-            self.get_error_limits_bitstream().tofile(file)
+        self.save_header_binary(f"{output_folder}/header.bin")
+        self.save_optional_tables_binary(f"{output_folder}/optional_tables.bin")
+        self.save_error_limits_binary(f"{output_folder}/error_limits.bin")
         
         if type(self.periodic_absolute_error_limit_table) is np.ndarray:
             np.savetxt(output_folder + "/header-00-periodic_absolute_error_limit_table.csv", self.periodic_absolute_error_limit_table, delimiter=",", fmt='%d')
