@@ -123,7 +123,7 @@ class HybridEncoder():
     def __encode_high_entropy(self, x, y, z):
         self.variable_length_code[y,x,z] = min(
                 log2((self.accumulator[y,x,z] + self.counter[y,x] * 49 // 2**5) // self.counter[y,x]) - 2,
-                self.image_constants.dynamic_range_bits - 2
+                max(self.image_constants.dynamic_range_bits - 2, 2)
             )
         assert self.variable_length_code[y,x,z] >= 2
 
