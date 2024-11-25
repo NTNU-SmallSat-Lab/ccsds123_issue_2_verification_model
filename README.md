@@ -4,6 +4,14 @@ CCSDS 123.0-B-2 High-Level Model is a verification and debugging tool for the de
 
 As this tool is designed for development purposes and to produce a large amount of output data it might be slow and resource-hungry compared to regular CCSDS 123.0-B-2 compression tools. For regular compression, [this CNES-provided tool](https://www.connectbycnes.fr/en/ccsds-1230-b-2-ccsds-1210-b-3) might for example be a more sensible choice.
 
+## Usage Rights
+
+This repository is licensed under the MIT License.
+
+If you use this code in your research, please cite our paper:
+
+D. Vorhaug, S. Boyle and M. Orlandić, "High-Level CCSDS 123.0-B-2 Hyperspectral Image Compressor Verification Model", Workshop on Hyperspectral Image and Signal Processing: Evolution in Remote Sensing (WHISPERS), Helsinki, Finland, Dec. 2024
+
 ## Prerequisites  
 - Python 3
 
