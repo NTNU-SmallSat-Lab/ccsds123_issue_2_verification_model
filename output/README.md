@@ -1,1 +1,0 @@
-This is where project outputs are placed

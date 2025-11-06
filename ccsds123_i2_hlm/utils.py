@@ -5,6 +5,7 @@ def clip(x, min, max):
         return max
     return x
 
+
 def sign(x):
     if x > 0:
         return 1
@@ -12,10 +13,12 @@ def sign(x):
         return -1
     return 0
 
+
 def sign_positive(x):
     if x >= 0:
         return 1
     return -1
 
+
 def modulo_star(x, R):
-    return ((x + 2**(R-1)) % 2**R) - 2**(R-1)
+    return ((x + 2 ** (R - 1)) % 2**R) - 2 ** (R - 1)

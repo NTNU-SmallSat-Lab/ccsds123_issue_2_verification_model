@@ -3,6 +3,8 @@
 *.csv
 *.bin
 *.egg-info
+*.html
+*.cfg
 
 __pycache__/
 .VSCodeCounter/
@@ -13,3 +15,6 @@ build/
 
 
 test/comparison.txt
+bin
+include
+lib
