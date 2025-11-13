@@ -18,6 +18,7 @@ class CCSDS123:
     predictor = None
     image_file = None
     image_name = None
+    image_ordering = None
     image_sample = None  # Symbol: s
     output_folder = str(Path(__file__).resolve().parent.parent) + "/output"
     header_file = None
@@ -27,9 +28,10 @@ class CCSDS123:
     accu_init_file = None
     use_accu_init_file = False
 
-    def __init__(self, image_file):
+    def __init__(self, image_file, image_ordering="BSQ"):
         self.image_file = image_file
         self.image_name = image_file.split("/")[-1]
+        self.image_ordering = image_ordering
 
     def __get_sample_format(self):
         formats = {
@@ -55,17 +57,31 @@ class CCSDS123:
 
     def __load_raw_image(self):
         """Load a raw image into a N_x * N_y by N_z array"""
+        # This should be updated to support different file formats for the input image
 
+        # Get image from file and convert data type to int64
         self.image_sample = np.fromfile(
             self.image_file, dtype=self.__get_sample_format()
         )
         self.image_sample = self.image_sample.astype(dtype=np.int64)
-        self.image_sample = self.image_sample.reshape(
-            (self.header.z_size, self.header.y_size, self.header.x_size)
-        )  # Reshape to z,y,x (BSQ) 3D array
-        self.image_sample = self.image_sample.transpose(
-            1, 2, 0
-        )  # Transpose to y,x,z order (BIP)
+
+        if self.image_ordering == "BSQ":
+            self.image_sample = self.image_sample.reshape(
+                (self.header.z_size, self.header.y_size, self.header.x_size)
+            )  # Reshape to z,y,x (BSQ) 3D array
+
+            self.image_sample = self.image_sample.transpose(
+                1, 2, 0
+            )  # Transpose to y,x,z order (BIP)
+        elif self.image_ordering == "BIP":
+            self.image_sample = self.image_sample.reshape(
+                (self.header.y_size, self.header.x_size, self.header.z_size)
+            )  # Image was stored as BIP
+        else:
+            print(
+                f"Image file ordering {self.image_ordering} is unsupported. Suppurted values are 'BSQ' and 'BIP'."
+            )
+            exit(1)
 
     def set_header_file(self, header_file):
         self.header_file = header_file
@@ -87,6 +103,9 @@ class CCSDS123:
             self.header.set_config_from_file(
                 self.header_file, self.optional_tables_file, self.error_limits_file
             )
+
+    def set_output_dir(self, output):
+        self.output_folder = output
 
     def compress_image(self):
         start_time = time.time()

@@ -242,7 +242,7 @@ class SampleAdaptiveEncoder:
         fill_bits = (word_bits - (len(self.bitstream)) % word_bits) % word_bits
         self.bitstream += "0" * fill_bits
 
-        with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
+        with open(output_folder + "/z-output-bitstream-enc.bin", "wb") as file:
             self.bitstream.tofile(file)
         with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
             bitarray().tofile(

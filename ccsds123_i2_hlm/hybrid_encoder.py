@@ -361,7 +361,7 @@ class HybridEncoder:
         fill_bits = (word_bits - (len(full_bitstream)) % word_bits) % word_bits
         full_bitstream += "0" * fill_bits
 
-        with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
+        with open(output_folder + "/z-output-bitstream-enc.bin", "wb") as file:
             full_bitstream.tofile(file)
 
         # Save the initial accumulator value

@@ -288,7 +288,6 @@ class Header:
         self.z_size = int(image_name.split("x")[0].split("-")[-1])
         format = re.findall("-(.*)-", image_name)[0]
         format = image_name.split("-")[-2].split("-")[-1]
-        print(format)
         self.sample_type = (
             SampleType.UNSIGNED_INTEGER
             if format[0] == "u"
@@ -2150,4 +2149,3 @@ class Header:
             delimiter=",",
             fmt="%d",
         )
-

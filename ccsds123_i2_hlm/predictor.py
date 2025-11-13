@@ -343,6 +343,9 @@ class Predictor:
                     self.weight_vector[y, x, z, offset + i] = (
                         self.weight_vector[y, x, z, offset + i - 1] // 8
                     )
+                # print(
+                #     f"Init weight vector for z={z},x={x},y={y}: {self.weight_vector[y,x,z,:]}"
+                # )
         else:
             self.weight_vector[y, x, z] = 2 ** (
                 self.weight_component_resolution
@@ -358,6 +361,27 @@ class Predictor:
                 - 1
             )
 
+    def __calculate_weight_offset(self, x, y, z, t, i):
+        return (
+            floor(
+                (
+                    float(
+                        sign_positive(self.double_resolution_prediction_error[y, x, z])
+                    )
+                    * float(self.local_difference_vector[y, x, z, i])
+                    * 2.0
+                    ** (
+                        -(
+                            float(self.weight_update_scaling_exponent[t])
+                            + self.weight_exponent_offset[z, i]
+                        )
+                    )
+                )
+                + 1
+            )
+            // 2
+        )
+
     def __calculate_weight_vector(self, x, y, z, t):
         if t == 0:
             return
@@ -365,41 +389,47 @@ class Predictor:
             self.__init_weights(x, y, z)
             return
 
-        prev_y = y
-        prev_x = x - 1
-        if prev_x < 0:
-            prev_y -= 1
-            prev_x = self.header.x_size - 1
+        # self.weight_update_frequncy dictates how often we should update the weights
+        # set to 1 for the updating scheme of the standard
 
-        assert t - 1 == prev_x + prev_y * self.header.x_size
+        if x % self.weight_update_frequncy != 0:  # keep same weight
+            prev_x = (t - 1) % self.header.x_size
+            prev_y = (t - 1) // self.header.x_size
 
-        for i in range(self.weight_vector.shape[3]):
-            self.weight_vector[y, x, z, i] = clip(
-                int(self.weight_vector[prev_y, prev_x, z, i])
-                + (
-                    floor(
-                        float(
-                            sign_positive(
-                                self.double_resolution_prediction_error[
-                                    prev_y, prev_x, z
-                                ]
-                            )
-                        )
-                        * float(self.local_difference_vector[prev_y, prev_x, z, i])
-                        * 2.0
-                        ** (
-                            -(
-                                float(self.weight_update_scaling_exponent[t - 1])
-                                + self.weight_exponent_offset[z, i]
-                            )
-                        )
-                    )
-                    + 1
+            for i in range(self.weight_vector.shape[3]):
+                self.weight_vector[y, x, z, i] = self.weight_vector[
+                    prev_y, prev_x, z, i
+                ]
+        else:
+            # update weight using weight from four samples ago
+            t_weight_update = t - self.weight_update_frequncy
+            x_weight_update = t_weight_update % self.header.x_size
+            y_weight_update = t_weight_update // self.header.x_size
+
+            # print(
+            #     f"Weight update: t={t} (x={x}, y={y}), t-4={t-4} (x={x_weight_update}, y={y_weight_update})"
+            # )
+
+            for i in range(self.weight_vector.shape[3]):
+                weight_update = self.__calculate_weight_offset(
+                    x_weight_update,
+                    y_weight_update,
+                    z,
+                    t_weight_update,
+                    i,
                 )
-                // 2,
-                self.weight_min,
-                self.weight_max,
-            )
+
+                self.weight_vector[y, x, z, i] = clip(
+                    int(self.weight_vector[y_weight_update, x_weight_update, z, i])
+                    + weight_update,
+                    self.weight_min,
+                    self.weight_max,
+                )
+
+        # if z == 30 and y == 0:
+        #     print(
+        #         f"weight for t={t}, z={z}, x={x}, y={y}: {self.weight_vector[y, x, z, :]}"
+        #     )
 
     def __calculate_predicted_central_local_difference(self, x, y, z, t):
         if t == 0:
@@ -621,6 +651,7 @@ class Predictor:
         self.__init_predictor_constants()
         self.__init_predictor_arrays()
 
+        # tranversing in BIP order
         for y in range(self.header.y_size):
             print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
             for x in range(self.header.x_size):

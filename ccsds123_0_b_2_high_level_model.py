@@ -33,6 +33,11 @@ def main():
         help="Path to the CCSDS 123.0-B-2 header binary file used to set compression settings. The header is formatted as it is in a CCSDS 123.0-B-2 compressed image.",
     )
     parser.add_argument(
+        "--image_ordering",
+        default="BSQ",
+        help="Image file ordering, supported values are 'BSQ' and 'BIP'.",
+    )
+    parser.add_argument(
         "--accu",
         default="",
         help="Path to the hybrid encoder accumulator initial values binary file. Stored as unsigned integers in increasing band order, using D+gamma_0 bits, in a file that is zero padded to the nearest byte at the end.",
@@ -51,7 +56,7 @@ def main():
 
     start_time = time.time()
 
-    image = ccsds123.CCSDS123(args.image_file)
+    image = ccsds123.CCSDS123(args.image_file, image_ordering=args.image_ordering)
     if len(args.header) > 0:
         image.set_header_file(args.header)
     if len(args.accu) > 0:
@@ -67,7 +72,7 @@ def main():
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
     print(f"Memory usage: {get_memory_usage():.2f} MB")
     print(
-        f"Compression ratio: {get_file_size(args.image_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream.bin'):.2f}"
+        f"Compression ratio: {get_file_size(args.image_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream-enc.bin'):.2f}"
     )
 
 
