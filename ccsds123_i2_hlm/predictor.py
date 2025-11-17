@@ -31,7 +31,8 @@ class Predictor:
     weight_exponent_offset = None  # Symbol: sigma (in word-final position)
     weight_min = None  # Symbol: omega_min
     weight_max = None  # Symbol: omega_max
-    weight_update_frequncy = 1  # weight update frequency (1 or 4)
+    weight_update_frequncy = 4  # weight update frequency (1 or 4)
+    refine_weights = True  # apply weight refinements when using reduced weight updates
 
     register_size = None  # Symbol: R
 
@@ -392,9 +393,17 @@ class Predictor:
         # self.weight_update_frequncy dictates how often we should update the weights
         # set to 1 for the updating scheme of the standard
 
-        if x % self.weight_update_frequncy != 0:  # keep same weight
+        keep_same_weight = False
+        if self.refine_weights:
+            keep_same_weight = x < self.weight_update_frequncy - 1
+        else:
+            keep_same_weight = x % self.weight_update_frequncy != 0
+
+        if keep_same_weight:
             prev_x = (t - 1) % self.header.x_size
             prev_y = (t - 1) // self.header.x_size
+
+            assert t - 1 == prev_x + prev_y * self.header.x_size
 
             for i in range(self.weight_vector.shape[3]):
                 self.weight_vector[y, x, z, i] = self.weight_vector[
@@ -406,9 +415,10 @@ class Predictor:
             x_weight_update = t_weight_update % self.header.x_size
             y_weight_update = t_weight_update // self.header.x_size
 
-            # print(
-            #     f"Weight update: t={t} (x={x}, y={y}), t-4={t-4} (x={x_weight_update}, y={y_weight_update})"
-            # )
+            assert (
+                t_weight_update
+                == x_weight_update + y_weight_update * self.header.x_size
+            )
 
             for i in range(self.weight_vector.shape[3]):
                 weight_update = self.__calculate_weight_offset(
@@ -419,9 +429,24 @@ class Predictor:
                     i,
                 )
 
-                self.weight_vector[y, x, z, i] = clip(
+                new_weight = (
                     int(self.weight_vector[y_weight_update, x_weight_update, z, i])
-                    + weight_update,
+                    + weight_update
+                )
+
+                # refine weight update
+                if x == self.weight_update_frequncy - 1 and self.refine_weights:
+                    prev_x = (t - 1) % self.header.x_size
+                    prev_y = (t - 1) // self.header.x_size
+
+                    assert t - 1 == prev_x + prev_y * self.header.x_size
+
+                    new_weight = floor(
+                        (new_weight + self.weight_vector[prev_y, prev_x, z, i]) // 2
+                    )
+
+                self.weight_vector[y, x, z, i] = clip(
+                    new_weight,
                     self.weight_min,
                     self.weight_max,
                 )
