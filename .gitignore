@@ -5,6 +5,7 @@
 *.egg-info
 *.html
 *.cfg
+*.so
 
 __pycache__/
 .VSCodeCounter/

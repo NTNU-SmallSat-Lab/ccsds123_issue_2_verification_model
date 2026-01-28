@@ -1,9 +1,10 @@
 from . import header as hd
 from . import constants as const
-from . import predictor as pred
+from . import predictor_old as pred
 from . import sa_encoder as sa_enc
 from . import hybrid_encoder as hyb_enc
 from . import ba_encoder as ba_enc
+from . import _predictor as predictor
 import numpy as np
 import time
 from pathlib import Path
@@ -32,6 +33,10 @@ class CCSDS123:
         self.image_file = image_file
         self.image_name = image_file.split("/")[-1]
         self.image_ordering = image_ordering
+
+        self.header = hd.Header(self.image_name)
+        pred = predictor.Predictor(self.header)
+        pred.runPredictor()
 
     def __get_sample_format(self):
         formats = {

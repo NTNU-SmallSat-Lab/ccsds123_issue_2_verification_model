@@ -20,6 +20,21 @@ D. Vorhaug, S. Boyle and M. Orlandić, "High-Level CCSDS 123.0-B-2 Hyperspectral
 1. Clone or download this repository
 2. Install necessary Python packages. Do this by running from the repository root folder (ccsds123_0-b-2_high_level_model): `pip install -r requirements.txt`
 
+## Install package
+
+From the root directory, install with `pip install .`. This will automatically build the predictor C++ submodule.
+
+To install C++ submodule locally for development purposes, use the following commands from the root directory.
+
+```
+> mkdir build
+> cd build
+> cmake .. -DCMAKE_INSTALL_PREFIX=$(pwd)/ccsds123_i2_hlm
+> make install
+```
+
+This builds a shared library file that can by included by python. Rerun `make install` when making changes to the C++ source files.
+
 ## Usage
 
 ### Tool overview

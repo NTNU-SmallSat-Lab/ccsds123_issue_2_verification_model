@@ -32,7 +32,7 @@ class Predictor:
     weight_min = None  # Symbol: omega_min
     weight_max = None  # Symbol: omega_max
     weight_update_frequncy = 4  # weight update frequency (1 or 4)
-    refine_weights = True  # apply weight refinements when using reduced weight updates
+    refine_weights = False  # apply weight refinements when using reduced weight updates
 
     register_size = None  # Symbol: R
 
@@ -212,6 +212,7 @@ class Predictor:
         )
         self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int64)
 
+    # return local sum
     def __calculate_local_sum(self, x, y, z, t):
         if t == 0:
             return
@@ -278,6 +279,7 @@ class Predictor:
             elif y == 0 and x > 0 and z == 0:
                 self.local_sum[y, x, z] = self.image_constants.middle_sample_value * 4
 
+    # store central local differences, what about full mode?
     def __calculate_local_difference_vector(self, x, y, z, t):
         if t == 0:
             return
@@ -383,6 +385,7 @@ class Predictor:
             // 2
         )
 
+    # store weights
     def __calculate_weight_vector(self, x, y, z, t):
         if t == 0:
             return
@@ -435,7 +438,7 @@ class Predictor:
                 )
 
                 # refine weight update
-                if x == self.weight_update_frequncy - 1 and self.refine_weights:
+                if x > self.weight_update_frequncy - 1 and self.refine_weights:
                     prev_x = (t - 1) % self.header.x_size
                     prev_y = (t - 1) // self.header.x_size
 
@@ -451,11 +454,7 @@ class Predictor:
                     self.weight_max,
                 )
 
-        # if z == 30 and y == 0:
-        #     print(
-        #         f"weight for t={t}, z={z}, x={x}, y={y}: {self.weight_vector[y, x, z, :]}"
-        #     )
-
+    # return predicted central local difference
     def __calculate_predicted_central_local_difference(self, x, y, z, t):
         if t == 0:
             return
@@ -466,6 +465,8 @@ class Predictor:
             self.weight_vector[y, x, z], self.local_difference_vector[y, x, z]
         )
 
+    # uses pred central local diff, local sum
+    # return predicted sample
     def __calculate_prediction(self, x, y, z, t):
         if t > 0:
             self.high_resolution_predicted_sample_value[y, x, z] = clip(
@@ -506,6 +507,8 @@ class Predictor:
             self.double_resolution_predicted_sample_value[y, x, z] // 2
         )
 
+    # uses predicted sample
+    # return max error
     def __calculate_maximum_error(self, x, y, z, t):
         if (
             self.header.quantizer_fidelity_control_method
@@ -542,6 +545,8 @@ class Predictor:
                 ),
             )
 
+    # uses pred sample, max error
+    # return quantizer index
     def __calculate_quantization(self, x, y, z, t):
         self.prediction_residual[y, x, z] = (
             self.image_sample[y, x, z] - self.predicted_sample_value[y, x, z]
@@ -556,6 +561,8 @@ class Predictor:
             // (2 * self.maximum_error[y, x, z] + 1)
         )
 
+    # uses quantizer index, max error, pred sample, high res pred sample
+    # return sample repr
     def __calculate_sample_representative(self, x, y, z, t):
         if t == 0:
             self.sample_representative[y, x, z] = self.image_sample[y, x, z]
@@ -620,6 +627,8 @@ class Predictor:
                 self.double_resolution_sample_representative[y, x, z] + 1
             ) // 2
 
+    # uses clipped quant bin center, double res pred sampl
+    # return double res pred error
     def __calculate_prediction_error(self, x, y, z, t):
         self.double_resolution_prediction_error[y, x, z] = (
             2 * self.clipped_quantizer_bin_center[y, x, z]
