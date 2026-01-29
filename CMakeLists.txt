@@ -24,5 +24,11 @@ target_link_libraries(_predictor PRIVATE pybind11::headers)
 # This is passing in the version as a define just as an example
 target_compile_definitions(_predictor PRIVATE VERSION_INFO=${PROJECT_VERSION})
 
+set_target_properties(_predictor PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO
+)
+
 # The install directory is the output (wheel) directory
 install(TARGETS _predictor DESTINATION ccsds123_i2_hlm)

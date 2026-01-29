@@ -1,10 +1,11 @@
 from . import header as hd
 from . import constants as const
-from . import predictor_old as pred
 from . import sa_encoder as sa_enc
 from . import hybrid_encoder as hyb_enc
 from . import ba_encoder as ba_enc
-from . import _predictor as predictor
+
+# from . import predictor_old as pred
+from . import _predictor as pred
 import numpy as np
 import time
 from pathlib import Path
@@ -33,10 +34,6 @@ class CCSDS123:
         self.image_file = image_file
         self.image_name = image_file.split("/")[-1]
         self.image_ordering = image_ordering
-
-        self.header = hd.Header(self.image_name)
-        pred = predictor.Predictor(self.header)
-        pred.runPredictor()
 
     def __get_sample_format(self):
         formats = {
@@ -126,33 +123,39 @@ class CCSDS123:
 
         self.image_constants = const.ImageConstants(self.header)
 
+        for i in range(10):
+            print(self.image_sample[0][0][i])
+
         self.predictor = pred.Predictor(
             self.header, self.image_constants, self.image_sample
         )
-        self.predictor.run_predictor()
+        predictor_output = self.predictor.compress()
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
-        if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
-            self.encoder = sa_enc.SampleAdaptiveEncoder(
-                self.header, self.image_constants, self.predictor.get_predictor_output()
-            )
-        elif self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
-            self.encoder = hyb_enc.HybridEncoder(
-                self.header, self.image_constants, self.predictor.get_predictor_output()
-            )
-            if self.use_accu_init_file:
-                self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
-        elif self.header.entropy_coder_type == hd.EntropyCoderType.BLOCK_ADAPTIVE:
-            self.encoder = ba_enc.BlockAdaptiveEncoder(
-                self.header, self.image_constants, self.predictor.get_predictor_output()
-            )
+        print(predictor_output.shape)
+        print(predictor_output[1][2][3])
 
-        self.encoder.run_encoder()
-        print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
+        # if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
+        #     self.encoder = sa_enc.SampleAdaptiveEncoder(
+        #         self.header, self.image_constants, predictor_output
+        #     )
+        # elif self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
+        #     self.encoder = hyb_enc.HybridEncoder(
+        #         self.header, self.image_constants, predictor_output
+        #     )
+        #     if self.use_accu_init_file:
+        #         self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
+        # elif self.header.entropy_coder_type == hd.EntropyCoderType.BLOCK_ADAPTIVE:
+        #     self.encoder = ba_enc.BlockAdaptiveEncoder(
+        #         self.header, self.image_constants, predictor_output
+        #     )
 
-        self.header.save_data(self.output_folder)
-        self.predictor.save_data(self.output_folder)
-        self.encoder.save_data(
-            self.output_folder, self.header.get_header_bitstreams()[0]
-        )
+        # self.encoder.run_encoder()
+        # print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
+        #
+        # self.header.save_data(self.output_folder)
+        # self.predictor.save_data(self.output_folder)
+        # self.encoder.save_data(
+        #     self.output_folder, self.header.get_header_bitstreams()[0]
+        # )
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")

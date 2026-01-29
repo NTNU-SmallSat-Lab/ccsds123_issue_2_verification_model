@@ -5,6 +5,6 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(_predictor, m, py::mod_gil_not_used()) {
     py::class_<Predictor>(m, "Predictor")
-        .def(py::init<py::object>())
-        .def("runPredictor", &Predictor::runPredictor);
+        .def(py::init<py::object, py::object, NumpyArr<int>>())
+        .def("compress", &Predictor::compress);
 }
