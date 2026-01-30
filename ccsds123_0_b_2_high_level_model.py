@@ -71,9 +71,9 @@ def main():
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
     print(f"Memory usage: {get_memory_usage():.2f} MB")
-    print(
-        f"Compression ratio: {get_file_size(args.image_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream-enc.bin'):.2f}"
-    )
+    # print(
+    #     f"Compression ratio: {get_file_size(args.image_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream-enc.bin'):.2f}"
+    # )
 
 
 if __name__ == "__main__":

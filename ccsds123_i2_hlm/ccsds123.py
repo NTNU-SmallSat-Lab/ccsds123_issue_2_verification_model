@@ -123,17 +123,11 @@ class CCSDS123:
 
         self.image_constants = const.ImageConstants(self.header)
 
-        for i in range(10):
-            print(self.image_sample[0][0][i])
-
         self.predictor = pred.Predictor(
             self.header, self.image_constants, self.image_sample
         )
         predictor_output = self.predictor.compress()
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
-
-        print(predictor_output.shape)
-        print(predictor_output[1][2][3])
 
         # if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
         #     self.encoder = sa_enc.SampleAdaptiveEncoder(
@@ -154,7 +148,7 @@ class CCSDS123:
         # print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
         #
         # self.header.save_data(self.output_folder)
-        # self.predictor.save_data(self.output_folder)
+        self.predictor.save_data(self.output_folder)
         # self.encoder.save_data(
         #     self.output_folder, self.header.get_header_bitstreams()[0]
         # )
