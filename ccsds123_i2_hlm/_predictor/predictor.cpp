@@ -44,9 +44,7 @@ Predictor::Predictor(py::object header, py::object image_constants, NumpyArr<int
 NumpyArr<int> Predictor::compress() {
   std::array<ssize_t, 3> image_shape = { _image_sample.shape(0), _image_sample.shape(1), _image_sample.shape(2) };
 
-  // mapped quantizer index
-  auto  mqi = NumpyArr<int>(image_shape);
-  auto _mqi = mqi.mutable_unchecked<3>();
+  auto mqismpl = new Sampler<int, 3>(image_shape);
 
   // tranversing in BIP order
   for (int y = 0; y < y_size; y++) {
@@ -55,7 +53,6 @@ NumpyArr<int> Predictor::compress() {
       int t = x + y * x_size;
       for (int z = 0; z < z_size; z++) {
         // local sum
-        lssmpl->sample(x + y + z, x, y, z);
         // predicted central difference
         // high resolution predicted sample value
         // double resolution predicted sample value
@@ -77,7 +74,7 @@ NumpyArr<int> Predictor::compress() {
   }
   std::cout << std::endl;
 
-  return mqi;
+  return mqismpl->get_arr();
 }
 
 void Predictor::save_data(std::string output_folder) {
@@ -86,9 +83,13 @@ void Predictor::save_data(std::string output_folder) {
   py::object savetxt = numpy.attr("savetxt");
 
   auto csv_image_shape = { y_size * x_size, z_size };
+  auto csv_vector_shape = { y_size * x_size, z_size * local_difference_values_num };
 
   if (lssmpl->enable_sampling)
     savetxt(output_folder + "/predictor-00-local_sum.csv", lssmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter")=",", py::arg("fmt")="%d");
+
+  if (ldvsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-01-local_difference_vector.csv", ldvsmpl->get_arr().reshape(csv_vector_shape), py::arg("delimiter")=",", py::arg("fmt")="%d");
 }
 
 /******************** Private ********************/

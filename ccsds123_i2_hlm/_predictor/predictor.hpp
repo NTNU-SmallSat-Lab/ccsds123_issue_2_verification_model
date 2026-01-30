@@ -25,23 +25,26 @@ class Predictor {
     template <typename data_t, ssize_t dims_t>
     class Sampler {
       public:
-        Sampler(std::array<ssize_t, dims_t> dimensions, bool enable_sampling = false) 
+        Sampler(std::array<ssize_t, dims_t> dimensions, bool enable_sampling = true) 
           : enable_sampling(enable_sampling)
         {
           if (!enable_sampling) return;
           // allocate sampler array
           arr = NumpyArr<data_t>(dimensions);
           _arr.emplace(arr.template mutable_unchecked<dims_t>());
-        };
+        }
 
         template <typename... Args>
         data_t sample(data_t t, Args &&...pos) {
           if (enable_sampling)
             (*_arr)(std::forward<Args>(pos)...) = t;
           return t;
-        };
+        }
 
-        NumpyArr<data_t> get_arr() { return arr; };
+        template <typename... Args>
+        data_t operator()(Args &&...pos) { return (*_arr)(std::forward<Args>(pos)...); }
+
+        NumpyArr<data_t> get_arr() { return arr; }
 
         bool enable_sampling;
 

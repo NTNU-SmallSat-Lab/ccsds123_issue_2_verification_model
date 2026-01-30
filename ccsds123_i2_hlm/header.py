@@ -164,7 +164,7 @@ class Header:
     #####################
     sample_representative_flag = SampleRepresentativeFlag.INCLUDED
     prediction_bands_num = 3  # P. 0<=P<=15
-    prediction_mode = PredictionMode.FULL
+    prediction_mode = PredictionMode.REDUCED
     weight_exponent_offset_flag = WeightExponentOffsetFlag.ALL_ZERO
     local_sum_type = LocalSumType.NARROW_COLUMN_ORIENTED
     register_size = 0  # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
