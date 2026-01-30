@@ -57,14 +57,18 @@ class Predictor {
 
     py::object header;
     py::object image_constants;
-    _NumpyArr<int, 3> _image_sample;           // three dimensional image cube
+    _NumpyArr<int, 3> _image_sample; // data cube
 
     /******************** Samplers ********************/
-    // samplers are used for intermediate values that can optionally be stored and exported
 
-    Sampler<int, 3> *lssmpl;
-    Sampler<int, 4> *ldvsmpl;
-    
+    // samplers used for intermediate values that can optionally be stored and exported
+    Sampler<int, 3> *lssmpl; // local sums
+
+    // these are samplers that need to store their values no matter what
+    Sampler<int, 3> *mqismpl; // mapped quantizer indices
+    Sampler<int, 3> *repsmpl; // sample representatives
+    Sampler<int, 4> *ldvsmpl; // local difference vectors
+   
     /******************** Constants ********************/
 
     int x_size, y_size, z_size;
@@ -91,4 +95,7 @@ class Predictor {
   
     void init_predictor_constants();
     void init_predictor_arrays();
+
+    int calc_local_sum(int x, int y, int z, Sampler<int, 3> *repsmpl);
+    std::vector<int> calc_local_difference_vector(int x, int y, int z, int local_sum, Sampler<int, 3> *repsmpl, Sampler<int, 4> *ldvsmpl);
 };
