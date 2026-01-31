@@ -97,5 +97,6 @@ class Predictor {
     void init_predictor_arrays();
 
     int calc_local_sum(int x, int y, int z, Sampler<int, 3> *repsmpl);
-    std::vector<int> calc_local_difference_vector(int x, int y, int z, int local_sum, Sampler<int, 3> *repsmpl, Sampler<int, 4> *ldvsmpl);
+    std::vector<int> calc_local_difference_vector(int x, int y, int z, int local_sum, int prev_local_sum,
+                                                  Sampler<int, 3> *repsmpl, Sampler<int, 4> *ldvsmpl);
 };

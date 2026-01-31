@@ -47,6 +47,7 @@ NumpyArr<int> Predictor::compress() {
     std::cout << "\rProcessing line y=" << y+1 << "/" << y_size << std::flush;
     for (int x = 0; x < x_size; x++) {
       int t = x + y * x_size;
+      int prev_local_sum; // local sum of previous band
       for (int z = 0; z < z_size; z++) {
         if (t == 0) continue;
 
@@ -54,9 +55,11 @@ NumpyArr<int> Predictor::compress() {
         int local_sum = lssmpl->sample(calc_local_sum(y, x, z, repsmpl), x, y, z);
 
         // local difference vector
-        auto local_difference_vector = calc_local_difference_vector(x, y, z, local_sum, repsmpl, ldvsmpl);
+        auto local_difference_vector = calc_local_difference_vector(x, y, z, local_sum, prev_local_sum, repsmpl, ldvsmpl);
         for (int i = 0; i < local_difference_vector.size(); i++)
           ldvsmpl->sample(local_difference_vector.at(i), y, x, z, i);
+
+        // find local difference!!
 
         // predicted central difference
         // high resolution predicted sample value
@@ -74,6 +77,8 @@ NumpyArr<int> Predictor::compress() {
         // theta
         // mapped quantizer index
         // sample representative
+        
+        prev_local_sum = local_sum;
       }
     }
   }
@@ -160,7 +165,8 @@ int Predictor::calc_local_sum(int x, int y, int z, Sampler<int, 3> *repsmpl) {
   return local_sum;
 }
 
-std::vector<int> Predictor::calc_local_difference_vector(int x, int y, int z, int local_sum, Sampler<int, 3> *repsmpl, Sampler<int, 4> *ldvsmpl) {
+std::vector<int> Predictor::calc_local_difference_vector(int x, int y, int z, int local_sum, int prev_local_sum,
+                                                         Sampler<int, 3> *repsmpl, Sampler<int, 4> *ldvsmpl) {
   if (x == 0 && y == 0) 
     throw std::invalid_argument("local sum not defined for t=0");
 
@@ -185,9 +191,12 @@ std::vector<int> Predictor::calc_local_difference_vector(int x, int y, int z, in
     offset += 3;
   }
 
-  // copies the local difference value of the previous vector
   if (z > 0 && SPECTRAL_BANDS_USED(z) > 0)
-    for (int i = 0; i < SPECTRAL_BANDS_USED(z); i++)
+    // local difference of z-1
+    local_difference_vector.push_back(4 * (*repsmpl)(y, x, z - 1) - prev_local_sum);
+
+    // copy local differences of previous vector
+    for (int i = 1; i < SPECTRAL_BANDS_USED(z); i++)
       local_difference_vector.push_back((*ldvsmpl)(y, x, z - 1, offset + i - 1));
 
   return local_difference_vector;
