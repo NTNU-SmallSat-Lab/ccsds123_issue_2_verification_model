@@ -16,7 +16,7 @@ using _NumpyArr = py::detail::unchecked_mutable_reference<data_t, dims_t>;
 class Predictor
 {
 public:
-  Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample);
+  Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample, bool save_intermediates = false);
   NumpyArr<long> compress();
   void save_data(std::string output_folder);
 
@@ -74,6 +74,7 @@ private:
   Sampler<long, 3> *prsmpl;    // prediction residual
   Sampler<long, 3> *mevsmpl;   // maximum error value
   Sampler<long, 3> *qismpl;    // quantizer index
+  Sampler<long, 3> *cqbcsmpl;  // clipped quantizer bin center
 
   // these are samplers that need to store their values no matter what
   Sampler<long, 3> *mqismpl; // mapped quantizer indices
@@ -84,6 +85,7 @@ private:
   /******************** Constants ********************/
 
   long x_size, y_size, z_size;
+  bool save_intermediates;
 
   long local_difference_values_num;
 
@@ -114,4 +116,5 @@ private:
   long calc_prediction_residual(long sample, long predicted_sample_value);
   long calc_maximum_error(long y, long z, long predicted_sample_value);
   long calc_quantizer_index(long t, long maximum_error, long prediction_residual);
+  long calc_clipped_quantizer_bin_center(long x, long y, long z, long predicted_sample_value, long maximum_error, long quantizer_index);
 };

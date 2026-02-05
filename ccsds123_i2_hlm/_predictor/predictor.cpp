@@ -44,10 +44,11 @@ static inline long sgn(long value)
 
 /******************** Constructor ********************/
 
-Predictor::Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample)
+Predictor::Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample, bool save_intermediates)
     : header(header),
       image_constants(image_constants),
-      _image_sample(image_sample.mutable_unchecked<3>()) // cast to three dimensional array
+      _image_sample(image_sample.mutable_unchecked<3>()), // cast to three dimensional array
+      save_intermediates(save_intermediates)
 
 {
   x_size = header.attr("x_size").cast<long>();
@@ -105,6 +106,8 @@ NumpyArr<long> Predictor::compress()
         long quantizer_index = qismpl->sample(calc_quantizer_index(t, maximum_error, prediction_residual), x, y, z);
 
         // clippped quantizer bin center
+        long clipper_quantizer_bin_center = cqbcsmpl->sample(calc_clipped_quantizer_bin_center(x, y, z, predicted_sample_value, maximum_error, quantizer_index), x, y, z);
+
         // double resolution sample representative
         // double resolution prediction error
         // weight update scaling exponent ?
@@ -153,6 +156,9 @@ void Predictor::save_data(std::string output_folder)
 
   if (qismpl->enable_sampling)
     savetxt(output_folder + "/predictor-09-quantizer_index.csv", qismpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (cqbcsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-10-clipper_quantizer_bin_center.csv", cqbcsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
   if (mevsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-22-maximum_error.csv", mevsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
@@ -238,8 +244,6 @@ void Predictor::init_predictor_arrays()
   std::array<ssize_t, 3> image_shape = {_image_sample.shape(0), _image_sample.shape(1), _image_sample.shape(2)};
   std::array<ssize_t, 4> local_difference_vector_shape = {image_shape[0], image_shape[1], image_shape[2], local_difference_values_num};
 
-  bool save_intermediates = false;
-
   // these may be optionally not stored
   lssmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // local sum
   pcdsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // predicted central local difference
@@ -249,6 +253,7 @@ void Predictor::init_predictor_arrays()
   prsmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // prediction residual
   mevsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // maximum error value
   qismpl = new Sampler<long, 3>(image_shape, save_intermediates);    // quantizer index
+  cqbcsmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // clipped quantizer bin center
 
   // these must be stored as they are accessed during execution
   mqismpl = new Sampler<long, 3>(image_shape);                   // mapped quantizer indices
@@ -473,4 +478,15 @@ long Predictor::calc_quantizer_index(long t, long maximum_error, long prediction
     return prediction_residual;
   else
     return sgn(prediction_residual) * (std::abs(prediction_residual) + maximum_error) / (2 * maximum_error + 1);
+}
+
+long Predictor::calc_clipped_quantizer_bin_center(long x, long y, long z, long predicted_sample_value, long maximum_error, long quantizer_index)
+{
+  long sMin = image_constants.attr("lower_sample_limit").cast<int>();
+  long sMax = image_constants.attr("upper_sample_limit").cast<int>();
+
+  if (maximum_error == 0)
+    return _image_sample(y, x, z);
+
+  return std::clamp(predicted_sample_value + quantizer_index * (2 * maximum_error + 1), sMin, sMax);
 }

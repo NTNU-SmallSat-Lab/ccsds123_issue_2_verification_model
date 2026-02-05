@@ -124,8 +124,9 @@ class CCSDS123:
 
         self.image_constants = const.ImageConstants(self.header)
 
+        save_intermediates = False
         self.predictor = pred.Predictor(
-            self.header, self.image_constants, self.image_sample
+            self.header, self.image_constants, self.image_sample, save_intermediates
         )
         predictor_output = self.predictor.compress()
         # self.predictor.run_predictor()
