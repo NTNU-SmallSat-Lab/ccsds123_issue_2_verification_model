@@ -7,7 +7,7 @@
 #include <numeric>
 
 #define SPECTRAL_BANDS_USED(z) std::min(z, header.attr("prediction_bands_num").cast<long>()) // symbol P^*
-#define WEIGHT_UPDATE_SCALING_EXPONENT(t) std::clamp(weight_update_initial_parameter + (t - header.attr("x_size").cast<long>()) / weight_update_change_interval, \
+#define WEIGHT_UPDATE_SCALING_EXPONENT(t) std::clamp(weight_update_initial_parameter + x_size.cast<long>()) / weight_update_change_interval, \
                                                      weight_update_initial_parameter,                                                                            \
                                                      weight_update_final_parameter)                                                                              \
                                               + image_constants.attr("dynamic_range_bits").cast<long>()                                                          \
@@ -17,7 +17,7 @@
 
 // cast Python enum to C++ enum class
 template <typename T>
-T cast_enum(py::object enum_py)
+static inline T cast_enum(py::object enum_py)
 {
   auto value = enum_py.attr("value").cast<long>();
   return static_cast<T>(value);
@@ -106,16 +106,23 @@ NumpyArr<long> Predictor::compress()
         long quantizer_index = qismpl->sample(calc_quantizer_index(t, maximum_error, prediction_residual), x, y, z);
 
         // clippped quantizer bin center
-        long clipper_quantizer_bin_center = cqbcsmpl->sample(calc_clipped_quantizer_bin_center(x, y, z, predicted_sample_value, maximum_error, quantizer_index), x, y, z);
+        long clipped_quantizer_bin_center = cqbcsmpl->sample(calc_clipped_quantizer_bin_center(x, y, z, predicted_sample_value, maximum_error, quantizer_index), x, y, z);
 
         // double resolution sample representative
+        long double_resolution_sample_representative = drsrsmpl->sample(calc_double_resolution_sample_representative(z, clipped_quantizer_bin_center, quantizer_index, maximum_error, high_resolution_pred_sample_value), x, y, z);
+
+        // sample representative
+        long sample_representative = srsmpl->sample(calc_sample_representative(x, y, z, clipped_quantizer_bin_center, double_resolution_sample_representative), x, y, z);
+
         // double resolution prediction error
+        long double_resolution_prediction_error = drpesmpl->sample(calc_double_resolution_prediction_error(clipped_quantizer_bin_center, double_resolution_predicted_sample_value), x, y, z);
+
         // weight update scaling exponent ?
         // weight update offset
         // weight update
+
         // theta
         // mapped quantizer index
-        // sample representative
 
         prev_local_sum = local_sum;
       }
@@ -146,7 +153,7 @@ void Predictor::save_data(std::string output_folder)
     savetxt(output_folder + "/predictor-04-high_resolution_predicted_sample_value.csv", hrpsvsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
   if (drpsvsmpl->enable_sampling)
-    savetxt(output_folder + "/predictor-05-doubple_resolution_predicted_sample_value.csv", drpsvsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+    savetxt(output_folder + "/predictor-05-double_resolution_predicted_sample_value.csv", drpsvsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
   if (psvsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-06-predicted_sample_value.csv", psvsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
@@ -159,6 +166,12 @@ void Predictor::save_data(std::string output_folder)
 
   if (cqbcsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-10-clipper_quantizer_bin_center.csv", cqbcsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (drsrsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-11-double_resolution_sample_representative.csv", drsrsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (srsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-12-sample_representative.csv", srsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
   if (mevsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-22-maximum_error.csv", mevsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
@@ -254,6 +267,9 @@ void Predictor::init_predictor_arrays()
   mevsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // maximum error value
   qismpl = new Sampler<long, 3>(image_shape, save_intermediates);    // quantizer index
   cqbcsmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // clipped quantizer bin center
+  drsrsmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // double resolution sample representative
+  srsmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // sample representative
+  drpesmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // double resolution prediction error
 
   // these must be stored as they are accessed during execution
   mqismpl = new Sampler<long, 3>(image_shape);                   // mapped quantizer indices
@@ -489,4 +505,43 @@ long Predictor::calc_clipped_quantizer_bin_center(long x, long y, long z, long p
     return _image_sample(y, x, z);
 
   return std::clamp(predicted_sample_value + quantizer_index * (2 * maximum_error + 1), sMin, sMax);
+}
+
+long Predictor::calc_double_resolution_sample_representative(long z, long clipped_quantizer_bin_center, long quantizer_index, long maximum_error, long high_resolution_pred_sample_value)
+{
+  auto damping_table_array = header.attr("damping_table_array").cast<NumpyArr<long>>().unchecked<1>();
+  auto damping_offset_table_array = header.attr("damping_offset_table_array").cast<NumpyArr<long>>().unchecked<1>();
+
+  long double_resolution_sample_representative;
+
+  if (damping_table_array(0) == 0 && damping_offset_table_array(0) == 0)
+  {
+    double_resolution_sample_representative = 2 * clipped_quantizer_bin_center;
+  }
+  else
+  {
+    int sample_representative_resolution = header.attr("sample_representative_resolution").cast<int>();
+    double_resolution_sample_representative = (4 * ((1 << sample_representative_resolution) - damping_table_array(z)) * (clipped_quantizer_bin_center * (1 << weight_component_resolution) - sgn(quantizer_index) * maximum_error * damping_offset_table_array(z) * (1 << (weight_component_resolution - sample_representative_resolution))) + damping_table_array(z) * high_resolution_pred_sample_value - damping_table_array(z) * (1 << (weight_component_resolution + 1))) / (1 << (weight_component_resolution + sample_representative_resolution + 1));
+  }
+
+  return double_resolution_sample_representative;
+}
+
+long Predictor::calc_sample_representative(long x, long y, long z, long clipped_quantizer_bin_center, long double_resolution_sample_representative)
+{
+  if (x == 0 && y == 0)
+    return _image_sample(y, x, z);
+
+  auto damping_table_array = header.attr("damping_table_array").cast<NumpyArr<long>>().unchecked<1>();
+  auto damping_offset_table_array = header.attr("damping_offset_table_array").cast<NumpyArr<long>>().unchecked<1>();
+
+  if (damping_table_array(0) == 0 && damping_offset_table_array(0) == 0)
+    return clipped_quantizer_bin_center;
+
+  return (double_resolution_sample_representative + 1) / 2;
+}
+
+long Predictor::calc_double_resolution_prediction_error(long clipped_quantizer_bin_center, long double_resolution_predicted_sample_value)
+{
+  return 2 * clipped_quantizer_bin_center - double_resolution_predicted_sample_value;
 }

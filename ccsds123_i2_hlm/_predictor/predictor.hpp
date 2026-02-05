@@ -75,6 +75,9 @@ private:
   Sampler<long, 3> *mevsmpl;   // maximum error value
   Sampler<long, 3> *qismpl;    // quantizer index
   Sampler<long, 3> *cqbcsmpl;  // clipped quantizer bin center
+  Sampler<long, 3> *drsrsmpl;  // double resolution sample representative
+  Sampler<long, 3> *srsmpl;    // sample representative
+  Sampler<long, 3> *drpesmpl;  // double resolution prediction error
 
   // these are samplers that need to store their values no matter what
   Sampler<long, 3> *mqismpl; // mapped quantizer indices
@@ -117,4 +120,7 @@ private:
   long calc_maximum_error(long y, long z, long predicted_sample_value);
   long calc_quantizer_index(long t, long maximum_error, long prediction_residual);
   long calc_clipped_quantizer_bin_center(long x, long y, long z, long predicted_sample_value, long maximum_error, long quantizer_index);
+  long calc_double_resolution_sample_representative(long z, long clipped_quantizer_bin_center, long quantizer_index, long maximum_error, long high_resolution_pred_sample_value);
+  long calc_sample_representative(long x, long y, long z, long clipped_quantizer_bin_center, long double_resolution_sample_representative);
+  long calc_double_resolution_prediction_error(long clipped_quantizer_bin_center, long double_resolution_predicted_sample_value);
 };
