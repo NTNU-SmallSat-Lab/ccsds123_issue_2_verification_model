@@ -73,6 +73,7 @@ private:
   Sampler<long, 3> *psvsmpl;   // predicted sample value
   Sampler<long, 3> *prsmpl;    // prediction residual
   Sampler<long, 3> *mevsmpl;   // maximum error value
+  Sampler<long, 3> *qismpl;    // quantizer index
 
   // these are samplers that need to store their values no matter what
   Sampler<long, 3> *mqismpl; // mapped quantizer indices
@@ -112,4 +113,5 @@ private:
   long calc_predicted_sample_value(long double_resolution_predicted_sample_value);
   long calc_prediction_residual(long sample, long predicted_sample_value);
   long calc_maximum_error(long y, long z, long predicted_sample_value);
+  long calc_quantizer_index(long t, long maximum_error, long prediction_residual);
 };

@@ -33,6 +33,15 @@ static inline long modulo_star(long value, long r)
   return ((value + offset) % modulus) - offset;
 }
 
+static inline long sgn(long value)
+{
+  if (value < 0)
+    return -1;
+  if (value > 0)
+    return 1;
+  return 0;
+}
+
 /******************** Constructor ********************/
 
 Predictor::Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample)
@@ -93,6 +102,8 @@ NumpyArr<long> Predictor::compress()
         long maximum_error = mevsmpl->sample(calc_maximum_error(y, z, predicted_sample_value), x, y, z);
 
         // quantizer index
+        long quantizer_index = qismpl->sample(calc_quantizer_index(t, maximum_error, prediction_residual), x, y, z);
+
         // clippped quantizer bin center
         // double resolution sample representative
         // double resolution prediction error
@@ -139,6 +150,9 @@ void Predictor::save_data(std::string output_folder)
 
   if (prsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-07-prediction_residual.csv", prsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (qismpl->enable_sampling)
+    savetxt(output_folder + "/predictor-09-quantizer_index.csv", qismpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
   if (mevsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-22-maximum_error.csv", mevsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
@@ -224,14 +238,17 @@ void Predictor::init_predictor_arrays()
   std::array<ssize_t, 3> image_shape = {_image_sample.shape(0), _image_sample.shape(1), _image_sample.shape(2)};
   std::array<ssize_t, 4> local_difference_vector_shape = {image_shape[0], image_shape[1], image_shape[2], local_difference_values_num};
 
+  bool save_intermediates = false;
+
   // these may be optionally not stored
-  lssmpl = new Sampler<long, 3>(image_shape, true);    // local sum
-  pcdsmpl = new Sampler<long, 3>(image_shape, true);   // predicted central local difference
-  hrpsvsmpl = new Sampler<long, 3>(image_shape, true); // high resolution predictied sample value
-  drpsvsmpl = new Sampler<long, 3>(image_shape, true); // double resolution predicted sample value
-  psvsmpl = new Sampler<long, 3>(image_shape, true);   // predicted sample value
-  prsmpl = new Sampler<long, 3>(image_shape, true);    // prediction residual
-  mevsmpl = new Sampler<long, 3>(image_shape, true);   // maximum error value
+  lssmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // local sum
+  pcdsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // predicted central local difference
+  hrpsvsmpl = new Sampler<long, 3>(image_shape, save_intermediates); // high resolution predictied sample value
+  drpsvsmpl = new Sampler<long, 3>(image_shape, save_intermediates); // double resolution predicted sample value
+  psvsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // predicted sample value
+  prsmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // prediction residual
+  mevsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // maximum error value
+  qismpl = new Sampler<long, 3>(image_shape, save_intermediates);    // quantizer index
 
   // these must be stored as they are accessed during execution
   mqismpl = new Sampler<long, 3>(image_shape);                   // mapped quantizer indices
@@ -448,4 +465,12 @@ long Predictor::calc_maximum_error(long y, long z, long predicted_sample_value)
   }
 
   return maximum_error;
+}
+
+long Predictor::calc_quantizer_index(long t, long maximum_error, long prediction_residual)
+{
+  if (t == 0)
+    return prediction_residual;
+  else
+    return sgn(prediction_residual) * (std::abs(prediction_residual) + maximum_error) / (2 * maximum_error + 1);
 }
