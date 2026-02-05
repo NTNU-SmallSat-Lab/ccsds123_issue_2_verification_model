@@ -90,7 +90,9 @@ NumpyArr<long> Predictor::compress()
         long prediction_residual = prsmpl->sample(calc_prediction_residual(_image_sample(y, x, z), predicted_sample_value), x, y, z);
 
         // max error value
-        // quatizer index
+        long maximum_error = mevsmpl->sample(calc_maximum_error(y, z, predicted_sample_value), x, y, z);
+
+        // quantizer index
         // clippped quantizer bin center
         // double resolution sample representative
         // double resolution prediction error
@@ -123,10 +125,31 @@ void Predictor::save_data(std::string output_folder)
   if (lssmpl->enable_sampling)
     savetxt(output_folder + "/predictor-00-local_sum.csv", lssmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
+  if (pcdsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-03-predicted_central_local_difference.csv", pcdsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (hrpsvsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-04-high_resolution_predicted_sample_value.csv", hrpsvsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (drpsvsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-05-doubple_resolution_predicted_sample_value.csv", drpsvsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (psvsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-06-predicted_sample_value.csv", psvsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (prsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-07-prediction_residual.csv", prsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (mevsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-22-maximum_error.csv", mevsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
   // always saved
   savetxt(output_folder + "/predictor-01-local_difference_vector.csv", ldvsmpl->get_arr().reshape(csv_vector_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+  savetxt(output_folder + "/predictor-02-weight_vectors.csv", wvsmpl->get_arr().reshape(csv_vector_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
   savetxt(output_folder + "/predictor-12-sample_representative.csv", repsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
   savetxt(output_folder + "/predictor-14-mapped_quantizer_index.csv", mqismpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+  savetxt(output_folder + "/predictor-20-absolute_error_limits.csv", absolute_error_limits->get_arr(), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+  savetxt(output_folder + "/predictor-21-relative_error_limits.csv", relative_error_limits->get_arr(), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 }
 
 /******************** Private ********************/
@@ -145,6 +168,55 @@ void Predictor::init_predictor_constants()
   register_size = header.attr("register_size").cast<long>();
   if (register_size == 0)
     register_size = 64;
+
+  absolute_error_limits = new Sampler<long, 2>({y_size, z_size}, true);
+  relative_error_limits = new Sampler<long, 2>({y_size, z_size}, true);
+
+  QuantizerFidelityControlMethod fidelity_control = cast_enum<QuantizerFidelityControlMethod>(header.attr("quantizer_fidelity_control_method"));
+  bool periodic_error_updating_used = cast_enum<PeriodicErrorUpdatingFlag>(header.attr("periodic_error_updating_flag")) == PeriodicErrorUpdatingFlag::USED;
+
+  // fill error limit arrays
+  if (!periodic_error_updating_used && fidelity_control != QuantizerFidelityControlMethod::LOSSLESS)
+  {
+    auto relative_error_limit_table = header.attr("relative_error_limit_table").cast<NumpyArr<long>>().unchecked<1>();
+    auto absolute_error_limit_table = header.attr("absolute_error_limit_table").cast<NumpyArr<long>>().unchecked<1>();
+
+    if (fidelity_control != QuantizerFidelityControlMethod::RELATIVE_ONLY)
+    {
+      for (int y = 0; y < y_size; y++)
+        for (int z = 0; z < z_size; z++)
+          (*absolute_error_limits)(y, z) = absolute_error_limit_table(z);
+    }
+    if (fidelity_control != QuantizerFidelityControlMethod::ABSOLUTE_ONLY)
+    {
+      for (int y = 0; y < y_size; y++)
+        for (int z = 0; z < z_size; z++)
+          (*relative_error_limits)(y, z) = relative_error_limit_table(z);
+    }
+  }
+  else if (periodic_error_updating_used)
+  {
+    auto periodic_relative_error_limit_table = header.attr("periodic_relative_error_limit_table").cast<NumpyArr<long>>().unchecked<2>();
+    auto periodic_absolute_error_limit_table = header.attr("periodic_absolute_error_limit_table").cast<NumpyArr<long>>().unchecked<2>();
+
+    long period = 1 << header.attr("error_update_period_exponent").cast<int>();
+    for (int y = 0; y < (y_size + (1 << 16) * (int)(y_size == 0)); y++)
+    {
+      long i = y / period;
+      if (fidelity_control != QuantizerFidelityControlMethod::RELATIVE_ONLY)
+      {
+        for (int y = 0; y < y_size; y++)
+          for (int z = 0; z < z_size; z++)
+            (*absolute_error_limits)(y, z) = periodic_absolute_error_limit_table(i, z);
+      }
+      if (fidelity_control != QuantizerFidelityControlMethod::ABSOLUTE_ONLY)
+      {
+        for (int y = 0; y < y_size; y++)
+          for (int z = 0; z < z_size; z++)
+            (*relative_error_limits)(y, z) = periodic_relative_error_limit_table(i, z);
+      }
+    }
+  }
 }
 
 void Predictor::init_predictor_arrays()
@@ -153,12 +225,13 @@ void Predictor::init_predictor_arrays()
   std::array<ssize_t, 4> local_difference_vector_shape = {image_shape[0], image_shape[1], image_shape[2], local_difference_values_num};
 
   // these may be optionally not stored
-  lssmpl = new Sampler<long, 3>(image_shape, false);    // local sum
-  pcdsmpl = new Sampler<long, 3>(image_shape, false);   // predicted central local difference
-  hrpsvsmpl = new Sampler<long, 3>(image_shape, false); // high resolution predictied sample value
-  drpsvsmpl = new Sampler<long, 3>(image_shape, false); // double resolution predicted sample value
-  psvsmpl = new Sampler<long, 3>(image_shape, false);   // predicted sample value
-  prsmpl = new Sampler<long, 3>(image_shape, false);    // prediction residual
+  lssmpl = new Sampler<long, 3>(image_shape, true);    // local sum
+  pcdsmpl = new Sampler<long, 3>(image_shape, true);   // predicted central local difference
+  hrpsvsmpl = new Sampler<long, 3>(image_shape, true); // high resolution predictied sample value
+  drpsvsmpl = new Sampler<long, 3>(image_shape, true); // double resolution predicted sample value
+  psvsmpl = new Sampler<long, 3>(image_shape, true);   // predicted sample value
+  prsmpl = new Sampler<long, 3>(image_shape, true);    // prediction residual
+  mevsmpl = new Sampler<long, 3>(image_shape, true);   // maximum error value
 
   // these must be stored as they are accessed during execution
   mqismpl = new Sampler<long, 3>(image_shape);                   // mapped quantizer indices
@@ -349,4 +422,30 @@ long Predictor::calc_predicted_sample_value(long double_resolution_predicted_sam
 long Predictor::calc_prediction_residual(long sample, long predicted_sample_value)
 {
   return sample - predicted_sample_value;
+}
+
+long Predictor::calc_maximum_error(long y, long z, long predicted_sample_value)
+{
+  long maximum_error;
+
+  switch (cast_enum<QuantizerFidelityControlMethod>(header.attr("quantizer_fidelity_control_method")))
+  {
+  case QuantizerFidelityControlMethod::LOSSLESS:
+    maximum_error = 0;
+    break;
+
+  case QuantizerFidelityControlMethod::ABSOLUTE_ONLY:
+    maximum_error = (*absolute_error_limits)(y, z);
+    break;
+
+  case QuantizerFidelityControlMethod::RELATIVE_ONLY:
+    maximum_error = (*relative_error_limits)(y, z) * predicted_sample_value / image_constants.attr("dynamic_range").cast<int>();
+    break;
+
+  case QuantizerFidelityControlMethod::ABSOLUTE_AND_RELATIVE:
+    maximum_error = std::min((*absolute_error_limits)(y, z), (*relative_error_limits)(y, z) * predicted_sample_value / image_constants.attr("dynamic_range").cast<int>());
+    break;
+  }
+
+  return maximum_error;
 }

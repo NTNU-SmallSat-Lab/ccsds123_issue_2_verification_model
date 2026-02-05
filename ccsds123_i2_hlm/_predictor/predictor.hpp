@@ -45,10 +45,10 @@ private:
       return t;
     }
 
-    template <typename... Args>
-    data_t operator()(Args &&...pos) { return (*_arr)(std::forward<Args>(pos)...); }
-
     NumpyArr<data_t> get_arr() { return arr; }
+
+    template <typename... Args>
+    decltype(auto) operator()(Args &&...pos) { return (*_arr)(std::forward<Args>(pos)...); }
 
     bool enable_sampling;
 
@@ -72,6 +72,7 @@ private:
   Sampler<long, 3> *drpsvsmpl; // double resolution predicted sample value
   Sampler<long, 3> *psvsmpl;   // predicted sample value
   Sampler<long, 3> *prsmpl;    // prediction residual
+  Sampler<long, 3> *mevsmpl;   // maximum error value
 
   // these are samplers that need to store their values no matter what
   Sampler<long, 3> *mqismpl; // mapped quantizer indices
@@ -95,8 +96,8 @@ private:
 
   long register_size; // Symbol: R
 
-  long absolute_error_limit; // Symbol: a_z
-  long relative_error_limit; // Symbol: r_z
+  Sampler<long, 2> *absolute_error_limits; // Symbol: a_z
+  Sampler<long, 2> *relative_error_limits; // Symbol: r_z
 
   /******************** Private methods ********************/
 
@@ -110,4 +111,5 @@ private:
   long calc_double_resolution_predicted_sample_value(long x, long y, long z, long high_resolution_pred_sample_value);
   long calc_predicted_sample_value(long double_resolution_predicted_sample_value);
   long calc_prediction_residual(long sample, long predicted_sample_value);
+  long calc_maximum_error(long y, long z, long predicted_sample_value);
 };

@@ -5,6 +5,7 @@ from . import hybrid_encoder as hyb_enc
 from . import ba_encoder as ba_enc
 
 # from . import predictor_old as pred
+
 from . import _predictor as pred
 import numpy as np
 import time
@@ -127,6 +128,7 @@ class CCSDS123:
             self.header, self.image_constants, self.image_sample
         )
         predictor_output = self.predictor.compress()
+        # self.predictor.run_predictor()
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
         # if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
