@@ -117,13 +117,17 @@ NumpyArr<long> Predictor::compress()
         // double resolution prediction error
         long double_resolution_prediction_error = drpesmpl->sample(calc_double_resolution_prediction_error(clipped_quantizer_bin_center, double_resolution_predicted_sample_value), x, y, z);
 
-        // weight update scaling exponent ?
+        // weight update scaling exponent
         // weight update offset
         // weight update
 
         // theta
-        // mapped quantizer index
+        long theta = tsmpl->sample(calc_theta(t, predicted_sample_value, maximum_error), x, y, z);
 
+        // mapped quantizer index
+        mqismpl->sample(calc_mapped_quantizer_index(quantizer_index, theta, double_resolution_predicted_sample_value), x, y, z);
+
+        // for local difference calculation
         prev_local_sum = local_sum;
       }
     }
@@ -172,6 +176,9 @@ void Predictor::save_data(std::string output_folder)
 
   if (srsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-12-sample_representative.csv", srsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
+  if (tsmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-18-scaled_prediction_endpoint_difference.csv", tsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
   if (mevsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-22-maximum_error.csv", mevsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
@@ -270,6 +277,8 @@ void Predictor::init_predictor_arrays()
   drsrsmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // double resolution sample representative
   srsmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // sample representative
   drpesmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // double resolution prediction error
+  tsmpl = new Sampler<long, 3>(image_shape, save_intermediates);     // scaled prediction endpoint difference (theta)
+  mqismpl = new Sampler<long, 3>(image_shape, save_intermediates);   // mapped quantizer index
 
   // these must be stored as they are accessed during execution
   mqismpl = new Sampler<long, 3>(image_shape);                   // mapped quantizer indices
@@ -544,4 +553,35 @@ long Predictor::calc_sample_representative(long x, long y, long z, long clipped_
 long Predictor::calc_double_resolution_prediction_error(long clipped_quantizer_bin_center, long double_resolution_predicted_sample_value)
 {
   return 2 * clipped_quantizer_bin_center - double_resolution_predicted_sample_value;
+}
+
+long Predictor::calc_theta(long t, long predicted_sample_value, long maximum_error)
+{
+  long sMin = image_constants.attr("lower_sample_limit").cast<int>();
+  long sMax = image_constants.attr("upper_sample_limit").cast<int>();
+
+  if (t == 0)
+    return std::min(predicted_sample_value - sMin, sMax - predicted_sample_value);
+
+  long denominator = 2 * maximum_error + 1;
+
+  return std::min((predicted_sample_value - sMin + maximum_error) / denominator, (sMax - predicted_sample_value + maximum_error) / denominator);
+}
+
+long Predictor::calc_mapped_quantizer_index(long quantizer_index, long theta, long double_resolution_predicted_sample_value)
+{
+  long term = std::pow(-1, double_resolution_predicted_sample_value % 2) * quantizer_index;
+
+  if (std::abs(quantizer_index) > theta)
+  {
+    return std::abs(quantizer_index) + theta;
+  }
+  else if (0 <= term && term <= theta)
+  {
+    return 2 * std::abs(quantizer_index);
+  }
+  else
+  {
+    return 2 * quantizer_index - 2;
+  }
 }
