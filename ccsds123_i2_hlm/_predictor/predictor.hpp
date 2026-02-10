@@ -27,13 +27,14 @@ private:
   class Sampler
   {
   public:
-    Sampler(std::array<ssize_t, dims_t> dimensions, bool enable_sampling = true)
+    Sampler(std::array<ssize_t, dims_t> dimensions, data_t value, bool enable_sampling = true)
         : enable_sampling(enable_sampling)
     {
       if (!enable_sampling)
         return;
       // allocate sampler array
       arr = NumpyArr<data_t>(dimensions);
+      std::memset(arr.mutable_data(), value, arr.nbytes());
       _arr.emplace(arr.template mutable_unchecked<dims_t>());
     }
 
@@ -93,13 +94,13 @@ private:
 
   long local_difference_values_num;
 
-  long weight_component_resolution;     // Symbol: Omega
-  long weight_update_change_interval;   // Symbol: t_inc
-  long weight_update_initial_parameter; // Symbol: nu_min
-  long weight_update_final_parameter;   // Symbol: nu_max
-  long weight_exponent_offset;          // Symbol: sigma (in word-final position)
-  long weight_min;                      // Symbol: omega_min
-  long weight_max;                      // Symbol: omega_max
+  long weight_component_resolution;         // Symbol: Omega
+  long weight_update_change_interval;       // Symbol: t_inc
+  long weight_update_initial_parameter;     // Symbol: nu_min
+  long weight_update_final_parameter;       // Symbol: nu_max
+  long weight_min;                          // Symbol: omega_min
+  long weight_max;                          // Symbol: omega_max
+  Sampler<long, 2> *weight_exponent_offset; // Symbol: Sigma
 
   long register_size; // Symbol: R
 
@@ -110,6 +111,7 @@ private:
 
   void init_predictor_constants();
   void init_predictor_arrays();
+  void init_weights();
 
   long calc_local_sum(long x, long y, long z);
   std::vector<long> calc_local_difference_vector(long x, long y, long z, long local_sum, long prev_local_sum);
@@ -126,4 +128,6 @@ private:
   long calc_double_resolution_prediction_error(long clipped_quantizer_bin_center, long double_resolution_predicted_sample_value);
   long calc_theta(long t, long predicted_sample_value, long maximum_error);
   long calc_mapped_quantizer_index(long quantizer_index, long theta, long double_resolution_predicted_sample_value);
+  long calc_weight_update(long x, long y, long z, long t, long double_resolution_prediction_error);
+  std::vector<long> calc_weight_vector();
 };

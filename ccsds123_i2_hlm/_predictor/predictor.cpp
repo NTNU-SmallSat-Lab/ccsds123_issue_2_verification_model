@@ -7,10 +7,10 @@
 #include <numeric>
 
 #define SPECTRAL_BANDS_USED(z) std::min(z, header.attr("prediction_bands_num").cast<long>()) // symbol P^*
-#define WEIGHT_UPDATE_SCALING_EXPONENT(t) std::clamp(weight_update_initial_parameter + x_size.cast<long>()) / weight_update_change_interval, \
-                                                     weight_update_initial_parameter,                                                                            \
-                                                     weight_update_final_parameter)                                                                              \
-                                              + image_constants.attr("dynamic_range_bits").cast<long>()                                                          \
+#define WEIGHT_UPDATE_SCALING_EXPONENT(t) std::clamp((weight_update_initial_parameter + x_size) / weight_update_change_interval, \
+                                                     weight_update_initial_parameter,                                            \
+                                                     weight_update_final_parameter)                                              \
+                                              + image_constants.attr("dynamic_range_bits").cast<long>()                          \
                                               - weight_component_resolution
 
 /******************** Utils ********************/
@@ -63,6 +63,7 @@ Predictor::Predictor(py::object header, py::object image_constants, NumpyArr<lon
 
 NumpyArr<long> Predictor::compress()
 {
+  std::cout << "Compressing image..." << std::endl;
   // tranversing in BIP order
   for (int y = 0; y < y_size; y++)
   {
@@ -70,64 +71,43 @@ NumpyArr<long> Predictor::compress()
     for (int x = 0; x < x_size; x++)
     {
       int t = x + y * x_size;
-      long prev_local_sum; // local sum of previous band
+      long prev_local_sum; // local sum of previous band for local difference calculation
       for (int z = 0; z < z_size; z++)
       {
         if (t == 0)
           continue;
 
-        // local sum
+        // local sum and difference
         long local_sum = lssmpl->sample(calc_local_sum(y, x, z), x, y, z);
-
-        // local difference vector
         auto local_difference_vector = calc_local_difference_vector(x, y, z, local_sum, prev_local_sum);
         for (int i = 0; i < local_difference_vector.size(); i++)
           ldvsmpl->sample(local_difference_vector.at(i), y, x, z, i);
-
-        // predicted central local difference
         long predicted_central_local_diff = pcdsmpl->sample(calc_predicted_central_local_diff(x, y, z), x, y, z);
 
-        // high resolution predicted sample value
+        // prediction calculation
         long high_resolution_pred_sample_value = hrpsvsmpl->sample(calc_high_resolution_pred_sample_value(x, y, z, local_sum, predicted_central_local_diff), x, y, z);
-
-        // double resolution predicted sample value
         long double_resolution_predicted_sample_value = drpsvsmpl->sample(calc_double_resolution_predicted_sample_value(x, y, z, high_resolution_pred_sample_value), x, y, z);
-
-        // predicted sample value
         long predicted_sample_value = psvsmpl->sample(calc_predicted_sample_value(double_resolution_predicted_sample_value), x, y, z);
 
-        // prediction residual
+        // quantization
         long prediction_residual = prsmpl->sample(calc_prediction_residual(_image_sample(y, x, z), predicted_sample_value), x, y, z);
-
-        // max error value
         long maximum_error = mevsmpl->sample(calc_maximum_error(y, z, predicted_sample_value), x, y, z);
-
-        // quantizer index
         long quantizer_index = qismpl->sample(calc_quantizer_index(t, maximum_error, prediction_residual), x, y, z);
-
-        // clippped quantizer bin center
         long clipped_quantizer_bin_center = cqbcsmpl->sample(calc_clipped_quantizer_bin_center(x, y, z, predicted_sample_value, maximum_error, quantizer_index), x, y, z);
 
-        // double resolution sample representative
+        // sample representatives
         long double_resolution_sample_representative = drsrsmpl->sample(calc_double_resolution_sample_representative(z, clipped_quantizer_bin_center, quantizer_index, maximum_error, high_resolution_pred_sample_value), x, y, z);
-
-        // sample representative
         long sample_representative = srsmpl->sample(calc_sample_representative(x, y, z, clipped_quantizer_bin_center, double_resolution_sample_representative), x, y, z);
-
-        // double resolution prediction error
         long double_resolution_prediction_error = drpesmpl->sample(calc_double_resolution_prediction_error(clipped_quantizer_bin_center, double_resolution_predicted_sample_value), x, y, z);
 
         // weight update scaling exponent
         // weight update offset
         // weight update
 
-        // theta
+        // mapping
         long theta = tsmpl->sample(calc_theta(t, predicted_sample_value, maximum_error), x, y, z);
-
-        // mapped quantizer index
         mqismpl->sample(calc_mapped_quantizer_index(quantizer_index, theta, double_resolution_predicted_sample_value), x, y, z);
 
-        // for local difference calculation
         prev_local_sum = local_sum;
       }
     }
@@ -185,7 +165,7 @@ void Predictor::save_data(std::string output_folder)
 
   // always saved
   savetxt(output_folder + "/predictor-01-local_difference_vector.csv", ldvsmpl->get_arr().reshape(csv_vector_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
-  savetxt(output_folder + "/predictor-02-weight_vectors.csv", wvsmpl->get_arr().reshape(csv_vector_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+  savetxt(output_folder + "/predictor-02-weight_vector.csv", wvsmpl->get_arr().reshape(csv_vector_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
   savetxt(output_folder + "/predictor-12-sample_representative.csv", repsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
   savetxt(output_folder + "/predictor-14-mapped_quantizer_index.csv", mqismpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
   savetxt(output_folder + "/predictor-20-absolute_error_limits.csv", absolute_error_limits->get_arr(), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
@@ -204,6 +184,16 @@ void Predictor::init_predictor_constants()
   weight_update_change_interval = (1 << header.attr("weight_update_change_interval").cast<long>()) + 4;
   weight_update_initial_parameter = header.attr("weight_update_initial_parameter").cast<long>() - 6;
   weight_update_final_parameter = header.attr("weight_update_final_parameter").cast<long>() - 6;
+
+  weight_exponent_offset = new Sampler<long, 2>({z_size, local_difference_values_num}, true);
+
+  // fill weight exponent offset array
+  if (local_difference_values_num > 0)
+  {
+  }
+
+  weight_min = -(1 << (weight_component_resolution + 2));
+  weight_max = (1 << (weight_component_resolution + 2)) - 1;
 
   register_size = header.attr("register_size").cast<long>();
   if (register_size == 0)
@@ -265,26 +255,28 @@ void Predictor::init_predictor_arrays()
   std::array<ssize_t, 4> local_difference_vector_shape = {image_shape[0], image_shape[1], image_shape[2], local_difference_values_num};
 
   // these may be optionally not stored
-  lssmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // local sum
-  pcdsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // predicted central local difference
-  hrpsvsmpl = new Sampler<long, 3>(image_shape, save_intermediates); // high resolution predictied sample value
-  drpsvsmpl = new Sampler<long, 3>(image_shape, save_intermediates); // double resolution predicted sample value
-  psvsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // predicted sample value
-  prsmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // prediction residual
-  mevsmpl = new Sampler<long, 3>(image_shape, save_intermediates);   // maximum error value
-  qismpl = new Sampler<long, 3>(image_shape, save_intermediates);    // quantizer index
-  cqbcsmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // clipped quantizer bin center
-  drsrsmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // double resolution sample representative
-  srsmpl = new Sampler<long, 3>(image_shape, save_intermediates);    // sample representative
-  drpesmpl = new Sampler<long, 3>(image_shape, save_intermediates);  // double resolution prediction error
-  tsmpl = new Sampler<long, 3>(image_shape, save_intermediates);     // scaled prediction endpoint difference (theta)
-  mqismpl = new Sampler<long, 3>(image_shape, save_intermediates);   // mapped quantizer index
+  lssmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);    // local sum
+  pcdsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);   // predicted central local difference
+  hrpsvsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates); // high resolution predictied sample value
+  drpsvsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates); // double resolution predicted sample value
+  psvsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);   // predicted sample value
+  prsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);    // prediction residual
+  mevsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);   // maximum error value
+  qismpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);    // quantizer index
+  cqbcsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);  // clipped quantizer bin center
+  drsrsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);  // double resolution sample representative
+  srsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);    // sample representative
+  drpesmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);  // double resolution prediction error
+  tsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);     // scaled prediction endpoint difference (theta)
+  mqismpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);   // mapped quantizer index
 
   // these must be stored as they are accessed during execution
-  mqismpl = new Sampler<long, 3>(image_shape);                   // mapped quantizer indices
-  repsmpl = new Sampler<long, 3>(image_shape);                   // sample representatives
-  ldvsmpl = new Sampler<long, 4>(local_difference_vector_shape); // local difference vectors
-  wvsmpl = new Sampler<long, 4>(local_difference_vector_shape);  // weight vectors
+  mqismpl = new Sampler<long, 3>(image_shape, -1);                  // mapped quantizer indices
+  repsmpl = new Sampler<long, 3>(image_shape, -1);                  // sample representatives
+  ldvsmpl = new Sampler<long, 4>(local_difference_vector_shape, 0); // local difference vectors
+  wvsmpl = new Sampler<long, 4>(local_difference_vector_shape, 0);  // weight vectors
+
+  init_weights(); // populate the initial weight values
 }
 
 long Predictor::calc_local_sum(long x, long y, long z)
@@ -584,4 +576,20 @@ long Predictor::calc_mapped_quantizer_index(long quantizer_index, long theta, lo
   {
     return 2 * quantizer_index - 2;
   }
+}
+
+void Predictor::init_weights()
+{
+  for (int z = 0; z < z_size; z++)
+    for (int i = 0; i < 3; i++)
+      ;
+}
+
+long Predictor::calc_weight_update(long x, long y, long z, long t, long double_resolution_prediction_error)
+{
+  long weight_update_scaling_exponent = WEIGHT_UPDATE_SCALING_EXPONENT(t);
+}
+
+std::vector<long> Predictor::calc_weight_vector()
+{
 }
