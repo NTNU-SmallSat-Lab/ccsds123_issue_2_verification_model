@@ -31,7 +31,7 @@ class Predictor:
     weight_exponent_offset = None  # Symbol: sigma (in word-final position)
     weight_min = None  # Symbol: omega_min
     weight_max = None  # Symbol: omega_max
-    weight_update_frequncy = 4  # weight update frequency (1 or 4)
+    weight_update_frequncy = 1  # weight update frequency (1 or 4)
     refine_weights = False  # apply weight refinements when using reduced weight updates
 
     register_size = None  # Symbol: R

@@ -58,7 +58,7 @@ private:
     std::optional<_NumpyArr<data_t, dims_t>> _arr;
   };
 
-  /******************** Read only arrays ********************/
+  /******************** From constructor ********************/
 
   py::object header;
   py::object image_constants;
@@ -66,7 +66,7 @@ private:
 
   /******************** Samplers ********************/
 
-  // samplers used for longermediate values that can optionally be stored and exported
+  // samplers used for intermediate values that can optionally be stored and exported
   Sampler<long, 3> *lssmpl;    // local sums
   Sampler<long, 3> *pcdsmpl;   // predicted central local difference
   Sampler<long, 3> *hrpsvsmpl; // high resolution predictied sample value
@@ -77,13 +77,12 @@ private:
   Sampler<long, 3> *qismpl;    // quantizer index
   Sampler<long, 3> *cqbcsmpl;  // clipped quantizer bin center
   Sampler<long, 3> *drsrsmpl;  // double resolution sample representative
-  Sampler<long, 3> *srsmpl;    // sample representative
   Sampler<long, 3> *drpesmpl;  // double resolution prediction error
   Sampler<long, 3> *tsmpl;     // scaled prediction endpoint difference (theta)
 
   // these are samplers that need to store their values no matter what
   Sampler<long, 3> *mqismpl; // mapped quantizer indices
-  Sampler<long, 3> *repsmpl; // sample representatives
+  Sampler<long, 3> *srsmpl;  // sample representative
   Sampler<long, 4> *ldvsmpl; // local difference vectors
   Sampler<long, 4> *wvsmpl;  // weight vectors
 
