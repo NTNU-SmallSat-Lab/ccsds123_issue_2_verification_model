@@ -42,6 +42,13 @@ static inline long sgn(long value)
   return 0;
 }
 
+static inline long sgn_positive(long value)
+{
+  if (value >= 0)
+    return 1;
+  return -1;
+}
+
 /******************** Constructor ********************/
 
 Predictor::Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample, bool save_intermediates)
@@ -75,7 +82,23 @@ NumpyArr<long> Predictor::compress()
       for (int z = 0; z < z_size; z++)
       {
         if (t == 0)
+        {
+          long double_resolution_predicted_sample_value = drpsvsmpl->sample(calc_double_resolution_predicted_sample_value(0, 0, z, 0), 0, 0, z);
+          long predicted_sample_value = psvsmpl->sample(calc_predicted_sample_value(double_resolution_predicted_sample_value), x, y, z);
+
+          long prediction_residual = prsmpl->sample(calc_prediction_residual(_image_sample(0, 0, z), predicted_sample_value), 0, 0, z);
+          long quantizer_index = qismpl->sample(calc_quantizer_index(0, 0, prediction_residual), 0, 0, z);
+
+          long clipped_quantizer_bin_center = cqbcsmpl->sample(calc_clipped_quantizer_bin_center(0, 0, z, predicted_sample_value, 0, quantizer_index), 0, 0, z);
+          srsmpl->sample(calc_sample_representative(0, 0, z, clipped_quantizer_bin_center, 0), 0, 0, z);
+
+          long theta = tsmpl->sample(calc_theta(0, predicted_sample_value, 0), 0, 0, z);
+          mqismpl->sample(calc_mapped_quantizer_index(quantizer_index, theta, double_resolution_predicted_sample_value), 0, 0, z);
+
+          mevsmpl->sample(calc_maximum_error(0, z, predicted_sample_value), 0, 0, z);
+
           continue;
+        }
 
         // local sum and difference
         long local_sum = lssmpl->sample(calc_local_sum(y, x, z), x, y, z);
@@ -97,12 +120,13 @@ NumpyArr<long> Predictor::compress()
 
         // sample representatives
         long double_resolution_sample_representative = drsrsmpl->sample(calc_double_resolution_sample_representative(z, clipped_quantizer_bin_center, quantizer_index, maximum_error, high_resolution_pred_sample_value), x, y, z);
-        long sample_representative = srsmpl->sample(calc_sample_representative(x, y, z, clipped_quantizer_bin_center, double_resolution_sample_representative), x, y, z);
+        srsmpl->sample(calc_sample_representative(x, y, z, clipped_quantizer_bin_center, double_resolution_sample_representative), x, y, z);
         long double_resolution_prediction_error = drpesmpl->sample(calc_double_resolution_prediction_error(clipped_quantizer_bin_center, double_resolution_predicted_sample_value), x, y, z);
 
-        // weight update scaling exponent
-        // weight update offset
         // weight update
+        auto updated_weight_vector = calc_weight_vector(x, y, z, double_resolution_prediction_error);
+        for (int i = 0; i < updated_weight_vector.size(); i++)
+          wvsmpl->sample(updated_weight_vector.at(i), y, x, z, i);
 
         // mapping
         long theta = tsmpl->sample(calc_theta(t, predicted_sample_value, maximum_error), x, y, z);
@@ -608,11 +632,35 @@ void Predictor::init_weights()
   }
 }
 
-long Predictor::calc_weight_update(long x, long y, long z, long t, long double_resolution_prediction_error)
+long calc_weight_offset(long local_diff, long weight_update_scaling_exponent, long weight_exponent_offset, long double_resolution_prediction_error)
 {
-  long weight_update_scaling_exponent = WEIGHT_UPDATE_SCALING_EXPONENT(t);
+  long exponent = weight_update_scaling_exponent + weight_exponent_offset;
+  if (exponent > 0)
+    return ((((sgn_positive(double_resolution_prediction_error) * local_diff) >> exponent) + 1) >> 1);
+  else
+    return ((((sgn_positive(double_resolution_prediction_error) * local_diff) << (-exponent)) + 1) >> 1);
 }
 
-std::vector<long> Predictor::calc_weight_vector()
+std::vector<long> Predictor::calc_weight_vector(long x, long y, long z, long double_resolution_prediction_error)
 {
+  if (x == 0 && y == 0)
+    throw std::invalid_argument("weight vector not defined for t=0");
+
+  long t = x + y * x_size;
+  long weight_update_scaling_exponent = WEIGHT_UPDATE_SCALING_EXPONENT(t);
+
+  // calculates weight vector for t+1
+  std::vector<long> weight_vector(local_difference_values_num);
+
+  for (int i = 0; i < weight_vector.size(); i++)
+  {
+    long local_diff = (*ldvsmpl)(y, x, z, i);
+    long weo = (*weight_exponent_offset)(z, i);
+
+    long weight_unclipped = (*wvsmpl)(y, x, z, i) + calc_weight_offset(local_diff, weight_update_scaling_exponent, weo, double_resolution_prediction_error);
+
+    weight_vector.at(i) = std::clamp(weight_unclipped, weight_min, weight_max);
+  }
+
+  return weight_vector;
 }

@@ -128,6 +128,5 @@ private:
   long calc_double_resolution_prediction_error(long clipped_quantizer_bin_center, long double_resolution_predicted_sample_value);
   long calc_theta(long t, long predicted_sample_value, long maximum_error);
   long calc_mapped_quantizer_index(long quantizer_index, long theta, long double_resolution_predicted_sample_value);
-  long calc_weight_update(long x, long y, long z, long t, long double_resolution_prediction_error);
-  std::vector<long> calc_weight_vector();
+  std::vector<long> calc_weight_vector(long x, long y, long z, long double_resolution_prediction_error);
 };

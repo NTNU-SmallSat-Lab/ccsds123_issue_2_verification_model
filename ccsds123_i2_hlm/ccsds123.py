@@ -3,10 +3,9 @@ from . import constants as const
 from . import sa_encoder as sa_enc
 from . import hybrid_encoder as hyb_enc
 from . import ba_encoder as ba_enc
-
-# from . import predictor_old as pred
-
+from . import predictor_old as pred_old
 from . import _predictor as pred
+
 import numpy as np
 import time
 from pathlib import Path
@@ -128,9 +127,18 @@ class CCSDS123:
         self.predictor = pred.Predictor(
             self.header, self.image_constants, self.image_sample, save_intermediates
         )
-        predictor_output = self.predictor.compress()
-        # self.predictor.run_predictor()
-        print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
+
+        self.predictor_old = pred_old.Predictor(
+            self.header, self.image_constants, self.image_sample
+        )
+
+        print("RUNNING NEW PREDICTOR")
+        self.predictor.compress()
+
+        print("RUNNING OLD PREDICTOR")
+        self.predictor_old.run_predictor()
+
+        # print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
         # if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
         #     self.encoder = sa_enc.SampleAdaptiveEncoder(
@@ -151,8 +159,12 @@ class CCSDS123:
         # print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
         #
         # self.header.save_data(self.output_folder)
+
         self.predictor.save_data(self.output_folder)
+        self.predictor_old.save_data("output_old")
+
         # self.encoder.save_data(
         #     self.output_folder, self.header.get_header_bitstreams()[0]
         # )
-        print(f"{time.time() - start_time:.3f} seconds. Done with saving")
+
+        # print(f"{time.time() - start_time:.3f} seconds. Done with saving")
