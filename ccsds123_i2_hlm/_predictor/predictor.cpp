@@ -580,9 +580,32 @@ long Predictor::calc_mapped_quantizer_index(long quantizer_index, long theta, lo
 
 void Predictor::init_weights()
 {
-  for (int z = 0; z < z_size; z++)
-    for (int i = 0; i < 3; i++)
-      ;
+  // t = 1
+  int x = 1;
+  int y = 0;
+
+  if (cast_enum<WeightInitMethod>(header.attr("weight_init_method")) == WeightInitMethod::DEFAULT)
+  {
+    int offset = 0;
+
+    if (cast_enum<PredictionMode>(header.attr("prediction_mode")) == PredictionMode::FULL)
+      offset += 3; // N, W and NW are already zero initialized
+
+    for (long z = 1; z < z_size; z++)
+    {
+      if (SPECTRAL_BANDS_USED(z) == 0)
+        continue;
+
+      (*wvsmpl)(y, x, z, offset) = (1 << weight_component_resolution) * 7 / 8;
+
+      for (int i = 1; i < SPECTRAL_BANDS_USED(z); i++)
+        (*wvsmpl)(y, x, z, offset + i) = (*wvsmpl)(y, x, z, offset + i - 1) / 8;
+    }
+  }
+  else
+  {
+    // TODO: custom weight init
+  }
 }
 
 long Predictor::calc_weight_update(long x, long y, long z, long t, long double_resolution_prediction_error)

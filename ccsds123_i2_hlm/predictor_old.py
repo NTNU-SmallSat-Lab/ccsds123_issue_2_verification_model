@@ -346,9 +346,6 @@ class Predictor:
                     self.weight_vector[y, x, z, offset + i] = (
                         self.weight_vector[y, x, z, offset + i - 1] // 8
                     )
-                # print(
-                #     f"Init weight vector for z={z},x={x},y={y}: {self.weight_vector[y,x,z,:]}"
-                # )
         else:
             self.weight_vector[y, x, z] = 2 ** (
                 self.weight_component_resolution
