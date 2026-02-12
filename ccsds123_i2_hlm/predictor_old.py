@@ -41,6 +41,8 @@ class Predictor:
 
     def __init_predictor_constants(self):
         self.local_difference_values_num = self.header.prediction_bands_num
+        assert self.local_difference_values_num < self.header.z_size
+
         if self.header.prediction_mode == hd.PredictionMode.FULL:
             self.local_difference_values_num += 3
 
@@ -700,8 +702,6 @@ class Predictor:
                     self.__calculate_mapped_quantizer_index(x, y, z, t)
         print("")
 
-    def get_predictor_output(self):
-        """Return the outputs of the predictor for the loaded image. The mapped quantizer index."""
         return self.mapped_quantizer_index
 
     def save_data(self, output_folder):

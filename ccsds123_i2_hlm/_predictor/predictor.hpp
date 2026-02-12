@@ -1,9 +1,12 @@
 #pragma once
 
+#include <cassert>
 #include <iostream>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <vector>
+
+// #define DEBUG 1 // adds significatn execution time
 
 namespace py = pybind11;
 
@@ -17,6 +20,7 @@ class Predictor
 {
 public:
   Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample, bool save_intermediates = false);
+  ~Predictor();
   NumpyArr<long> compress();
   void save_data(std::string output_folder);
 
@@ -35,27 +39,63 @@ private:
       // allocate sampler array
       arr = NumpyArr<data_t>(dimensions);
       std::memset(arr.mutable_data(), value, arr.nbytes());
-      _arr.emplace(arr.template mutable_unchecked<dims_t>());
     }
 
     template <typename... Args>
     data_t sample(data_t t, Args &&...pos)
     {
       if (enable_sampling)
-        (*_arr)(std::forward<Args>(pos)...) = t;
+        arr.template mutable_unchecked<dims_t>()(std::forward<Args>(pos)...) = t;
+
+#ifdef DEBUG
+      if (!reference.nbytes()) // this check adds quite a lot of time
+        return t;
+
+      if (t == reference.template unchecked<dims_t>()(std::forward<Args>(pos)...))
+        return t;
+
+      std::cout << "\n'" << reference_file << "' mismatch position: ";
+      ((std::cout << pos << " "), ...);
+      std::cout << std::endl;
+      throw std::runtime_error("result mismatch");
+#endif // DEBUG
       return t;
     }
+
+#ifdef DEBUG
+    // allows easy identification of coordinates of deviating values compared to reference
+    void set_reference(std::string file_path)
+    {
+      if (!enable_sampling)
+        return;
+
+      py::module_ np = py::module_::import("numpy");
+      py::object loaded = np.attr("loadtxt")(file_path, py::arg("delimiter") = std::string(1, ','), py::arg("dtype") = py::dtype::of<data_t>());
+
+      py::tuple shape(dims_t);
+      for (ssize_t i = 0; i < dims_t; ++i)
+        shape[i] = arr.shape(i);
+      py::object reshaped = loaded.attr("reshape")(shape);
+
+      reference = reshaped.cast<NumpyArr<data_t>>();
+      reference_file = file_path;
+    }
+#endif // DEBUG
 
     NumpyArr<data_t> get_arr() { return arr; }
 
     template <typename... Args>
-    decltype(auto) operator()(Args &&...pos) { return (*_arr)(std::forward<Args>(pos)...); }
+    decltype(auto) operator()(Args &&...pos) { return arr.template mutable_unchecked<dims_t>()(std::forward<Args>(pos)...); }
 
     bool enable_sampling;
 
   private:
     NumpyArr<data_t> arr;
-    std::optional<_NumpyArr<data_t, dims_t>> _arr;
+    NumpyArr<data_t> reference;
+
+#ifdef DEBUG
+    std::string reference_file;
+#endif // DEBUG
   };
 
   /******************** From constructor ********************/

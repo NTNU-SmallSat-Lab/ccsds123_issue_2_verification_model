@@ -7,11 +7,6 @@
 #include <numeric>
 
 #define SPECTRAL_BANDS_USED(z) std::min(z, header.attr("prediction_bands_num").cast<long>()) // symbol P^*
-#define WEIGHT_UPDATE_SCALING_EXPONENT(t) std::clamp(weight_update_initial_parameter + (t - x_size) / weight_update_change_interval, \
-                                                     weight_update_initial_parameter,                                                \
-                                                     weight_update_final_parameter)                                                  \
-                                              + image_constants.attr("dynamic_range_bits").cast<long>()                              \
-                                              - weight_component_resolution
 
 /******************** Utils ********************/
 
@@ -49,21 +44,28 @@ static inline long sgn_positive(long value)
   return -1;
 }
 
-/******************** Constructor ********************/
+/******************** (de)Constructor ********************/
 
 Predictor::Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample, bool save_intermediates)
     : header(header),
       image_constants(image_constants),
       _image_sample(image_sample.mutable_unchecked<3>()), // cast to three dimensional array
       save_intermediates(save_intermediates)
-
 {
   x_size = header.attr("x_size").cast<long>();
   y_size = header.attr("y_size").cast<long>();
   z_size = header.attr("z_size").cast<long>();
 
+#ifdef DEBUG
+  save_intermediates = true;
+#endif
+
   init_predictor_constants();
   init_predictor_arrays();
+}
+
+Predictor::~Predictor()
+{
 }
 
 /******************** Public ********************/
@@ -72,7 +74,7 @@ NumpyArr<long> Predictor::compress()
 {
   std::cout << "Compressing image..." << std::endl;
 
-  long t_max = x_size * z_size - 1;
+  long t_max = x_size * y_size - 1;
 
   // tranversing in BIP order
   for (int y = 0; y < y_size; y++)
@@ -129,14 +131,19 @@ NumpyArr<long> Predictor::compress()
         long theta = tsmpl->sample(calc_theta(t, predicted_sample_value, maximum_error), y, x, z);
         mqismpl->sample(calc_mapped_quantizer_index(quantizer_index, theta, double_resolution_predicted_sample_value), y, x, z);
 
+        prev_local_sum = local_sum;
+
+        if (t == t_max)
+          continue;
+
         // weight update
         long x_weight_update = (t + 1) % x_size;
         long y_weight_update = (t + 1) / x_size;
+        assert(x_weight_update < x_size && y_weight_update < y_size);
+
         auto updated_weight_vector = calc_weight_vector(x, y, z, double_resolution_prediction_error);
         for (int i = 0; i < updated_weight_vector.size(); i++) // sets weights for t+1
           wvsmpl->sample(updated_weight_vector.at(i), y_weight_update, x_weight_update, z, i);
-
-        prev_local_sum = local_sum;
       }
     }
   }
@@ -182,6 +189,9 @@ void Predictor::save_data(std::string output_folder)
   if (drsrsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-11-double_resolution_sample_representative.csv", drsrsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
+  if (drpesmpl->enable_sampling)
+    savetxt(output_folder + "/predictor-13-double_resolution_prediction_error.csv", drpesmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
+
   if (srsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-12-sample_representative.csv", srsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
@@ -205,19 +215,37 @@ void Predictor::save_data(std::string output_folder)
 void Predictor::init_predictor_constants()
 {
   local_difference_values_num = header.attr("prediction_bands_num").cast<long>();
+  assert(local_difference_values_num < z_size && "Prediction bands (P) must be less than number of bands");
+
   if (cast_enum<PredictionMode>(header.attr("prediction_mode")) == PredictionMode::FULL)
     local_difference_values_num += 3;
 
   weight_component_resolution = header.attr("weight_component_resolution").cast<long>() + 4;
-  weight_update_change_interval = (1 << header.attr("weight_update_change_interval").cast<long>()) + 4;
+  weight_update_change_interval = 1 << (header.attr("weight_update_change_interval").cast<long>() + 4);
   weight_update_initial_parameter = header.attr("weight_update_initial_parameter").cast<long>() - 6;
   weight_update_final_parameter = header.attr("weight_update_final_parameter").cast<long>() - 6;
 
-  weight_exponent_offset = new Sampler<long, 2>({z_size, local_difference_values_num}, true);
+  weight_exponent_offset = new Sampler<long, 2>({z_size, local_difference_values_num}, 0, true);
 
   // fill weight exponent offset array
-  if (local_difference_values_num > 0)
+  bool not_all_zero = cast_enum<WeightExponentOffsetFlag>(header.attr("weight_exponent_offset_flag")) == WeightExponentOffsetFlag::NOT_ALL_ZERO;
+  if (local_difference_values_num > 0 && not_all_zero)
   {
+    PredictionMode mode = cast_enum<PredictionMode>(header.attr("prediction_mode"));
+    auto weight_exopnent_offset_table = header.attr("weight_exopnent_offset_table").cast<NumpyArr<long>>().unchecked<2>();
+
+    if (mode == PredictionMode::FULL)
+    {
+      for (int z = 0; z < z_size; z++)
+      {
+        for (int i = 0; i < 3; i++)
+          (*weight_exponent_offset)(z, i) = weight_exopnent_offset_table(z, 0);
+        // TODO: complete this!
+      }
+    }
+    else if (mode == PredictionMode::REDUCED)
+    {
+    }
   }
 
   weight_min = -(1 << (weight_component_resolution + 2));
@@ -227,8 +255,8 @@ void Predictor::init_predictor_constants()
   if (register_size == 0)
     register_size = 64;
 
-  absolute_error_limits = new Sampler<long, 2>({y_size, z_size}, true);
-  relative_error_limits = new Sampler<long, 2>({y_size, z_size}, true);
+  absolute_error_limits = new Sampler<long, 2>({y_size, z_size}, -1, true);
+  relative_error_limits = new Sampler<long, 2>({y_size, z_size}, -1, true);
 
   QuantizerFidelityControlMethod fidelity_control = cast_enum<QuantizerFidelityControlMethod>(header.attr("quantizer_fidelity_control_method"));
   bool periodic_error_updating_used = cast_enum<PeriodicErrorUpdatingFlag>(header.attr("periodic_error_updating_flag")) == PeriodicErrorUpdatingFlag::USED;
@@ -295,7 +323,6 @@ void Predictor::init_predictor_arrays()
   drsrsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);  // double resolution sample representative
   drpesmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);  // double resolution prediction error
   tsmpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);     // scaled prediction endpoint difference (theta)
-  mqismpl = new Sampler<long, 3>(image_shape, -1, save_intermediates);   // mapped quantizer index
 
   // these must be stored as they are accessed during execution
   mqismpl = new Sampler<long, 3>(image_shape, -1);                  // mapped quantizer indices
@@ -304,6 +331,26 @@ void Predictor::init_predictor_arrays()
   wvsmpl = new Sampler<long, 4>(local_difference_vector_shape, 0);  // weight vectors
 
   init_weights(); // populate the initial weight values
+
+#ifdef DEBUG
+  // sorted in order they are calculated
+  lssmpl->set_reference("reference/predictor-00-local_sum.csv");                                   // 2 9 1
+  ldvsmpl->set_reference("reference/predictor-01-local_difference_vector.csv");                    // 1 9 2 0
+  pcdsmpl->set_reference("reference/predictor-03-predicted_central_local_difference.csv");         // 1 9 1
+  hrpsvsmpl->set_reference("reference/predictor-04-high_resolution_predicted_sample_value.csv");   // 1 9 1
+  drpsvsmpl->set_reference("reference/predictor-05-double_resolution_predicted_sample_value.csv"); // 1 9 1
+  psvsmpl->set_reference("reference/predictor-06-predicted_sample_value.csv");                     // 1 9 1
+  prsmpl->set_reference("reference/predictor-07-prediction_residual.csv");                         // 1 9 1
+  mevsmpl->set_reference("reference/predictor-22-maximum_error.csv");                              // 1 9 3
+  qismpl->set_reference("reference/predictor-09-quantizer_index.csv");                             // 1 9 1
+  cqbcsmpl->set_reference("reference/predictor-10-clipped_quantizer_bin_center.csv");              // 1 9 2
+  drsrsmpl->set_reference("reference/predictor-11-double_resolution_sample_representative.csv");   // 1 9 1
+  srsmpl->set_reference("reference/predictor-12-sample_representative.csv");                       // 1 9 1
+  drpesmpl->set_reference("reference/predictor-13-double_resolution_prediction_error.csv");        // 1 9 1
+  tsmpl->set_reference("reference/predictor-18-scaled_prediction_endpoint_difference.csv");        // 1 9 1
+  mqismpl->set_reference("reference/predictor-14-mapped_quantizer_index.csv");                     // 1 9 2
+  wvsmpl->set_reference("reference/predictor-02-weight_vector.csv");                               // 1 9 1 0 - note that this one calculates for t+1
+#endif                                                                                             // DEBUG
 }
 
 long Predictor::calc_local_sum(long x, long y, long z)
@@ -318,70 +365,42 @@ long Predictor::calc_local_sum(long x, long y, long z)
 
   case LocalSumType::WIDE_NEIGHBOR_ORIENTED:
     if (y > 0 && 0 < x && x < x_size - 1)
-    {
       local_sum = (*srsmpl)(y, x - 1, z) + (*srsmpl)(y - 1, x - 1, z) + (*srsmpl)(y - 1, x, z) + (*srsmpl)(y - 1, x + 1, z);
-    }
     else if (y == 0 && x > 0)
-    {
       local_sum = (*srsmpl)(y, x - 1, z) * 4;
-    }
     else if (y > 0 && x == 0)
-    {
       local_sum = ((*srsmpl)(y - 1, x, z) + (*srsmpl)(y - 1, x + 1, z)) * 2;
-    }
     else if (y > 0 && x == x_size - 1)
-    {
       local_sum = (*srsmpl)(y, x - 1, z) + (*srsmpl)(y - 1, x - 1, z) + (*srsmpl)(y - 1, x, z) * 2;
-    }
     break;
 
   case LocalSumType::NARROW_NEIGHBOR_ORIENTED:
     if (y > 0 && 0 < x && x < x_size - 1)
-    {
       local_sum = (*srsmpl)(y - 1, x - 1, z) + (*srsmpl)(y - 1, x, z) * 2 + (*srsmpl)(y - 1, x + 1, z);
-    }
     else if (y == 0 && x > 0 && z > 0)
-    {
       local_sum = (*srsmpl)(y, x - 1, z - 1) * 4;
-    }
     else if (y > 0 && x == 0)
-    {
       local_sum = ((*srsmpl)(y - 1, x, z) + (*srsmpl)(y - 1, x + 1, z)) * 2;
-    }
     else if (y > 0 && x == x_size - 1)
-    {
       local_sum = ((*srsmpl)(y - 1, x - 1, z) + (*srsmpl)(y - 1, x, z)) * 2;
-    }
     else if (y == 0 && x > 0 && z == 0)
-    {
       local_sum = image_constants.attr("middle_sample_value").cast<long>() * 4;
-    }
     break;
 
   case LocalSumType::WIDE_COLUMN_ORIENTED:
     if (y > 0)
-    {
       local_sum = (*srsmpl)(y - 1, x, z) * 4;
-    }
     else if (y == 0 && x > 0)
-    {
       local_sum = (*srsmpl)(y, x - 1, z) * 4;
-    }
     break;
 
   case LocalSumType::NARROW_COLUMN_ORIENTED:
     if (y > 0)
-    {
       local_sum = (*srsmpl)(y - 1, x, z) * 4;
-    }
     else if (y == 0 && x > 0 && z > 0)
-    {
       local_sum = (*srsmpl)(y, x - 1, z - 1) * 4;
-    }
     else if (y == 0 && x > 0 && z == 0)
-    {
       local_sum = image_constants.attr("middle_sample_value").cast<long>() * 4;
-    }
     break;
   }
   return local_sum;
@@ -418,12 +437,14 @@ std::vector<long> Predictor::calc_local_difference_vector(long x, long y, long z
   }
 
   if (z > 0 && SPECTRAL_BANDS_USED(z) > 0)
+  {
     // local difference of z-1
     local_difference_vector.push_back(4 * (*srsmpl)(y, x, z - 1) - prev_local_sum);
 
-  // copy local differences of previous vector
-  for (int i = 1; i < SPECTRAL_BANDS_USED(z); i++)
-    local_difference_vector.push_back((*ldvsmpl)(y, x, z - 1, offset + i - 1));
+    // copy local differences of previous vector
+    for (int i = 1; i < SPECTRAL_BANDS_USED(z); i++)
+      local_difference_vector.push_back((*ldvsmpl)(y, x, z - 1, offset + i - 1));
+  }
 
   return local_difference_vector;
 }
@@ -447,12 +468,12 @@ long Predictor::calc_high_resolution_pred_sample_value(long x, long y, long z, l
   if (x == 0 && y == 0)
     throw std::invalid_argument("high resolution predicted sample value not defined for t=0");
 
-  long sMin = image_constants.attr("lower_sample_limit").cast<int>();
-  long sMid = image_constants.attr("middle_sample_value").cast<int>();
-  long sMax = image_constants.attr("upper_sample_limit").cast<int>();
+  long sMin = image_constants.attr("lower_sample_limit").cast<long>();
+  long sMid = image_constants.attr("middle_sample_value").cast<long>();
+  long sMax = image_constants.attr("upper_sample_limit").cast<long>();
 
   long high_resolution_pred_sample_vaue = modulo_star(
-                                              (long)(predicted_central_local_diff + ((local_sum - (sMid << 2)) << weight_component_resolution)), register_size)
+                                              (predicted_central_local_diff + ((local_sum - (4 * sMid)) << weight_component_resolution)), register_size)
                                           + (sMid
                                              << (weight_component_resolution + 2))
                                           + (1 << (weight_component_resolution + 1));
@@ -463,19 +484,14 @@ long Predictor::calc_high_resolution_pred_sample_value(long x, long y, long z, l
 long Predictor::calc_double_resolution_predicted_sample_value(long x, long y, long z, long high_resolution_pred_sample_value)
 {
   long double_resolution_predicted_sample_value;
+  long P = header.attr("prediction_bands_num").cast<long>();
 
-  if ((x == 0 && y == 0) && header.attr("prediction_bands_num").cast<long>() > 0 && z > 0)
-  {
+  if ((x == 0 && y == 0) && P > 0 && z > 0)
     double_resolution_predicted_sample_value = 2 * _image_sample(y, x, z - 1);
-  }
-  else if (x == 0 && y == 0)
-  {
+  else if (x == 0 && y == 0 && (P == 0 || z == 0))
     double_resolution_predicted_sample_value = 2 * image_constants.attr("middle_sample_value").cast<int>();
-  }
-  else
-  {
+  else if (x != 0 || y != 0)
     double_resolution_predicted_sample_value = high_resolution_pred_sample_value >> (weight_component_resolution + 1);
-  }
 
   return double_resolution_predicted_sample_value;
 }
@@ -526,8 +542,8 @@ long Predictor::calc_quantizer_index(long t, long maximum_error, long prediction
 
 long Predictor::calc_clipped_quantizer_bin_center(long x, long y, long z, long predicted_sample_value, long maximum_error, long quantizer_index)
 {
-  long sMin = image_constants.attr("lower_sample_limit").cast<int>();
-  long sMax = image_constants.attr("upper_sample_limit").cast<int>();
+  long sMin = image_constants.attr("lower_sample_limit").cast<long>();
+  long sMax = image_constants.attr("upper_sample_limit").cast<long>();
 
   if (maximum_error == 0)
     return _image_sample(y, x, z);
@@ -537,22 +553,46 @@ long Predictor::calc_clipped_quantizer_bin_center(long x, long y, long z, long p
 
 long Predictor::calc_double_resolution_sample_representative(long z, long clipped_quantizer_bin_center, long quantizer_index, long maximum_error, long high_resolution_pred_sample_value)
 {
-  auto damping_table_array = header.attr("damping_table_array").cast<NumpyArr<long>>().unchecked<1>();
-  auto damping_offset_table_array = header.attr("damping_offset_table_array").cast<NumpyArr<long>>().unchecked<1>();
+  auto phi = header.attr("damping_table_array")
+                 .cast<NumpyArr<long>>()
+                 .unchecked<1>()(z);
 
-  long double_resolution_sample_representative;
+  auto psi = header.attr("damping_offset_table_array")
+                 .cast<NumpyArr<long>>()
+                 .unchecked<1>()(z);
 
-  if (damping_table_array(0) == 0 && damping_offset_table_array(0) == 0)
-  {
-    double_resolution_sample_representative = 2 * clipped_quantizer_bin_center;
-  }
-  else
-  {
-    int sample_representative_resolution = header.attr("sample_representative_resolution").cast<int>();
-    double_resolution_sample_representative = (4 * ((1 << sample_representative_resolution) - damping_table_array(z)) * (clipped_quantizer_bin_center * (1 << weight_component_resolution) - sgn(quantizer_index) * maximum_error * damping_offset_table_array(z) * (1 << (weight_component_resolution - sample_representative_resolution))) + damping_table_array(z) * high_resolution_pred_sample_value - damping_table_array(z) * (1 << (weight_component_resolution + 1))) / (1 << (weight_component_resolution + sample_representative_resolution + 1));
-  }
+  long Theta = header.attr("sample_representative_resolution").cast<long>();
+  long Omega = weight_component_resolution;
 
-  return double_resolution_sample_representative;
+  // Shortcut from spec
+  if (phi == 0 && psi == 0)
+    return 2 * clipped_quantizer_bin_center;
+
+  // Precompute powers of two
+  long two_Theta = 1L << Theta;
+  long two_Omega = 1L << Omega;
+  long two_Omega_minus_Theta = 1L << (Omega - Theta);
+  long two_Omega_plus_1 = 1L << (Omega + 1);
+  long denom = 1L << (Omega + Theta + 1);
+
+  // s′z(t) · 2^Ω
+  long term_signal = clipped_quantizer_bin_center * two_Omega;
+
+  // sgn(qz(t)) · mz(t) · ψz · 2^(Ω−Θ)
+  long term_error =
+      sgn(quantizer_index) * maximum_error * psi * two_Omega_minus_Theta;
+
+  // 4 · (2^Θ − φz)
+  long gain = 4 * (two_Theta - phi);
+
+  // Full numerator of Eq. (47)
+  long numerator =
+      gain * (term_signal - term_error)
+      + phi * high_resolution_pred_sample_value
+      - phi * two_Omega_plus_1;
+
+  // Divide by 2^(Ω+Θ+1)
+  return numerator / denom;
 }
 
 long Predictor::calc_sample_representative(long x, long y, long z, long clipped_quantizer_bin_center, long double_resolution_sample_representative)
@@ -576,8 +616,8 @@ long Predictor::calc_double_resolution_prediction_error(long clipped_quantizer_b
 
 long Predictor::calc_theta(long t, long predicted_sample_value, long maximum_error)
 {
-  long sMin = image_constants.attr("lower_sample_limit").cast<int>();
-  long sMax = image_constants.attr("upper_sample_limit").cast<int>();
+  long sMin = image_constants.attr("lower_sample_limit").cast<long>();
+  long sMax = image_constants.attr("upper_sample_limit").cast<long>();
 
   if (t == 0)
     return std::min(predicted_sample_value - sMin, sMax - predicted_sample_value);
@@ -601,7 +641,7 @@ long Predictor::calc_mapped_quantizer_index(long quantizer_index, long theta, lo
   }
   else
   {
-    return 2 * quantizer_index - 2;
+    return 2 * std::abs(quantizer_index) - 1;
   }
 }
 
@@ -650,11 +690,15 @@ std::vector<long> Predictor::calc_weight_vector(long x, long y, long z, long dou
     throw std::invalid_argument("weight vector not defined for t=0");
 
   long t = x + y * x_size;
-  long weight_update_scaling_exponent = WEIGHT_UPDATE_SCALING_EXPONENT(t);
+  long weight_update_scaling_exponent = std::clamp(weight_update_initial_parameter + (t - x_size) / weight_update_change_interval,
+                                                   weight_update_initial_parameter,
+                                                   weight_update_final_parameter)
+                                        + image_constants.attr("dynamic_range_bits").cast<long>()
+                                        - weight_component_resolution;
 
-  // calculates weight vector for t+1
   std::vector<long> weight_vector(local_difference_values_num);
 
+  // calculates weight vector for t+1
   for (int i = 0; i < weight_vector.size(); i++)
   {
     long local_diff = (*ldvsmpl)(y, x, z, i);
