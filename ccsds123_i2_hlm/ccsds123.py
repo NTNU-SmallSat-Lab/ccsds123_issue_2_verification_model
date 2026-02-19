@@ -21,6 +21,7 @@ class CCSDS123:
     image_file = None
     image_name = None
     image_ordering = None
+    sample_format = None
     image_sample = None  # Symbol: s
     output_folder = str(Path(__file__).resolve().parent.parent) + "/output"
     header_file = None
@@ -35,7 +36,7 @@ class CCSDS123:
         self.image_name = image_file.split("/")[-1]
         self.image_ordering = image_ordering
 
-    def __get_sample_format(self):
+    def get_sample_format(self):
         formats = {
             "u8be": np.dtype(">u1"),
             "u8le": np.dtype("<u1"),
@@ -61,10 +62,10 @@ class CCSDS123:
         """Load a raw image into a N_x * N_y by N_z array"""
         # This should be updated to support different file formats for the input image
 
+        self.sample_format = self.get_sample_format()
+
         # Get image from file and convert data type to int64
-        self.image_sample = np.fromfile(
-            self.image_file, dtype=self.__get_sample_format()
-        )
+        self.image_sample = np.fromfile(self.image_file, dtype=self.sample_format)
         self.image_sample = self.image_sample.astype(dtype=np.int64)
 
         if self.image_ordering == "BSQ":
@@ -123,7 +124,6 @@ class CCSDS123:
 
         self.image_constants = const.ImageConstants(self.header)
 
-        # save_intermediates = True
         save_intermediates = False
         self.predictor = pred.Predictor(
             self.header, self.image_constants, self.image_sample, save_intermediates
@@ -134,7 +134,6 @@ class CCSDS123:
         )
 
         use_old_predictor = False
-        # use_old_predictor = True
         predictor_output = None
 
         if use_old_predictor:

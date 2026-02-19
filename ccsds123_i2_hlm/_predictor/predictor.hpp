@@ -2,11 +2,20 @@
 
 #include <cassert>
 #include <iostream>
+#include <memory>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <vector>
 
-// #define DEBUG 1 // adds significatn execution time
+/*
+ * A note on datatypes
+ *
+ * The algorithm supports up to 32 bits of image data bit depth, so I used the 'long' datatype which guaranties 4 bytes.
+ * However, I forgot about unsigned 32 bit, so I needed to switch to 'long long' which uses a lot more data memory.
+ * For later I should use a type template to specify the data type when instantiating the class
+ */
+
+// #define DEBUG 1 // adds significant execution time
 
 namespace py = pybind11;
 
@@ -19,9 +28,9 @@ using _NumpyArr = py::detail::unchecked_mutable_reference<data_t, dims_t>;
 class Predictor
 {
 public:
-  Predictor(py::object header, py::object image_constants, NumpyArr<long> image_sample, bool save_intermediates = false);
+  Predictor(py::object header, py::object image_constants, NumpyArr<long long> image_sample, bool save_intermediates = false);
   ~Predictor();
-  NumpyArr<long> compress();
+  NumpyArr<long long> compress();
   void save_data(std::string output_folder);
 
 private:
@@ -102,49 +111,49 @@ private:
 
   py::object header;
   py::object image_constants;
-  _NumpyArr<long, 3> _image_sample; // data cube
+  NumpyArr<long long> image_sample; // data cube
 
   /******************** Samplers ********************/
 
   // samplers used for intermediate values that can optionally be stored and exported
-  Sampler<long, 3> *lssmpl;    // local sums
-  Sampler<long, 3> *pcdsmpl;   // predicted central local difference
-  Sampler<long, 3> *hrpsvsmpl; // high resolution predictied sample value
-  Sampler<long, 3> *drpsvsmpl; // double resolution predicted sample value
-  Sampler<long, 3> *psvsmpl;   // predicted sample value
-  Sampler<long, 3> *prsmpl;    // prediction residual
-  Sampler<long, 3> *mevsmpl;   // maximum error value
-  Sampler<long, 3> *qismpl;    // quantizer index
-  Sampler<long, 3> *cqbcsmpl;  // clipped quantizer bin center
-  Sampler<long, 3> *drsrsmpl;  // double resolution sample representative
-  Sampler<long, 3> *drpesmpl;  // double resolution prediction error
-  Sampler<long, 3> *tsmpl;     // scaled prediction endpoint difference (theta)
+  std::unique_ptr<Sampler<long long, 3>> lssmpl;    // local sums
+  std::unique_ptr<Sampler<long long, 3>> pcdsmpl;   // predicted central local difference
+  std::unique_ptr<Sampler<long long, 3>> hrpsvsmpl; // high resolution predictied sample value
+  std::unique_ptr<Sampler<long long, 3>> drpsvsmpl; // long long resolution predicted sample value
+  std::unique_ptr<Sampler<long long, 3>> psvsmpl;   // predicted sample value
+  std::unique_ptr<Sampler<long long, 3>> prsmpl;    // prediction residual
+  std::unique_ptr<Sampler<long long, 3>> mevsmpl;   // maximum error value
+  std::unique_ptr<Sampler<long long, 3>> qismpl;    // quantizer index
+  std::unique_ptr<Sampler<long long, 3>> cqbcsmpl;  // clipped quantizer bin center
+  std::unique_ptr<Sampler<long long, 3>> drsrsmpl;  // long long resolution sample representative
+  std::unique_ptr<Sampler<long long, 3>> drpesmpl;  // long long resolution prediction error
+  std::unique_ptr<Sampler<long long, 3>> tsmpl;     // scaled prediction endpoint difference (theta)
 
   // these are samplers that need to store their values no matter what
-  Sampler<long, 3> *mqismpl; // mapped quantizer indices
-  Sampler<long, 3> *srsmpl;  // sample representative
-  Sampler<long, 4> *ldvsmpl; // local difference vectors
-  Sampler<long, 4> *wvsmpl;  // weight vectors
+  std::unique_ptr<Sampler<long long, 3>> mqismpl; // mapped quantizer indices
+  std::unique_ptr<Sampler<long long, 3>> srsmpl;  // sample representative
+  std::unique_ptr<Sampler<long long, 4>> ldvsmpl; // local difference vectors
+  std::unique_ptr<Sampler<long long, 4>> wvsmpl;  // weight vectors
 
   /******************** Constants ********************/
 
-  long x_size, y_size, z_size;
+  long long x_size, y_size, z_size;
   bool save_intermediates;
 
-  long local_difference_values_num;
+  long long local_difference_values_num;
 
-  long weight_component_resolution;         // Symbol: Omega
-  long weight_update_change_interval;       // Symbol: t_inc
-  long weight_update_initial_parameter;     // Symbol: nu_min
-  long weight_update_final_parameter;       // Symbol: nu_max
-  long weight_min;                          // Symbol: omega_min
-  long weight_max;                          // Symbol: omega_max
-  Sampler<long, 2> *weight_exponent_offset; // Symbol: Sigma
+  long long weight_component_resolution;                         // Symbol: Omega
+  long long weight_update_change_interval;                       // Symbol: t_inc
+  long long weight_update_initial_parameter;                     // Symbol: nu_min
+  long long weight_update_final_parameter;                       // Symbol: nu_max
+  long long weight_min;                                          // Symbol: omega_min
+  long long weight_max;                                          // Symbol: omega_max
+  std::unique_ptr<Sampler<long long, 2>> weight_exponent_offset; // Symbol: Sigma
 
-  long register_size; // Symbol: R
+  long long register_size; // Symbol: R
 
-  Sampler<long, 2> *absolute_error_limits; // Symbol: a_z
-  Sampler<long, 2> *relative_error_limits; // Symbol: r_z
+  std::unique_ptr<Sampler<long long, 2>> absolute_error_limits; // Symbol: a_z
+  std::unique_ptr<Sampler<long long, 2>> relative_error_limits; // Symbol: r_z
 
   /******************** Private methods ********************/
 
@@ -152,20 +161,20 @@ private:
   void init_predictor_arrays();
   void init_weights();
 
-  long calc_local_sum(long x, long y, long z);
-  std::vector<long> calc_local_difference_vector(long x, long y, long z, long local_sum, long prev_local_sum);
-  long calc_predicted_central_local_diff(long x, long y, long z);
-  long calc_high_resolution_pred_sample_value(long x, long y, long z, long local_sum, long predicted_central_local_diff);
-  long calc_double_resolution_predicted_sample_value(long x, long y, long z, long high_resolution_pred_sample_value);
-  long calc_predicted_sample_value(long double_resolution_predicted_sample_value);
-  long calc_prediction_residual(long sample, long predicted_sample_value);
-  long calc_maximum_error(long y, long z, long predicted_sample_value);
-  long calc_quantizer_index(long t, long maximum_error, long prediction_residual);
-  long calc_clipped_quantizer_bin_center(long x, long y, long z, long predicted_sample_value, long maximum_error, long quantizer_index);
-  long calc_double_resolution_sample_representative(long z, long clipped_quantizer_bin_center, long quantizer_index, long maximum_error, long high_resolution_pred_sample_value);
-  long calc_sample_representative(long x, long y, long z, long clipped_quantizer_bin_center, long double_resolution_sample_representative);
-  long calc_double_resolution_prediction_error(long clipped_quantizer_bin_center, long double_resolution_predicted_sample_value);
-  long calc_theta(long t, long predicted_sample_value, long maximum_error);
-  long calc_mapped_quantizer_index(long quantizer_index, long theta, long double_resolution_predicted_sample_value);
-  std::vector<long> calc_weight_vector(long x, long y, long z, long double_resolution_prediction_error);
+  long long calc_local_sum(long long x, long long y, long long z);
+  std::vector<long long> calc_local_difference_vector(long long x, long long y, long long z, long long local_sum, long long prev_local_sum);
+  long long calc_predicted_central_local_diff(long long x, long long y, long long z);
+  long long calc_high_resolution_pred_sample_value(long long x, long long y, long long z, long long local_sum, long long predicted_central_local_diff);
+  long long calc_double_resolution_predicted_sample_value(long long x, long long y, long long z, long long high_resolution_pred_sample_value);
+  long long calc_predicted_sample_value(long long double_resolution_predicted_sample_value);
+  long long calc_prediction_residual(long long sample, long long predicted_sample_value);
+  long long calc_maximum_error(long long y, long long z, long long predicted_sample_value);
+  long long calc_quantizer_index(long long t, long long maximum_error, long long prediction_residual);
+  long long calc_clipped_quantizer_bin_center(long long x, long long y, long long z, long long predicted_sample_value, long long maximum_error, long long quantizer_index);
+  long long calc_double_resolution_sample_representative(long long z, long long clipped_quantizer_bin_center, long long quantizer_index, long long maximum_error, long long high_resolution_pred_sample_value);
+  long long calc_sample_representative(long long x, long long y, long long z, long long clipped_quantizer_bin_center, long long double_resolution_sample_representative);
+  long long calc_double_resolution_prediction_error(long long clipped_quantizer_bin_center, long long double_resolution_predicted_sample_value);
+  long long calc_theta(long long t, long long predicted_sample_value, long long maximum_error);
+  long long calc_mapped_quantizer_index(long long quantizer_index, long long theta, long long double_resolution_predicted_sample_value);
+  std::vector<long long> calc_weight_vector(long long x, long long y, long long z, long long double_resolution_prediction_error);
 };

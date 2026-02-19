@@ -11,8 +11,13 @@ __pycache__/
 .VSCodeCounter/
 .vscode/
 from_golden_model/
-Test1-20190201/
 build/
+release/
+debug/
+test_vectors/*
+test/*
+reference
+raw_images/
 
 
 test/comparison.txt

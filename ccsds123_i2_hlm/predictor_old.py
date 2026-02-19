@@ -41,7 +41,6 @@ class Predictor:
 
     def __init_predictor_constants(self):
         self.local_difference_values_num = self.header.prediction_bands_num
-        assert self.local_difference_values_num < self.header.z_size
 
         if self.header.prediction_mode == hd.PredictionMode.FULL:
             self.local_difference_values_num += 3
@@ -349,11 +348,12 @@ class Predictor:
                         self.weight_vector[y, x, z, offset + i - 1] // 8
                     )
         else:
-            self.weight_vector[y, x, z] = 2 ** (
+            multiplier = 2 ** (
                 self.weight_component_resolution
                 + 3
                 - self.header.weight_init_resolution
-            ) * self.header.weight_init_table[z] + np.ceil(
+            )
+            offset = np.ceil(
                 2
                 ** (
                     self.weight_component_resolution
@@ -361,6 +361,10 @@ class Predictor:
                     - self.header.weight_init_resolution
                 )
                 - 1
+            )
+            print("\n", multiplier, offset)
+            self.weight_vector[y, x, z] = (
+                multiplier * self.header.weight_init_table[z] + offset
             )
 
     def __calculate_weight_offset(self, x, y, z, t, i):

@@ -29,7 +29,7 @@ To install C++ submodule locally for development purposes, use the following com
 ```
 > mkdir build
 > cd build
-> cmake .. -DCMAKE_INSTALL_PREFIX=$(pwd)/ccsds123_i2_hlm
+> cmake .. -DCMAKE_INSTALL_PREFIX=/repository/path
 > make install
 ```
 
