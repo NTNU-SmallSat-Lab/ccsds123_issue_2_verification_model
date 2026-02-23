@@ -9,6 +9,7 @@ project(
   VERSION ${SKBUILD_PROJECT_VERSION}
   LANGUAGES CXX)
 
+
 # Find pybind11 and Python
 find_package(pybind11 CONFIG REQUIRED)
 
@@ -31,4 +32,5 @@ set_target_properties(_predictor PROPERTIES
 )
 
 # The install directory is the output (wheel) directory
+set(CMAKE_INSTALL_PREFIX ..)
 install(TARGETS _predictor DESTINATION ccsds123_i2_hlm)

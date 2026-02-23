@@ -47,7 +47,7 @@ private:
         return;
       // allocate sampler array
       arr = NumpyArr<data_t>(dimensions);
-      std::memset(arr.mutable_data(), value, arr.nbytes());
+      std::fill_n(arr.mutable_data(), arr.size(), value);
     }
 
     template <typename... Args>
@@ -94,7 +94,7 @@ private:
     NumpyArr<data_t> get_arr() { return arr; }
 
     template <typename... Args>
-    decltype(auto) operator()(Args &&...pos) { return arr.template mutable_unchecked<dims_t>()(std::forward<Args>(pos)...); }
+    decltype(auto) operator()(Args &&...pos) { return arr.mutable_at(std::forward<Args>(pos)...); }
 
     bool enable_sampling;
 

@@ -5,68 +5,41 @@ import argparse
 # for Test1-20181021
 # roughly 10% of tets in this set have invalid headers
 skip = [
-    1471,  # segfault
-    1777,  # gives a segmentation fault, yikes
-    1791,  # seg fault
     1820,  # gives wrong result, should look into
-    1925,  # another seg fault
     1932,  # wrong result
-    2075,  # seg fault
     2158,  # wrong result
     2226,  # wrong result
     2527,  # gives a weird error in the encoder on line 97
-    2558,  # seg fault
-    2570,  # seg fault, bruh this one did not have size of 1x1
-    2631,  # again seg fault, not 1x1
     2648,  # wrong result
     2672,  # wrong result
     2782,  # wrong result
     2821,  # same error in encoder, line 89
-    3032,  # seg fault
     3084,  # wrong result
     3151,  # wrong result
-    3303,  # seg fault
     3386,  # wrong result
     3408,  # wrong result
-    3416,  # seg fault
-    3421,  # seg fault
     3483,  # wrong result
     3543,  # wrong result
-    3602,  # seg fault
     3667,  # wrong result
-    3866,  # seg fault
     3982,  # wrong result
     4016,  # wrong result
-    4052,  # seg fault
     4109,  # wrong result
-    4188,  # seg fault
     4192,  # wrong result
     4236,  # wrong result
     4446,  # wrong result
-    4532,  # seg fault
-    4542,  # seg fault
-    4543,  # seg fault
     4669,  # wrong result
     4777,  # wrong result
     4947,  # wrong result
     4949,  # wrong result
-    5024,  # seg fault
     5091,  # wrong result
-    5138,  # seg fault
     5208,  # wrong result
-    5444,  # seg fault
-    5458,  # seg fault
-    5701,  # seg fault
     5718,  # wrong result
     5722,  # wrong result
     6090,  # wrong result
-    6277,  # seg fault
-    6397,  # seg fault
 ]
-# seems like some of the ones with segfaults have a spatial size of 1x1
-# not all images of that size fail, so must be something else in addition with the config
-# maybe not, I probably have a memory leak somewhere, yikes
 
+# I am getting seg fault every now and again
+# maybe not, I probably have a memory leak somewhere, yikes
 # when rerunning a large set of tests I get new failures, meaning a seg fault is probable
 # maybe some sort of array misalignment?
 
