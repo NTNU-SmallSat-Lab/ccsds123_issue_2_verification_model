@@ -16,17 +16,20 @@ def get_file_size(file_path):
     return os.path.getsize(file_path)
 
 
-# ccsds123_0_b_2_high_level_model.py --header ../ccsds-paramater-review/output/mjosa_2025-03-29T11-24-11Z-hdr.bin ../ccsds-paramater-review/images/hypso2/mjosa_2025-03-29T11-24-11Z/mjosa_2025-03-29T11-24-11Z-u16le-598x1092x120.raw
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Compress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging"
     )
+
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument("-c", "--compress", action="store_true", default="True")
+    group.add_argument("-d", "--decompress", action="store_true")
+
     parser.add_argument(
         "image_file",
         help="Path to the raw uncompressed image file. The filename must be on the format <name>-<datatype>-<z_size>x<y_size>x<x_size>.raw like CCSDS TestData images. For example Landsat_mountain-u16be-6x50x100.raw.",
     )
+
     parser.add_argument(
         "--header",
         default="",
@@ -56,17 +59,21 @@ def main():
 
     start_time = time.time()
 
-    image = ccsds123.CCSDS123(args.image_file, image_ordering=args.image_ordering)
-    if len(args.header) > 0:
-        image.set_header_file(args.header)
-    if len(args.accu) > 0:
-        image.set_hybrid_accu_init_file(args.accu)
-    if len(args.optional) > 0:
-        image.set_optional_tables_file(args.optional)
-    if len(args.error_limits) > 0:
-        image.set_error_limits_file(args.error_limits)
+    ccsds = ccsds123.CCSDS123(args.image_file, image_ordering=args.image_ordering)
 
-    image.compress_image()
+    if len(args.header) > 0:
+        ccsds.set_header_file(args.header)
+    if len(args.accu) > 0:
+        ccsds.set_hybrid_accu_init_file(args.accu)
+    if len(args.optional) > 0:
+        ccsds.set_optional_tables_file(args.optional)
+    if len(args.error_limits) > 0:
+        ccsds.set_error_limits_file(args.error_limits)
+
+    if args.decompress:
+        ccsds.decompress_image()
+    elif args.compress:
+        ccsds.compress_image()
 
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")

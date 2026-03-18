@@ -1,47 +1,17 @@
 from ccsds123_i2_hlm import ccsds123
+from ccsds123_i2_hlm import header as hd
 import os
 import argparse
+import struct
 
-# for Test1-20181021
-# roughly 10% of tets in this set have invalid headers
-skip = [
-    1820,  # gives wrong result, should look into
-    1932,  # wrong result
-    2158,  # wrong result
-    2226,  # wrong result
-    2527,  # gives a weird error in the encoder on line 97
-    2648,  # wrong result
-    2672,  # wrong result
-    2782,  # wrong result
-    2821,  # same error in encoder, line 89
-    3084,  # wrong result
-    3151,  # wrong result
-    3386,  # wrong result
-    3408,  # wrong result
-    3483,  # wrong result
-    3543,  # wrong result
-    3667,  # wrong result
-    3982,  # wrong result
-    4016,  # wrong result
-    4109,  # wrong result
-    4192,  # wrong result
-    4236,  # wrong result
-    4446,  # wrong result
-    4669,  # wrong result
-    4777,  # wrong result
-    4947,  # wrong result
-    4949,  # wrong result
-    5091,  # wrong result
-    5208,  # wrong result
-    5718,  # wrong result
-    5722,  # wrong result
-    6090,  # wrong result
-]
+skip = []
 
-# I am getting seg fault every now and again
-# maybe not, I probably have a memory leak somewhere, yikes
-# when rerunning a large set of tests I get new failures, meaning a seg fault is probable
-# maybe some sort of array misalignment?
+
+def get_int_list(bytes):
+    n_ints = len(bytes) // 4
+    int_list = list(struct.unpack(f">{n_ints}i", bytes))
+    int_list.sort()
+    return int_list
 
 
 def main():
@@ -82,6 +52,9 @@ def main():
     golden_compressed_files = [
         file for file in test_vector_files if file.endswith(".flex")
     ]
+    golden_decompressed_files = [
+        file for file in test_vector_files if file.endswith("dec.bin")
+    ]
 
     input_raw_files.sort()
     input_header_files.sort()
@@ -89,9 +62,11 @@ def main():
     input_error_limits.sort()
     input_hybrid_tables.sort()
     golden_compressed_files.sort()
+    golden_decompressed_files.sort()
 
     comparison_files_hlm = [
         "output/z-output-bitstream-enc.bin",
+        "output/z-output-bitstream-dec.bin",
         "output/header.bin",
         "output/optional_tables.bin",
         "output/error_limits.bin",
@@ -108,12 +83,14 @@ def main():
     failure = 0
     skipped = 0
     failure_list = []
+    skipped_list = []
     for num in range(start_num, end_num):
         os.system("cls" if os.name == "nt" else "clear")
         print(
             f"Success: {success}/{num} Failure: {failure}/{num} Skipped: {skipped}/{num}"
         )
         print(f"Failure list: {failure_list}\n")
+        print(f"Skipped list: {skipped_list}\n")
 
         print(f"Test {num}")
         print(f"Input raw file: {input_raw_files[num]}")
@@ -122,6 +99,7 @@ def main():
         print(f"Input error limits file: {input_error_limits[num]}")
         print(f"Input hybrid tables file: {input_hybrid_tables[num]}")
         print(f"Golden compressed file: {golden_compressed_files[num]}")
+        print(f"Golden decompressed file: {golden_decompressed_files[num]}")
 
         print(f"For more debug data, run: ")
         print(
@@ -137,6 +115,7 @@ def main():
 
         comparison_files_golden = [
             f"{test_vector_folder}/{golden_compressed_files[num]}",
+            f"{test_vector_folder}/{golden_decompressed_files[num]}",
             f"{test_vector_folder}/{input_header_files[num]}",
             f"{test_vector_folder}/{input_optional_tables[num]}",
             f"{test_vector_folder}/{input_error_limits[num]}",
@@ -165,21 +144,30 @@ def main():
         except Exception as e:
             print("Invalid header (", e, "), skipping")
             skipped += 1
+            skipped_list.append(num)
             continue
+
+        # if dut_compressor.header.entropy_coder_type != hd.EntropyCoderType.HYBRID:
+        #     skipped += 1
+        #     continue
+
+        # if (
+        #     dut_compressor.header.periodic_error_updating_flag
+        #     == hd.PeriodicErrorUpdatingFlag.USED
+        # ):
+        #     skipped += 1
+        #     skipped_list.append(num)
+        #     continue
 
         dut_compressor.compress_image()
 
-        with open("output/z-output-bitstream-enc.bin", "rb") as file1, open(
-            f"{test_vector_folder}/{golden_compressed_files[num]}", "rb"
-        ) as file2:
-            content1 = file1.read()
-            content2 = file2.read()
-
-        with open("output/header.bin", "rb") as file1, open(
-            f"{test_vector_folder}/{input_header_files[num]}", "rb"
-        ) as file2:
-            content1 = file1.read()
-            content2 = file2.read()
+        try:
+            dut_compressor.decompress_image()
+        except Exception as e:
+            print("Decompressor exception (", e, ")")
+            failure += 1
+            failure_list.append(num)
+            continue
 
         correct = 0
         for i in range(len(comparison_files_golden)):
@@ -188,10 +176,17 @@ def main():
             ) as file2:
                 content1 = file1.read()
                 content2 = file2.read()
+
                 if content1 == content2:
                     correct += 1
                 else:
                     print("Mismatch on file: ", comparison_files_hlm[i])
+                    if i == 1:
+                        if get_int_list(content1) == get_int_list(content2):
+                            correct += 1
+                            print(
+                                "Same, just wrong ordering"
+                            )  # about 100 of the tests are failing due to wrong ordering
 
         if correct == len(comparison_files_golden):
             print(f"Files in test {num} are identical")

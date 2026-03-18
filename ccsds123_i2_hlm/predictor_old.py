@@ -362,7 +362,6 @@ class Predictor:
                 )
                 - 1
             )
-            print("\n", multiplier, offset)
             self.weight_vector[y, x, z] = (
                 multiplier * self.header.weight_init_table[z] + offset
             )

@@ -3,6 +3,7 @@ name = "ccsds123_i2_hlm"
 version = "0.0.1"
 authors = [
   { name="Daniel Vorhaug", email="dvorhaug@gmail.com" },
+  { name="Aasmund Nørsett", email="aasmund.norsett@gmail.com" },
 ]
 description = "A ccsds 123 issue 2 high-level model"
 readme = "README.md"
@@ -16,6 +17,9 @@ classifiers = [
 [build-system]
 requires = ["scikit-build-core>=0.11", "pybind11>=3.0"]
 build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+logging.level = "INFO"
 
 [tool.pyright]
 typeCheckingMode = "off"

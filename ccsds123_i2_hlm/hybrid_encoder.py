@@ -104,12 +104,16 @@ class HybridEncoder:
             self.__add_to_bitstream(bitstring, x, y, z)
             return
 
+        # t-1
         prev_y = y
         prev_x = x - 1
         if prev_x < 0:
             prev_y -= 1
             prev_x = self.header.x_size - 1
 
+        # update counter and accumulator
+
+        # rescaling
         if self.counter[prev_y, prev_x] == 2**self.rescaling_counter_size - 1:
             self.counter[y, x] = (self.counter[prev_y, prev_x] + 1) // 2
             self.accumulator[y, x, z] = (
@@ -120,13 +124,14 @@ class HybridEncoder:
             accumulator_lsb = bin(self.accumulator[prev_y, prev_x, z])[-1]
             self.__add_to_bitstream(accumulator_lsb, x, y, z)
             self.rescale_bits[y, x, z] = accumulator_lsb
-        else:
+        else:  # normal case, no rescaling
             self.counter[y, x] = self.counter[prev_y, prev_x] + 1
             self.accumulator[y, x, z] = (
                 self.accumulator[prev_y, prev_x, z]
                 + 4 * self.mapped_quantizer_index[y, x, z]
             )
 
+        # select high/low entropy based on counter and accumulator, and encode sample
         if self.accumulator[y, x, z] * 2**14 >= threshold[0] * self.counter[y, x]:
             self.__encode_high_entropy(x, y, z)
             self.entropy_type[y, x, z] = 1

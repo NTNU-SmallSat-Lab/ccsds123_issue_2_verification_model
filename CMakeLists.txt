@@ -10,15 +10,14 @@ project(
   LANGUAGES CXX)
 
 
-# Find pybind11 and Python
+# Find pybind11
 find_package(pybind11 CONFIG REQUIRED)
 
 # Add a library using FindPython's tooling (pybind11 also provides a helper like
 # this)
-python_add_library(_predictor MODULE 
+pybind11_add_module(_predictor MODULE 
   ccsds123_i2_hlm/_predictor/predictor.cpp 
   ccsds123_i2_hlm/_predictor/predictorpy.cpp 
-  WITH_SOABI
 )
 target_link_libraries(_predictor PRIVATE pybind11::headers)
 

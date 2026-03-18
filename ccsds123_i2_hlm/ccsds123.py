@@ -23,13 +23,14 @@ class CCSDS123:
     image_ordering = None
     sample_format = None
     image_sample = None  # Symbol: s
-    output_folder = str(Path(__file__).resolve().parent.parent) + "/output"
+    output_folder = str(Path(__file__).resolve().parent) + "/output"
     header_file = None
     optional_tables_file = None
     error_limits_file = None
     use_header_file = False
     accu_init_file = None
     use_accu_init_file = False
+    mqi = None
 
     def __init__(self, image_file, image_ordering="BSQ"):
         self.image_file = image_file
@@ -124,32 +125,32 @@ class CCSDS123:
 
         self.image_constants = const.ImageConstants(self.header)
 
-        save_intermediates = False
-        self.predictor = pred.Predictor(
-            self.header, self.image_constants, self.image_sample, save_intermediates
-        )
-
-        self.predictor_old = pred_old.Predictor(
-            self.header, self.image_constants, self.image_sample
-        )
-
+        save_intermediates = True
         use_old_predictor = False
+
+        if use_old_predictor:
+            self.predictor_old = pred_old.Predictor(
+                self.header, self.image_constants, self.image_sample
+            )
+        else:
+            self.predictor = pred.Predictor(
+                self.header, self.image_constants, save_intermediates
+            )
+
         predictor_output = None
 
         if use_old_predictor:
-            print("RUNNING OLD PREDICTOR")
+            print("Compressing with old predictor")
             predictor_output = self.predictor_old.run_predictor()
-            self.predictor_old.save_data("reference")
         else:
-            print("RUNNING NEW PREDICTOR")
+            print("Compressing with new predictor")
             try:
-                predictor_output = self.predictor.compress()
+                predictor_output = self.predictor.compress(self.image_sample)
             except Exception as e:
                 print("Predictor threw exception (", e, "), saving and exiting")
-                self.predictor.save_data(self.output_folder)
                 exit(1)
 
-            self.predictor.save_data(self.output_folder)
+        self.mqi = predictor_output  # for debugging of decompression
 
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
@@ -171,9 +172,68 @@ class CCSDS123:
         self.encoder.run_encoder()
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
 
+        if use_old_predictor:
+            self.predictor_old.save_data("reference")
+        else:
+            self.predictor.save_data(self.output_folder)
+
         self.header.save_data(self.output_folder)
         self.encoder.save_data(
             self.output_folder, self.header.get_header_bitstreams()[0]
         )
+
+        print(f"{time.time() - start_time:.3f} seconds. Done with saving")
+
+    def decompress_image(self):
+        start_time = time.time()
+
+        # need to add support for reading config from compressed bitstream
+        self.header = hd.Header(self.image_name)
+        if self.use_header_file:
+            self.header.set_config_from_file(
+                self.header_file, self.optional_tables_file, self.error_limits_file
+            )
+
+        self.image_constants = const.ImageConstants(self.header)
+
+        print(f"{time.time() - start_time:.3f} seconds. Done with loading")
+
+        print("Decompressing")
+
+        save_intermediates = True
+        self.predictor = pred.Predictor(
+            self.header, self.image_constants, save_intermediates
+        )
+
+        decompressed = None
+        try:
+            decompressed = self.predictor.decompress(self.mqi)
+        except Exception as e:
+            raise e
+
+        print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
+
+        csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
+        np.savetxt(
+            f"{self.output_folder}/predictor-16-image_sample.csv",
+            decompressed.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+
+        # already is in BIP, (y,x,z)
+        if self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
+            decompressed = decompressed.transpose(2, 0, 1)  # (z,y,x)
+        else:
+            if self.header.sub_frame_interleaving_depth == 1:  # BIL
+                decompressed = decompressed.transpose(0, 2, 1)  # (y,z,x)
+            elif self.header.sub_frame_interleaving_depth == self.header.z_size:  # BIP
+                pass
+            else:
+                print("BRUH!")  # TODO: fix
+
+        self.predictor.save_data(self.output_folder)
+        with open(f"{self.output_folder}/z-output-bitstream-dec.bin", "wb") as f:
+            f.write(decompressed.astype(self.get_sample_format()).tobytes())
 
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")
