@@ -19,6 +19,7 @@ test/*
 reference
 raw_images/
 test_vectors/*
+share
 
 .DS_Store
 test/comparison.txt
