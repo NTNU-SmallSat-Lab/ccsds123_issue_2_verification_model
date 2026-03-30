@@ -16,6 +16,10 @@ class CCSDS123:
     CCSDS 123.0-B-2 high level model class
     """
 
+    delayed_weight_updates = None
+    save_intermediates = None
+    use_old_predictor = None
+
     header = None
     predictor = None
     image_file = None
@@ -30,11 +34,18 @@ class CCSDS123:
     use_header_file = False
     accu_init_file = None
     use_accu_init_file = False
+    mqi = None
 
-    def __init__(self, image_file, image_ordering="BSQ"):
+    def __init__(self, image_file, image_ordering="BSQ", delayed_weight_updates=True, save_intermediates=False, use_old_predictor=False):
         self.image_file = image_file
         self.image_name = image_file.split("/")[-1]
         self.image_ordering = image_ordering
+        self.delayed_weight_updates = delayed_weight_updates
+        self.save_intermediates = save_intermediates
+        self.use_old_predictor = use_old_predictor
+
+        if self.delayed_weight_updates:
+            print("Using delayed weight updates")
 
     def get_sample_format(self):
         formats = {
@@ -69,22 +80,14 @@ class CCSDS123:
         self.image_sample = self.image_sample.astype(dtype=np.int64)
 
         if self.image_ordering == "BSQ":
-            self.image_sample = self.image_sample.reshape(
-                (self.header.z_size, self.header.y_size, self.header.x_size)
-            )  # Reshape to z,y,x (BSQ) 3D array
+            self.image_sample = self.image_sample.reshape((self.header.z_size, self.header.y_size, self.header.x_size))  # Reshape to z,y,x (BSQ) 3D array
 
-            self.image_sample = self.image_sample.transpose(
-                1, 2, 0
-            )  # Transpose to y,x,z order (BIP)
+            self.image_sample = self.image_sample.transpose(1, 2, 0)  # Transpose to y,x,z order (BIP)
         elif self.image_ordering == "BIP":
-            self.image_sample = self.image_sample.reshape(
-                (self.header.y_size, self.header.x_size, self.header.z_size)
-            )  # Image was stored as BIP
+            self.image_sample = self.image_sample.reshape((self.header.y_size, self.header.x_size, self.header.z_size))  # Image was stored as BIP
         else:
-            print(
-                f"Image file ordering {self.image_ordering} is unsupported. Suppurted values are 'BSQ' and 'BIP'."
-            )
-            exit(1)
+            print(f"Image file ordering {self.image_ordering} is unsupported. Suppurted values are 'BSQ' and 'BIP'.")
+            raise RuntimeError
 
     def set_header_file(self, header_file):
         self.header_file = header_file
@@ -103,9 +106,7 @@ class CCSDS123:
     def set_header(self):
         self.header = hd.Header(self.image_name)
         if self.use_header_file:
-            self.header.set_config_from_file(
-                self.header_file, self.optional_tables_file, self.error_limits_file
-            )
+            self.header.set_config_from_file(self.header_file, self.optional_tables_file, self.error_limits_file)
 
     def set_output_dir(self, output):
         self.output_folder = output
@@ -115,65 +116,103 @@ class CCSDS123:
 
         self.header = hd.Header(self.image_name)
         if self.use_header_file:
-            self.header.set_config_from_file(
-                self.header_file, self.optional_tables_file, self.error_limits_file
-            )
+            self.header.set_config_from_file(self.header_file, self.optional_tables_file, self.error_limits_file)
 
         self.__load_raw_image()
         print(f"{time.time() - start_time:.3f} seconds. Done with loading")
 
         self.image_constants = const.ImageConstants(self.header)
 
-        save_intermediates = False
-        self.predictor = pred.Predictor(
-            self.header, self.image_constants, self.image_sample, save_intermediates
-        )
+        if self.use_old_predictor:
+            self.predictor_old = pred_old.Predictor(self.header, self.image_constants, self.image_sample, self.delayed_weight_updates)
+        else:
+            self.predictor = pred.Predictor(self.header, self.image_constants, self.delayed_weight_updates, self.save_intermediates)
 
-        self.predictor_old = pred_old.Predictor(
-            self.header, self.image_constants, self.image_sample
-        )
-
-        use_old_predictor = False
         predictor_output = None
 
-        if use_old_predictor:
-            print("RUNNING OLD PREDICTOR")
+        if self.use_old_predictor:
+            print("Compressing with old predictor")
             predictor_output = self.predictor_old.run_predictor()
-            self.predictor_old.save_data("reference")
         else:
-            print("RUNNING NEW PREDICTOR")
+            print("Compressing with new predictor")
             try:
-                predictor_output = self.predictor.compress()
+                predictor_output = self.predictor.compress(self.image_sample)
             except Exception as e:
-                print("Predictor threw exception (", e, "), saving and exiting")
                 self.predictor.save_data(self.output_folder)
-                exit(1)
+                print("Predictor threw exception (", e, "), saving and exiting")
+                raise RuntimeError
 
-            self.predictor.save_data(self.output_folder)
+        self.mqi = predictor_output  # for debugging of decompression
 
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
         if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
-            self.encoder = sa_enc.SampleAdaptiveEncoder(
-                self.header, self.image_constants, predictor_output
-            )
+            self.encoder = sa_enc.SampleAdaptiveEncoder(self.header, self.image_constants, predictor_output)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
-            self.encoder = hyb_enc.HybridEncoder(
-                self.header, self.image_constants, predictor_output
-            )
+            self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants, predictor_output)
             if self.use_accu_init_file:
                 self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.BLOCK_ADAPTIVE:
-            self.encoder = ba_enc.BlockAdaptiveEncoder(
-                self.header, self.image_constants, predictor_output
-            )
+            self.encoder = ba_enc.BlockAdaptiveEncoder(self.header, self.image_constants, predictor_output)
 
         self.encoder.run_encoder()
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
 
+        if self.use_old_predictor:
+            self.predictor_old.save_data("reference")
+        else:
+            self.predictor.save_data(self.output_folder)
+
         self.header.save_data(self.output_folder)
-        self.encoder.save_data(
-            self.output_folder, self.header.get_header_bitstreams()[0]
+        self.encoder.save_data(self.output_folder, self.header.get_header_bitstreams()[0])
+
+        print(f"{time.time() - start_time:.3f} seconds. Done with saving")
+
+    def decompress_image(self):
+        start_time = time.time()
+
+        # need to add support for reading config from compressed bitstream
+        self.header = hd.Header(self.image_name)
+        if self.use_header_file:
+            self.header.set_config_from_file(self.header_file, self.optional_tables_file, self.error_limits_file)
+
+        self.image_constants = const.ImageConstants(self.header)
+
+        print(f"{time.time() - start_time:.3f} seconds. Done with loading")
+
+        print("Decompressing")
+
+        self.predictor = pred.Predictor(self.header, self.image_constants, self.delayed_weight_updates, self.save_intermediates)
+
+        decompressed = None
+        try:
+            decompressed = self.predictor.decompress(self.mqi)
+        except Exception as e:
+            raise e
+
+        print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
+
+        csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
+        np.savetxt(
+            f"{self.output_folder}/predictor-16-image_sample.csv",
+            decompressed.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
         )
+
+        # already is in BIP, (y,x,z)
+        if self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:
+            decompressed = decompressed.transpose(2, 0, 1)  # (z,y,x)
+        else:
+            if self.header.sub_frame_interleaving_depth == 1:  # BIL
+                decompressed = decompressed.transpose(0, 2, 1)  # (y,z,x)
+            elif self.header.sub_frame_interleaving_depth == self.header.z_size:  # BIP
+                pass
+            else:
+                print("BRUH!")  # TODO: fix
+
+        self.predictor.save_data(self.output_folder)
+        with open(f"{self.output_folder}/z-output-bitstream-dec.bin", "wb") as f:
+            f.write(decompressed.astype(self.get_sample_format()).tobytes())
 
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")

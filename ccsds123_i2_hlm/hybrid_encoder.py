@@ -23,13 +23,9 @@ class HybridEncoder:
     initial_count_exponent = None  # Symbol: gamma_0
 
     def __init_encoder_constants(self):
-        self.unary_length_limit = self.header.unary_length_limit + 32 * (
-            self.header.unary_length_limit == 0
-        )
+        self.unary_length_limit = self.header.unary_length_limit + 32 * (self.header.unary_length_limit == 0)
         self.rescaling_counter_size = self.header.rescaling_counter_size + 4
-        self.initial_count_exponent = self.header.initial_count_exponent + 8 * (
-            self.header.initial_count_exponent == 0
-        )
+        self.initial_count_exponent = self.header.initial_count_exponent + 8 * (self.header.initial_count_exponent == 0)
         tables_init()
 
     accumulator = None  # Symbol: Sigma
@@ -63,9 +59,7 @@ class HybridEncoder:
         self.high_entropy_codes = np.full(image_shape, fill_value="", dtype="U64")
         self.rescale_bits = np.full(image_shape, fill_value="", dtype="U1")
         self.flush_codes = np.full((16), fill_value="", dtype="U10")
-        self.accumulator_final = np.full(
-            (self.header.z_size), fill_value="", dtype="U46"
-        )
+        self.accumulator_final = np.full((self.header.z_size), fill_value="", dtype="U46")
         self.codewords = np.full(image_shape, fill_value="", dtype="U16")
         self.codewords_binary = np.full(image_shape, fill_value="", dtype="U16")
         self.entropy_type = np.full(image_shape, fill_value=2, dtype=np.uint8)
@@ -78,15 +72,9 @@ class HybridEncoder:
             with open(self.accu_init_file, "rb") as file:
                 data = file.read()
                 data = "".join([bin(byte)[2:].zfill(8) for byte in data])
-                num_bits = (
-                    self.image_constants.dynamic_range_bits
-                    + self.initial_count_exponent
-                )
+                num_bits = self.image_constants.dynamic_range_bits + self.initial_count_exponent
                 data = data[: num_bits * self.header.z_size]  # Remove fill bits
-                data = [
-                    int(data[i : i + num_bits], 2)
-                    for i in range(0, len(data), num_bits)
-                ]
+                data = [int(data[i : i + num_bits], 2) for i in range(0, len(data), num_bits)]
                 assert len(data) == self.header.z_size
                 self.accumulator[0, 0] = np.array(data)
         else:
@@ -98,35 +86,32 @@ class HybridEncoder:
 
     def __encode_sample(self, x, y, z):
         if y == 0 and x == 0:
-            bitstring = bin(self.mapped_quantizer_index[y, x, z])[2:].zfill(
-                self.image_constants.dynamic_range_bits
-            )
+            bitstring = bin(self.mapped_quantizer_index[y, x, z])[2:].zfill(self.image_constants.dynamic_range_bits)
             self.__add_to_bitstream(bitstring, x, y, z)
             return
 
+        # t-1
         prev_y = y
         prev_x = x - 1
         if prev_x < 0:
             prev_y -= 1
             prev_x = self.header.x_size - 1
 
+        # update counter and accumulator
+
+        # rescaling
         if self.counter[prev_y, prev_x] == 2**self.rescaling_counter_size - 1:
             self.counter[y, x] = (self.counter[prev_y, prev_x] + 1) // 2
-            self.accumulator[y, x, z] = (
-                self.accumulator[prev_y, prev_x, z]
-                + 4 * self.mapped_quantizer_index[y, x, z]
-                + 1
-            ) // 2
+            self.accumulator[y, x, z] = (self.accumulator[prev_y, prev_x, z] + 4 * self.mapped_quantizer_index[y, x, z] + 1) // 2
+            # add lsb of accumulator to allow the decoder to reproduce the value, due to rounding on division by two
             accumulator_lsb = bin(self.accumulator[prev_y, prev_x, z])[-1]
             self.__add_to_bitstream(accumulator_lsb, x, y, z)
             self.rescale_bits[y, x, z] = accumulator_lsb
-        else:
+        else:  # normal case, no rescaling
             self.counter[y, x] = self.counter[prev_y, prev_x] + 1
-            self.accumulator[y, x, z] = (
-                self.accumulator[prev_y, prev_x, z]
-                + 4 * self.mapped_quantizer_index[y, x, z]
-            )
+            self.accumulator[y, x, z] = self.accumulator[prev_y, prev_x, z] + 4 * self.mapped_quantizer_index[y, x, z]
 
+        # select high/low entropy based on counter and accumulator, and encode sample
         if self.accumulator[y, x, z] * 2**14 >= threshold[0] * self.counter[y, x]:
             self.__encode_high_entropy(x, y, z)
             self.entropy_type[y, x, z] = 1
@@ -136,18 +121,12 @@ class HybridEncoder:
 
     def __encode_high_entropy(self, x, y, z):
         self.variable_length_code[y, x, z] = min(
-            log2(
-                (self.accumulator[y, x, z] + self.counter[y, x] * 49 // 2**5)
-                // self.counter[y, x]
-            )
-            - 2,
+            log2((self.accumulator[y, x, z] + self.counter[y, x] * 49 // 2**5) // self.counter[y, x]) - 2,
             max(self.image_constants.dynamic_range_bits - 2, 2),
         )
         assert self.variable_length_code[y, x, z] >= 2
 
-        code = self.__reverse_gpo2(
-            self.mapped_quantizer_index[y, x, z], self.variable_length_code[y, x, z]
-        )
+        code = self.__reverse_gpo2(self.mapped_quantizer_index[y, x, z], self.variable_length_code[y, x, z])
         self.__add_to_bitstream(code, x, y, z)
         self.high_entropy_codes[y, x, z] = code
 
@@ -174,11 +153,7 @@ class HybridEncoder:
             assert "h" not in self.input_symbol[y, x, z]
         else:
             input_symbol = "X"
-            residual_value = (
-                self.mapped_quantizer_index[y, x, z]
-                - input_symbol_limit[code_index]
-                - 1
-            )
+            residual_value = self.mapped_quantizer_index[y, x, z] - input_symbol_limit[code_index] - 1
             code = self.__reverse_gpo2(residual_value, 0)
             self.__add_to_bitstream(code, x, y, z)
             self.low_entropy_codes[y, x, z] += code
@@ -186,12 +161,8 @@ class HybridEncoder:
         self.active_prefix[code_index] += input_symbol
         self.current_active_prefix[y, x, z] = self.active_prefix[code_index]
         self.input_symbol[y, x, z] = input_symbol
-        prefix_match_index = np.where(
-            code_table_input[code_index] == self.active_prefix[code_index]
-        )[0]
-        self.prefix_match_index[y, x, z] = (
-            prefix_match_index[0] if prefix_match_index.shape[0] == 1 else -1
-        )
+        prefix_match_index = np.where(code_table_input[code_index] == self.active_prefix[code_index])[0]
+        self.prefix_match_index[y, x, z] = prefix_match_index[0] if prefix_match_index.shape[0] == 1 else -1
 
         if prefix_match_index.shape[0] == 1:
             codeword = code_table_output[code_index][prefix_match_index[0]]
@@ -205,9 +176,7 @@ class HybridEncoder:
             self.active_prefix[code_index] = ""
 
     def __table_codeword_to_binary(self, codeword):
-        return bin(int(codeword.split("'h")[1], 16))[2:].zfill(
-            int(codeword.split("'h")[0])
-        )
+        return bin(int(codeword.split("'h")[1], 16))[2:].zfill(int(codeword.split("'h")[0]))
 
     def __add_to_bitstream(self, bitstring, x=None, y=None, z=None):
         self.bitstream += bitstring
@@ -216,69 +185,35 @@ class HybridEncoder:
 
     def __encode_error_limits(self, y):
         period_index = y // 2**self.header.error_update_period_exponent
-        if (
-            self.header.quantizer_fidelity_control_method
-            != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY
-        ):
-            if (
-                self.header.absolute_error_limit_assignment_method
-                == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            ):
+        if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+            if self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                 self.__add_to_bitstream(
-                    bin(
-                        self.header.periodic_absolute_error_limit_table[period_index][0]
-                    )[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value()),
+                    bin(self.header.periodic_absolute_error_limit_table[period_index][0])[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value()),
                     0,
                     y,
                     0,
                 )
-            elif (
-                self.header.absolute_error_limit_assignment_method
-                == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT
-            ):
+            elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.header.z_size):
                     self.__add_to_bitstream(
-                        bin(
-                            self.header.periodic_absolute_error_limit_table[
-                                period_index
-                            ][z]
-                        )[2:].zfill(
-                            self.header.get_absolute_error_limit_bit_depth_value()
-                        ),
+                        bin(self.header.periodic_absolute_error_limit_table[period_index][z])[2:].zfill(self.header.get_absolute_error_limit_bit_depth_value()),
                         0,
                         y,
                         z,
                     )
 
-        if (
-            self.header.quantizer_fidelity_control_method
-            != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-        ):
-            if (
-                self.header.relative_error_limit_assignment_method
-                == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            ):
+        if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+            if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                 self.__add_to_bitstream(
-                    bin(
-                        self.header.periodic_relative_error_limit_table[period_index][0]
-                    )[2:].zfill(self.header.get_relative_error_limit_bit_depth_value()),
+                    bin(self.header.periodic_relative_error_limit_table[period_index][0])[2:].zfill(self.header.get_relative_error_limit_bit_depth_value()),
                     0,
                     y,
                     0,
                 )
-            elif (
-                self.header.relative_error_limit_assignment_method
-                == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT
-            ):
+            elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.header.z_size):
                     self.__add_to_bitstream(
-                        bin(
-                            self.header.periodic_relative_error_limit_table[
-                                period_index
-                            ][z]
-                        )[2:].zfill(
-                            self.header.get_relative_error_limit_bit_depth_value()
-                        ),
+                        bin(self.header.periodic_relative_error_limit_table[period_index][z])[2:].zfill(self.header.get_relative_error_limit_bit_depth_value()),
                         0,
                         y,
                         z,
@@ -286,24 +221,14 @@ class HybridEncoder:
 
     def __encode_image_tail(self):
         for i in range(16):
-            index = (
-                np.where(flush_table_prefix[i] == self.active_prefix[i])[0][0]
-                if self.active_prefix[i] != ""
-                else 0
-            )
+            index = np.where(flush_table_prefix[i] == self.active_prefix[i])[0][0] if self.active_prefix[i] != "" else 0
             code = self.__table_codeword_to_binary(flush_table_word[i][index])
             self.__add_to_bitstream(code)
             self.flush_codes[i] = code
 
         for z in range(self.header.z_size):
-            code = bin(
-                self.accumulator[self.header.y_size - 1, self.header.x_size - 1, z]
-            )[2:]
-            code = code.zfill(
-                2
-                + self.image_constants.dynamic_range_bits
-                + self.rescaling_counter_size
-            )
+            code = bin(self.accumulator[self.header.y_size - 1, self.header.x_size - 1, z])[2:]
+            code = code.zfill(2 + self.image_constants.dynamic_range_bits + self.rescaling_counter_size)
             self.__add_to_bitstream(code)
             self.accumulator_final[z] = code
 
@@ -321,16 +246,10 @@ class HybridEncoder:
             for y in range(self.header.y_size):
                 print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
 
-                if (
-                    y % 2**self.header.error_update_period_exponent == 0
-                    and self.header.periodic_error_updating_flag
-                    == hd.PeriodicErrorUpdatingFlag.USED
-                ):
+                if y % 2**self.header.error_update_period_exponent == 0 and self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.USED:
                     self.__encode_error_limits(y)
 
-                for i in range(
-                    ceil(self.header.z_size / self.header.sub_frame_interleaving_depth)
-                ):
+                for i in range(ceil(self.header.z_size / self.header.sub_frame_interleaving_depth)):
                     for x in range(self.header.x_size):
                         z_start = i * self.header.sub_frame_interleaving_depth
                         z_end = min(
@@ -351,13 +270,20 @@ class HybridEncoder:
         self.__encode_image_tail()
         print("")
 
+    def run_decoder(self):
+        # read compressed image tail
+        # - Get initial accumulator values
+        # - Get state of low-entropy codes
+
+        # iterate over compressed bitstream in reverse order, while recreating the code selection statistics
+
+        pass
+
     def save_data(self, output_folder, header_bitstream):
         full_bitstream = header_bitstream + self.bitstream
 
         # Pad to word size
-        word_bits = 8 * (
-            self.header.output_word_size + 8 * (self.header.output_word_size == 0)
-        )
+        word_bits = 8 * (self.header.output_word_size + 8 * (self.header.output_word_size == 0))
         fill_bits = (word_bits - (len(full_bitstream)) % word_bits) % word_bits
         full_bitstream += "0" * fill_bits
 
@@ -367,12 +293,7 @@ class HybridEncoder:
         # Save the initial accumulator value
         accu = bitarray()
         for z in range(self.header.z_size):
-            accu += bin(int(self.accumulator[0, 0, z]))[2:].zfill(
-                int(
-                    self.image_constants.dynamic_range_bits
-                    + self.initial_count_exponent
-                )
-            )
+            accu += bin(int(self.accumulator[0, 0, z]))[2:].zfill(int(self.image_constants.dynamic_range_bits + self.initial_count_exponent))
         accu += "0" * (8 - len(accu))
         with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
             accu.tofile(file)

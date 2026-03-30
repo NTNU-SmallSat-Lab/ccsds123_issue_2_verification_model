@@ -18,8 +18,9 @@ test_vectors/*
 test/*
 reference
 raw_images/
+test_vectors/*
 
-
+.DS_Store
 test/comparison.txt
 bin
 include

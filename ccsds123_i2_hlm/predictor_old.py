@@ -13,10 +13,11 @@ class Predictor:
     image_constants = None
     image_sample = None  # Symbol: s
 
-    def __init__(self, header, image_constants, image_sample):
+    def __init__(self, header, image_constants, image_sample, delayed_weight_updates=False):
         self.header = header
         self.image_constants = image_constants
         self.image_sample = image_sample
+        self.delayed_weight_updates = delayed_weight_updates
 
     # Predictor constants
     local_difference_values_num = None
@@ -31,8 +32,7 @@ class Predictor:
     weight_exponent_offset = None  # Symbol: sigma (in word-final position)
     weight_min = None  # Symbol: omega_min
     weight_max = None  # Symbol: omega_max
-    weight_update_frequncy = 1  # weight update frequency (1 or 4)
-    refine_weights = False  # apply weight refinements when using reduced weight updates
+    delayed_weight_updates = None  # apply delayed weight updates
 
     register_size = None  # Symbol: R
 
@@ -50,23 +50,14 @@ class Predictor:
             self.spectral_bands_used[z] = min(z, self.header.prediction_bands_num)
 
         self.weight_component_resolution = self.header.weight_component_resolution + 4
-        self.weight_update_change_interval = 2 ** (
-            self.header.weight_update_change_interval + 4
-        )
-        self.weight_update_initial_parameter = (
-            self.header.weight_update_initial_parameter - 6
-        )
-        self.weight_update_final_parameter = (
-            self.header.weight_update_final_parameter - 6
-        )
-        self.weight_update_scaling_exponent = np.empty(
-            (self.header.y_size * self.header.x_size), dtype=np.int64
-        )
+        self.weight_update_change_interval = 2 ** (self.header.weight_update_change_interval + 4)
+        self.weight_update_initial_parameter = self.header.weight_update_initial_parameter - 6
+        self.weight_update_final_parameter = self.header.weight_update_final_parameter - 6
+        self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int64)
         for t in range(self.header.y_size * self.header.x_size):
             self.weight_update_scaling_exponent[t] = (
                 clip(
-                    self.weight_update_initial_parameter
-                    + (t - self.header.x_size) // self.weight_update_change_interval,
+                    self.weight_update_initial_parameter + (t - self.header.x_size) // self.weight_update_change_interval,
                     self.weight_update_initial_parameter,
                     self.weight_update_final_parameter,
                 )
@@ -80,28 +71,13 @@ class Predictor:
                 0.0,
                 dtype=np.float64,
             )
-            if (
-                self.header.weight_exponent_offset_flag
-                == hd.WeightExponentOffsetFlag.NOT_ALL_ZERO
-            ):
+            if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.NOT_ALL_ZERO:
                 if self.header.prediction_mode == hd.PredictionMode.FULL:
                     for i in range(3):  # Set the directional offsets
-                        self.weight_exponent_offset[:, i] = (
-                            self.header.weight_exponent_offset_table[:, 0].astype(
-                                dtype=np.float64
-                            )
-                        )
-                    self.weight_exponent_offset[:, 3:] = (
-                        self.header.weight_exponent_offset_table[:, 1:].astype(
-                            dtype=np.float64
-                        )
-                    )
+                        self.weight_exponent_offset[:, i] = self.header.weight_exponent_offset_table[:, 0].astype(dtype=np.float64)
+                    self.weight_exponent_offset[:, 3:] = self.header.weight_exponent_offset_table[:, 1:].astype(dtype=np.float64)
                 elif self.header.prediction_mode == hd.PredictionMode.REDUCED:
-                    self.weight_exponent_offset = (
-                        self.header.weight_exponent_offset_table.astype(
-                            dtype=np.float64
-                        )
-                    )
+                    self.weight_exponent_offset = self.header.weight_exponent_offset_table.astype(dtype=np.float64)
 
         self.weight_min = -(2 ** (self.weight_component_resolution + 2))
         self.weight_max = 2 ** (self.weight_component_resolution + 2) - 1
@@ -110,50 +86,22 @@ class Predictor:
         if self.register_size == 0:
             self.register_size = 64
 
-        self.absolute_error_limits = np.full(
-            (self.header.y_size, self.header.z_size), -1, dtype=np.int64
-        )
-        self.relative_error_limits = np.full(
-            (self.header.y_size, self.header.z_size), -1, dtype=np.int64
-        )
+        self.absolute_error_limits = np.full((self.header.y_size, self.header.z_size), -1, dtype=np.int64)
+        self.relative_error_limits = np.full((self.header.y_size, self.header.z_size), -1, dtype=np.int64)
 
-        if (
-            self.header.periodic_error_updating_flag
-            == hd.PeriodicErrorUpdatingFlag.NOT_USED
-            and self.header.quantizer_fidelity_control_method
-            != hd.QuantizerFidelityControlMethod.LOSSLESS
-        ):
-            if (
-                self.header.quantizer_fidelity_control_method
-                != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY
-            ):
+        if self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.NOT_USED and self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.LOSSLESS:
+            if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
                 self.absolute_error_limits[:,] = self.header.absolute_error_limit_table
-            if (
-                self.header.quantizer_fidelity_control_method
-                != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-            ):
+            if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
                 self.relative_error_limits[:,] = self.header.relative_error_limit_table
-        elif (
-            self.header.periodic_error_updating_flag
-            == hd.PeriodicErrorUpdatingFlag.USED
-        ):
+        elif self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.USED:
             period = 2**self.header.error_update_period_exponent
             for y in range(self.header.y_size + 2**16 * int(self.header.y_size == 0)):
                 i = y // period
-                if (
-                    self.header.quantizer_fidelity_control_method
-                    != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY
-                ):
-                    self.absolute_error_limits[y,] = (
-                        self.header.periodic_absolute_error_limit_table[i]
-                    )
-                if (
-                    self.header.quantizer_fidelity_control_method
-                    != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-                ):
-                    self.relative_error_limits[y,] = (
-                        self.header.periodic_relative_error_limit_table[i]
-                    )
+                if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                    self.absolute_error_limits[y,] = self.header.periodic_absolute_error_limit_table[i]
+                if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                    self.relative_error_limits[y,] = self.header.periodic_relative_error_limit_table[i]
 
     # Predictor variables
     local_sum = None  # Symbol: sigma
@@ -176,41 +124,25 @@ class Predictor:
 
     def __init_predictor_arrays(self):
         image_shape = self.image_sample.shape
-        local_difference_vector_shape = image_shape + (
-            self.local_difference_values_num,
-        )
+        local_difference_vector_shape = image_shape + (self.local_difference_values_num,)
 
         value = -1
 
         self.local_sum = np.full(image_shape, value, dtype=np.int64)
-        self.local_difference_vector = np.zeros(
-            local_difference_vector_shape, dtype=np.int64
-        )
+        self.local_difference_vector = np.zeros(local_difference_vector_shape, dtype=np.int64)
         self.weight_vector = np.zeros(local_difference_vector_shape, dtype=np.int64)
-        self.predicted_central_local_difference = np.full(
-            image_shape, value, dtype=np.int64
-        )
-        self.high_resolution_predicted_sample_value = np.full(
-            image_shape, value, dtype=np.int64
-        )
-        self.double_resolution_predicted_sample_value = np.full(
-            image_shape, value, dtype=np.int64
-        )
+        self.predicted_central_local_difference = np.full(image_shape, value, dtype=np.int64)
+        self.high_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int64)
+        self.double_resolution_predicted_sample_value = np.full(image_shape, value, dtype=np.int64)
         self.predicted_sample_value = np.full(image_shape, value, dtype=np.int64)
         self.prediction_residual = np.full(image_shape, value, dtype=np.int64)
         self.maximum_error = np.full(image_shape, value, dtype=np.int64)
         self.quantizer_index = np.full(image_shape, value, dtype=np.int64)
         self.clipped_quantizer_bin_center = np.full(image_shape, value, dtype=np.int64)
-        self.double_resolution_sample_representative = np.full(
-            image_shape, value, dtype=np.int64
-        )
+        self.double_resolution_sample_representative = np.full(image_shape, value, dtype=np.int64)
         self.sample_representative = np.full(image_shape, value, dtype=np.int64)
-        self.double_resolution_prediction_error = np.full(
-            image_shape, value, dtype=np.int64
-        )
-        self.scaled_prediction_endpoint_difference = np.full(
-            image_shape, value, dtype=np.int64
-        )
+        self.double_resolution_prediction_error = np.full(image_shape, value, dtype=np.int64)
+        self.scaled_prediction_endpoint_difference = np.full(image_shape, value, dtype=np.int64)
         self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int64)
 
     # return local sum
@@ -220,47 +152,23 @@ class Predictor:
 
         if self.header.local_sum_type == hd.LocalSumType.WIDE_NEIGHBOR_ORIENTED:
             if y > 0 and 0 < x and x < self.header.x_size - 1:
-                self.local_sum[y, x, z] = (
-                    self.sample_representative[y, x - 1, z]
-                    + self.sample_representative[y - 1, x - 1, z]
-                    + self.sample_representative[y - 1, x, z]
-                    + self.sample_representative[y - 1, x + 1, z]
-                )
+                self.local_sum[y, x, z] = self.sample_representative[y, x - 1, z] + self.sample_representative[y - 1, x - 1, z] + self.sample_representative[y - 1, x, z] + self.sample_representative[y - 1, x + 1, z]
             elif y == 0 and x > 0:
                 self.local_sum[y, x, z] = self.sample_representative[y, x - 1, z] * 4
             elif y > 0 and x == 0:
-                self.local_sum[y, x, z] = (
-                    self.sample_representative[y - 1, x, z]
-                    + self.sample_representative[y - 1, x + 1, z]
-                ) * 2
+                self.local_sum[y, x, z] = (self.sample_representative[y - 1, x, z] + self.sample_representative[y - 1, x + 1, z]) * 2
             elif y > 0 and x == self.header.x_size - 1:
-                self.local_sum[y, x, z] = (
-                    self.sample_representative[y, x - 1, z]
-                    + self.sample_representative[y - 1, x - 1, z]
-                    + self.sample_representative[y - 1, x, z] * 2
-                )
+                self.local_sum[y, x, z] = self.sample_representative[y, x - 1, z] + self.sample_representative[y - 1, x - 1, z] + self.sample_representative[y - 1, x, z] * 2
 
         elif self.header.local_sum_type == hd.LocalSumType.NARROW_NEIGHBOR_ORIENTED:
             if y > 0 and 0 < x and x < self.header.x_size - 1:
-                self.local_sum[y, x, z] = (
-                    self.sample_representative[y - 1, x - 1, z]
-                    + self.sample_representative[y - 1, x, z] * 2
-                    + self.sample_representative[y - 1, x + 1, z]
-                )
+                self.local_sum[y, x, z] = self.sample_representative[y - 1, x - 1, z] + self.sample_representative[y - 1, x, z] * 2 + self.sample_representative[y - 1, x + 1, z]
             elif y == 0 and x > 0 and z > 0:
-                self.local_sum[y, x, z] = (
-                    self.sample_representative[y, x - 1, z - 1] * 4
-                )
+                self.local_sum[y, x, z] = self.sample_representative[y, x - 1, z - 1] * 4
             elif y > 0 and x == 0:
-                self.local_sum[y, x, z] = (
-                    self.sample_representative[y - 1, x, z]
-                    + self.sample_representative[y - 1, x + 1, z]
-                ) * 2
+                self.local_sum[y, x, z] = (self.sample_representative[y - 1, x, z] + self.sample_representative[y - 1, x + 1, z]) * 2
             elif y > 0 and x == self.header.x_size - 1:
-                self.local_sum[y, x, z] = (
-                    self.sample_representative[y - 1, x - 1, z]
-                    + self.sample_representative[y - 1, x, z]
-                ) * 2
+                self.local_sum[y, x, z] = (self.sample_representative[y - 1, x - 1, z] + self.sample_representative[y - 1, x, z]) * 2
             elif y == 0 and x > 0 and z == 0:
                 self.local_sum[y, x, z] = self.image_constants.middle_sample_value * 4
 
@@ -274,9 +182,7 @@ class Predictor:
             if y > 0:
                 self.local_sum[y, x, z] = self.sample_representative[y - 1, x, z] * 4
             elif y == 0 and x > 0 and z > 0:
-                self.local_sum[y, x, z] = (
-                    self.sample_representative[y, x - 1, z - 1] * 4
-                )
+                self.local_sum[y, x, z] = self.sample_representative[y, x - 1, z - 1] * 4
             elif y == 0 and x > 0 and z == 0:
                 self.local_sum[y, x, z] = self.image_constants.middle_sample_value * 4
 
@@ -289,31 +195,13 @@ class Predictor:
 
         if self.header.prediction_mode == hd.PredictionMode.FULL:
             if x > 0 and y > 0:
-                self.local_difference_vector[y, x, z, 0] = (
-                    4 * self.sample_representative[y - 1, x, z]
-                    - self.local_sum[y, x, z]
-                )
-                self.local_difference_vector[y, x, z, 1] = (
-                    4 * self.sample_representative[y, x - 1, z]
-                    - self.local_sum[y, x, z]
-                )
-                self.local_difference_vector[y, x, z, 2] = (
-                    4 * self.sample_representative[y - 1, x - 1, z]
-                    - self.local_sum[y, x, z]
-                )
+                self.local_difference_vector[y, x, z, 0] = 4 * self.sample_representative[y - 1, x, z] - self.local_sum[y, x, z]
+                self.local_difference_vector[y, x, z, 1] = 4 * self.sample_representative[y, x - 1, z] - self.local_sum[y, x, z]
+                self.local_difference_vector[y, x, z, 2] = 4 * self.sample_representative[y - 1, x - 1, z] - self.local_sum[y, x, z]
             elif x == 0 and y > 0:
-                self.local_difference_vector[y, x, z, 0] = (
-                    4 * self.sample_representative[y - 1, x, z]
-                    - self.local_sum[y, x, z]
-                )
-                self.local_difference_vector[y, x, z, 1] = (
-                    4 * self.sample_representative[y - 1, x, z]
-                    - self.local_sum[y, x, z]
-                )
-                self.local_difference_vector[y, x, z, 2] = (
-                    4 * self.sample_representative[y - 1, x, z]
-                    - self.local_sum[y, x, z]
-                )
+                self.local_difference_vector[y, x, z, 0] = 4 * self.sample_representative[y - 1, x, z] - self.local_sum[y, x, z]
+                self.local_difference_vector[y, x, z, 1] = 4 * self.sample_representative[y - 1, x, z] - self.local_sum[y, x, z]
+                self.local_difference_vector[y, x, z, 2] = 4 * self.sample_representative[y - 1, x, z] - self.local_sum[y, x, z]
             else:  # y = 0
                 self.local_difference_vector[y, x, z, 0] = 0
                 self.local_difference_vector[y, x, z, 1] = 0
@@ -321,14 +209,9 @@ class Predictor:
             offset += 3
 
         if z > 0 and self.spectral_bands_used[z] > 0:
-            self.local_difference_vector[y, x, z, offset] = (
-                4 * self.sample_representative[y, x, z - 1]
-                - self.local_sum[y, x, z - 1]
-            )
+            self.local_difference_vector[y, x, z, offset] = 4 * self.sample_representative[y, x, z - 1] - self.local_sum[y, x, z - 1]
             for i in range(1, self.spectral_bands_used[z]):
-                self.local_difference_vector[y, x, z, offset + i] = (
-                    self.local_difference_vector[y, x, z - 1, offset + i - 1]
-                )
+                self.local_difference_vector[y, x, z, offset + i] = self.local_difference_vector[y, x, z - 1, offset + i - 1]
 
     def __init_weights(self, x, y, z):
         if self.header.weight_init_method == hd.WeightInitMethod.DEFAULT:
@@ -340,53 +223,16 @@ class Predictor:
                 offset += 3
 
             if z > 0 and self.spectral_bands_used[z] > 0:
-                self.weight_vector[y, x, z, offset] = (
-                    2**self.weight_component_resolution * 7 // 8
-                )
+                self.weight_vector[y, x, z, offset] = 2**self.weight_component_resolution * 7 // 8
                 for i in range(1, self.spectral_bands_used[z]):
-                    self.weight_vector[y, x, z, offset + i] = (
-                        self.weight_vector[y, x, z, offset + i - 1] // 8
-                    )
+                    self.weight_vector[y, x, z, offset + i] = self.weight_vector[y, x, z, offset + i - 1] // 8
         else:
-            multiplier = 2 ** (
-                self.weight_component_resolution
-                + 3
-                - self.header.weight_init_resolution
-            )
-            offset = np.ceil(
-                2
-                ** (
-                    self.weight_component_resolution
-                    + 2
-                    - self.header.weight_init_resolution
-                )
-                - 1
-            )
-            print("\n", multiplier, offset)
-            self.weight_vector[y, x, z] = (
-                multiplier * self.header.weight_init_table[z] + offset
-            )
+            multiplier = 2 ** (self.weight_component_resolution + 3 - self.header.weight_init_resolution)
+            offset = np.ceil(2 ** (self.weight_component_resolution + 2 - self.header.weight_init_resolution) - 1)
+            self.weight_vector[y, x, z] = multiplier * self.header.weight_init_table[z] + offset
 
     def __calculate_weight_offset(self, x, y, z, t, i):
-        return (
-            floor(
-                (
-                    float(
-                        sign_positive(self.double_resolution_prediction_error[y, x, z])
-                    )
-                    * float(self.local_difference_vector[y, x, z, i])
-                    * 2.0
-                    ** (
-                        -(
-                            float(self.weight_update_scaling_exponent[t])
-                            + self.weight_exponent_offset[z, i]
-                        )
-                    )
-                )
-                + 1
-            )
-            // 2
-        )
+        return floor((float(sign_positive(self.double_resolution_prediction_error[y, x, z])) * float(self.local_difference_vector[y, x, z, i]) * 2.0 ** (-(float(self.weight_update_scaling_exponent[t]) + self.weight_exponent_offset[z, i]))) + 1) // 2
 
     # store weights
     def __calculate_weight_vector(self, x, y, z, t):
@@ -399,35 +245,28 @@ class Predictor:
         # self.weight_update_frequncy dictates how often we should update the weights
         # set to 1 for the updating scheme of the standard
 
-        keep_same_weight = False
-        if self.refine_weights:
-            keep_same_weight = x < self.weight_update_frequncy - 1
-        else:
-            keep_same_weight = x % self.weight_update_frequncy != 0
+        prev_x = (t - 1) % self.header.x_size
+        prev_y = (t - 1) // self.header.x_size
+        assert t - 1 == prev_x + prev_y * self.header.x_size
 
-        if keep_same_weight:
-            prev_x = (t - 1) % self.header.x_size
-            prev_y = (t - 1) // self.header.x_size
-
-            assert t - 1 == prev_x + prev_y * self.header.x_size
-
+        if self.delayed_weight_updates and (x != 0 and x < 4):
             for i in range(self.weight_vector.shape[3]):
-                self.weight_vector[y, x, z, i] = self.weight_vector[
-                    prev_y, prev_x, z, i
-                ]
+                self.weight_vector[y, x, z, i] = self.weight_vector[prev_y, prev_x, z, i]
         else:
+            t_weight_update = t - 1
+            x_weight_update = prev_x
+            y_weight_update = prev_y
+
             # update weight using weight from four samples ago
-            t_weight_update = t - self.weight_update_frequncy
-            x_weight_update = t_weight_update % self.header.x_size
-            y_weight_update = t_weight_update // self.header.x_size
+            if self.delayed_weight_updates:
+                t_weight_update = t - 4
+                x_weight_update = t_weight_update % self.header.x_size
+                y_weight_update = t_weight_update // self.header.x_size
 
-            assert (
-                t_weight_update
-                == x_weight_update + y_weight_update * self.header.x_size
-            )
+            assert t_weight_update == x_weight_update + y_weight_update * self.header.x_size
 
             for i in range(self.weight_vector.shape[3]):
-                weight_update = self.__calculate_weight_offset(
+                weight_offset = self.__calculate_weight_offset(
                     x_weight_update,
                     y_weight_update,
                     z,
@@ -435,24 +274,14 @@ class Predictor:
                     i,
                 )
 
-                new_weight = (
-                    int(self.weight_vector[y_weight_update, x_weight_update, z, i])
-                    + weight_update
-                )
+                weight_unclipped = int(self.weight_vector[y_weight_update, x_weight_update, z, i]) + weight_offset
 
                 # refine weight update
-                if x > self.weight_update_frequncy - 1 and self.refine_weights:
-                    prev_x = (t - 1) % self.header.x_size
-                    prev_y = (t - 1) // self.header.x_size
-
-                    assert t - 1 == prev_x + prev_y * self.header.x_size
-
-                    new_weight = floor(
-                        (new_weight + self.weight_vector[prev_y, prev_x, z, i]) // 2
-                    )
+                if self.delayed_weight_updates and (x > 4 or x == 0):
+                    weight_unclipped = floor((weight_unclipped + self.weight_vector[prev_y, prev_x, z, i]) // 2)
 
                 self.weight_vector[y, x, z, i] = clip(
-                    new_weight,
+                    weight_unclipped,
                     self.weight_min,
                     self.weight_max,
                 )
@@ -464,9 +293,7 @@ class Predictor:
         if self.header.prediction_mode == hd.PredictionMode.REDUCED and z == 0:
             self.predicted_central_local_difference[y, x, z] = 0
             return
-        self.predicted_central_local_difference[y, x, z] = np.dot(
-            self.weight_vector[y, x, z], self.local_difference_vector[y, x, z]
-        )
+        self.predicted_central_local_difference[y, x, z] = np.dot(self.weight_vector[y, x, z], self.local_difference_vector[y, x, z])
 
     # uses pred central local diff, local sum
     # return predicted sample
@@ -474,95 +301,50 @@ class Predictor:
         if t > 0:
             self.high_resolution_predicted_sample_value[y, x, z] = clip(
                 modulo_star(
-                    int(
-                        self.predicted_central_local_difference[y, x, z]
-                        + 2**self.weight_component_resolution
-                        * (
-                            self.local_sum[y, x, z]
-                            - 4 * self.image_constants.middle_sample_value
-                        )
-                    ),
+                    int(self.predicted_central_local_difference[y, x, z] + 2**self.weight_component_resolution * (self.local_sum[y, x, z] - 4 * self.image_constants.middle_sample_value)),
                     self.register_size,
                 )
-                + 2 ** (self.weight_component_resolution + 2)
-                * self.image_constants.middle_sample_value
+                + 2 ** (self.weight_component_resolution + 2) * self.image_constants.middle_sample_value
                 + 2 ** (self.weight_component_resolution + 1),
-                2 ** (self.weight_component_resolution + 2)
-                * self.image_constants.lower_sample_limit,
-                2 ** (self.weight_component_resolution + 2)
-                * self.image_constants.upper_sample_limit
-                + 2 ** (self.weight_component_resolution + 1),
+                2 ** (self.weight_component_resolution + 2) * self.image_constants.lower_sample_limit,
+                2 ** (self.weight_component_resolution + 2) * self.image_constants.upper_sample_limit + 2 ** (self.weight_component_resolution + 1),
             )
-            self.double_resolution_predicted_sample_value[y, x, z] = (
-                self.high_resolution_predicted_sample_value[y, x, z]
-                // 2 ** (self.weight_component_resolution + 1)
-            )
+            self.double_resolution_predicted_sample_value[y, x, z] = self.high_resolution_predicted_sample_value[y, x, z] // 2 ** (self.weight_component_resolution + 1)
         elif t == 0 and self.header.prediction_bands_num > 0 and z > 0:
-            self.double_resolution_predicted_sample_value[y, x, z] = (
-                2 * self.image_sample[y, x, z - 1]
-            )
+            self.double_resolution_predicted_sample_value[y, x, z] = 2 * self.image_sample[y, x, z - 1]
         else:
-            self.double_resolution_predicted_sample_value[y, x, z] = (
-                2 * self.image_constants.middle_sample_value
-            )
+            self.double_resolution_predicted_sample_value[y, x, z] = 2 * self.image_constants.middle_sample_value
 
-        self.predicted_sample_value[y, x, z] = (
-            self.double_resolution_predicted_sample_value[y, x, z] // 2
-        )
+        self.predicted_sample_value[y, x, z] = self.double_resolution_predicted_sample_value[y, x, z] // 2
 
     # uses predicted sample
     # return max error
     def __calculate_maximum_error(self, x, y, z, t):
-        if (
-            self.header.quantizer_fidelity_control_method
-            == hd.QuantizerFidelityControlMethod.LOSSLESS
-        ):
+        if self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.LOSSLESS:
             self.maximum_error[y, x, z] = 0
 
-        elif (
-            self.header.quantizer_fidelity_control_method
-            == hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-        ):
+        elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
             self.maximum_error[y, x, z] = self.absolute_error_limits[y, z]
 
-        elif (
-            self.header.quantizer_fidelity_control_method
-            == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY
-        ):
-            self.maximum_error[y, x, z] = int(
-                self.relative_error_limits[y, z]
-                * self.predicted_sample_value[y, x, z]
-                // self.image_constants.dynamic_range
-            )
+        elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.RELATIVE_ONLY:
+            self.maximum_error[y, x, z] = int(self.relative_error_limits[y, z] * self.predicted_sample_value[y, x, z] // self.image_constants.dynamic_range)
 
-        elif (
-            self.header.quantizer_fidelity_control_method
-            == hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-        ):
+        elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             self.maximum_error[y, x, z] = min(
                 self.absolute_error_limits[y, z],
-                int(
-                    self.relative_error_limits[y, z]
-                    * self.predicted_sample_value[y, x, z]
-                    // self.image_constants.dynamic_range
-                ),
+                int(self.relative_error_limits[y, z] * self.predicted_sample_value[y, x, z] // self.image_constants.dynamic_range),
             )
 
     # uses pred sample, max error
     # return quantizer index
     def __calculate_quantization(self, x, y, z, t):
-        self.prediction_residual[y, x, z] = (
-            self.image_sample[y, x, z] - self.predicted_sample_value[y, x, z]
-        )
+        self.prediction_residual[y, x, z] = self.image_sample[y, x, z] - self.predicted_sample_value[y, x, z]
 
         if t == 0:
             self.quantizer_index[y, x, z] = self.prediction_residual[y, x, z]
             return
 
-        self.quantizer_index[y, x, z] = sign(self.prediction_residual[y, x, z]) * (
-            (abs(self.prediction_residual[y, x, z]) + self.maximum_error[y, x, z])
-            // (2 * self.maximum_error[y, x, z] + 1)
-        )
+        self.quantizer_index[y, x, z] = sign(self.prediction_residual[y, x, z]) * ((abs(self.prediction_residual[y, x, z]) + self.maximum_error[y, x, z]) // (2 * self.maximum_error[y, x, z] + 1))
 
     # uses quantizer index, max error, pred sample, high res pred sample
     # return sample repr
@@ -575,113 +357,47 @@ class Predictor:
             self.clipped_quantizer_bin_center[y, x, z] = self.image_sample[y, x, z]
         else:
             self.clipped_quantizer_bin_center[y, x, z] = clip(
-                int(
-                    self.predicted_sample_value[y, x, z]
-                    + self.quantizer_index[y, x, z]
-                    * (2 * self.maximum_error[y, x, z] + 1)
-                ),
+                int(self.predicted_sample_value[y, x, z] + self.quantizer_index[y, x, z] * (2 * self.maximum_error[y, x, z] + 1)),
                 self.image_constants.lower_sample_limit,
                 self.image_constants.upper_sample_limit,
             )
 
-        if (
-            self.header.damping_table_array[z] == 0
-            and self.header.damping_offset_table_array[z] == 0
-        ):
-            self.double_resolution_sample_representative[y, x, z] = (
-                2 * self.clipped_quantizer_bin_center[y, x, z]
-            )
+        if self.header.damping_table_array[z] == 0 and self.header.damping_offset_table_array[z] == 0:
+            self.double_resolution_sample_representative[y, x, z] = 2 * self.clipped_quantizer_bin_center[y, x, z]
 
-            self.sample_representative[y, x, z] = self.clipped_quantizer_bin_center[
-                y, x, z
-            ]
+            self.sample_representative[y, x, z] = self.clipped_quantizer_bin_center[y, x, z]
 
         else:
             # Assumes band_varying_damping_flag = BAND_INDEPENDENT and band_varying_offset_flag = BAND_INDEPENDENT
-            self.double_resolution_sample_representative[y, x, z] = (
-                4
-                * (
-                    2**self.header.sample_representative_resolution
-                    - self.header.damping_table_array[z]
-                )
-                * (
-                    self.clipped_quantizer_bin_center[y, x, z]
-                    * 2**self.weight_component_resolution
-                    - sign(self.quantizer_index[y, x, z])
-                    * self.maximum_error[y, x, z]
-                    * self.header.damping_offset_table_array[z]
-                    * 2
-                    ** (
-                        self.weight_component_resolution
-                        - self.header.sample_representative_resolution
-                    )
-                )
-                + self.header.damping_table_array[z]
-                * self.high_resolution_predicted_sample_value[y, x, z]
-                - self.header.damping_table_array[z]
-                * 2 ** (self.weight_component_resolution + 1)
-            ) // 2 ** (
-                self.weight_component_resolution
-                + self.header.sample_representative_resolution
-                + 1
-            )
+            self.double_resolution_sample_representative[y, x, z] = (4 * (2**self.header.sample_representative_resolution - self.header.damping_table_array[z]) * (self.clipped_quantizer_bin_center[y, x, z] * 2**self.weight_component_resolution - sign(self.quantizer_index[y, x, z]) * self.maximum_error[y, x, z] * self.header.damping_offset_table_array[z] * 2 ** (self.weight_component_resolution - self.header.sample_representative_resolution)) + self.header.damping_table_array[z] * self.high_resolution_predicted_sample_value[y, x, z] - self.header.damping_table_array[z] * 2 ** (self.weight_component_resolution + 1)) // 2 ** (self.weight_component_resolution + self.header.sample_representative_resolution + 1)
 
-            self.sample_representative[y, x, z] = (
-                self.double_resolution_sample_representative[y, x, z] + 1
-            ) // 2
+            self.sample_representative[y, x, z] = (self.double_resolution_sample_representative[y, x, z] + 1) // 2
 
     # uses clipped quant bin center, double res pred sampl
     # return double res pred error
     def __calculate_prediction_error(self, x, y, z, t):
-        self.double_resolution_prediction_error[y, x, z] = (
-            2 * self.clipped_quantizer_bin_center[y, x, z]
-            - self.double_resolution_predicted_sample_value[y, x, z]
-        )
+        self.double_resolution_prediction_error[y, x, z] = 2 * self.clipped_quantizer_bin_center[y, x, z] - self.double_resolution_predicted_sample_value[y, x, z]
 
     def __calculate_mapped_quantizer_index(self, x, y, z, t):
         if t == 0:
             self.scaled_prediction_endpoint_difference[y, x, z] = min(
-                self.predicted_sample_value[0, 0, z]
-                - self.image_constants.lower_sample_limit,
-                self.image_constants.upper_sample_limit
-                - self.predicted_sample_value[0, 0, z],
+                self.predicted_sample_value[0, 0, z] - self.image_constants.lower_sample_limit,
+                self.image_constants.upper_sample_limit - self.predicted_sample_value[0, 0, z],
             )
         else:
             self.scaled_prediction_endpoint_difference[y, x, z] = min(
-                (
-                    self.predicted_sample_value[y, x, z]
-                    - self.image_constants.lower_sample_limit
-                    + self.maximum_error[y, x, z]
-                )
-                // (2 * self.maximum_error[y, x, z] + 1),
-                (
-                    self.image_constants.upper_sample_limit
-                    - self.predicted_sample_value[y, x, z]
-                    + self.maximum_error[y, x, z]
-                )
-                // (2 * self.maximum_error[y, x, z] + 1),
+                (self.predicted_sample_value[y, x, z] - self.image_constants.lower_sample_limit + self.maximum_error[y, x, z]) // (2 * self.maximum_error[y, x, z] + 1),
+                (self.image_constants.upper_sample_limit - self.predicted_sample_value[y, x, z] + self.maximum_error[y, x, z]) // (2 * self.maximum_error[y, x, z] + 1),
             )
 
-        term = (-1) ** (
-            self.double_resolution_predicted_sample_value[y, x, z] % 2
-        ) * self.quantizer_index[y, x, z]
+        term = (-1) ** (self.double_resolution_predicted_sample_value[y, x, z] % 2) * self.quantizer_index[y, x, z]
 
-        if (
-            abs(self.quantizer_index[y, x, z])
-            > self.scaled_prediction_endpoint_difference[y, x, z]
-        ):
-            self.mapped_quantizer_index[y, x, z] = (
-                abs(self.quantizer_index[y, x, z])
-                + self.scaled_prediction_endpoint_difference[y, x, z]
-            )
+        if abs(self.quantizer_index[y, x, z]) > self.scaled_prediction_endpoint_difference[y, x, z]:
+            self.mapped_quantizer_index[y, x, z] = abs(self.quantizer_index[y, x, z]) + self.scaled_prediction_endpoint_difference[y, x, z]
         elif 0 <= term and term <= self.scaled_prediction_endpoint_difference[y, x, z]:
-            self.mapped_quantizer_index[y, x, z] = 2 * abs(
-                self.quantizer_index[y, x, z]
-            )
+            self.mapped_quantizer_index[y, x, z] = 2 * abs(self.quantizer_index[y, x, z])
         else:
-            self.mapped_quantizer_index[y, x, z] = (
-                2 * abs(self.quantizer_index[y, x, z]) - 1
-            )
+            self.mapped_quantizer_index[y, x, z] = 2 * abs(self.quantizer_index[y, x, z]) - 1
 
     def run_predictor(self):
         """Calculate the outputs of the predictor for the loaded image"""
@@ -746,8 +462,7 @@ class Predictor:
             fmt="%d",
         )
         np.savetxt(
-            output_folder
-            + "/predictor-05-double_resolution_predicted_sample_value.csv",
+            output_folder + "/predictor-05-double_resolution_predicted_sample_value.csv",
             self.double_resolution_predicted_sample_value.reshape(csv_image_shape),
             delimiter=",",
             fmt="%d",
@@ -814,9 +529,7 @@ class Predictor:
         )
         np.savetxt(
             output_folder + "/predictor-17-weight_update_scaling_exponent.csv",
-            self.weight_update_scaling_exponent.reshape(
-                (self.header.y_size, self.header.x_size)
-            ),
+            self.weight_update_scaling_exponent.reshape((self.header.y_size, self.header.x_size)),
             delimiter=",",
             fmt="%d",
         )
