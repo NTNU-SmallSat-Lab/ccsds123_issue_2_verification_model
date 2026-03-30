@@ -16,12 +16,11 @@ def get_int_list(bytes):
 
 def main():
 
-    parser = argparse.ArgumentParser(
-        description="Verify the CCSDS 123.0-B-2 High level model using CCSDS provided test vectors"
-    )
+    parser = argparse.ArgumentParser(description="Verify the CCSDS 123.0-B-2 High level model using CCSDS provided test vectors")
     parser.add_argument("folder", help="Path to the folder containing the test vectors")
     parser.add_argument("--start", default="", help="Test vector number to start at")
     parser.add_argument("--len", default="", help="Test vector number to end at")
+    parser.add_argument("-d", "--decompress", action="store_true", default=False, help="Add to Verify decompression, only supports hybrid encoder")
     args = parser.parse_args()
 
     start_num = 0
@@ -35,26 +34,12 @@ def main():
     test_vector_files = os.listdir(test_vector_folder)
 
     input_raw_files = [file for file in test_vector_files if file.endswith(".raw")]
-    input_header_files = [
-        file for file in test_vector_files if file.endswith("hdr.bin")
-    ]
-    input_optional_tables = [
-        file for file in test_vector_files if file.endswith("optional_tables.bin")
-    ]
-    input_error_limits = [
-        file for file in test_vector_files if file.endswith("error_limits.bin")
-    ]
-    input_hybrid_tables = [
-        file
-        for file in test_vector_files
-        if file.endswith("hybrid_initial_accumulators.bin")
-    ]
-    golden_compressed_files = [
-        file for file in test_vector_files if file.endswith(".flex")
-    ]
-    golden_decompressed_files = [
-        file for file in test_vector_files if file.endswith("dec.bin")
-    ]
+    input_header_files = [file for file in test_vector_files if file.endswith("hdr.bin")]
+    input_optional_tables = [file for file in test_vector_files if file.endswith("optional_tables.bin")]
+    input_error_limits = [file for file in test_vector_files if file.endswith("error_limits.bin")]
+    input_hybrid_tables = [file for file in test_vector_files if file.endswith("hybrid_initial_accumulators.bin")]
+    golden_compressed_files = [file for file in test_vector_files if file.endswith(".flex")]
+    golden_decompressed_files = [file for file in test_vector_files if file.endswith("dec.bin")]
 
     input_raw_files.sort()
     input_header_files.sort()
@@ -66,12 +51,14 @@ def main():
 
     comparison_files_hlm = [
         "output/z-output-bitstream-enc.bin",
-        "output/z-output-bitstream-dec.bin",
         "output/header.bin",
         "output/optional_tables.bin",
         "output/error_limits.bin",
         "output/hybrid_initial_accumulator.bin",
     ]
+
+    if args.decompress:
+        comparison_files_hlm.append("output/z-output-bitstream-dec.bin")
 
     end_num = len(input_raw_files)
     if length != 0:
@@ -86,9 +73,7 @@ def main():
     skipped_list = []
     for num in range(start_num, end_num):
         os.system("cls" if os.name == "nt" else "clear")
-        print(
-            f"Success: {success}/{num} Failure: {failure}/{num} Skipped: {skipped}/{num}"
-        )
+        print(f"Success: {success}/{num} Failure: {failure}/{num} Skipped: {skipped}/{num}")
         print(f"Failure list: {failure_list}\n")
         print(f"Skipped list: {skipped_list}\n")
 
@@ -102,12 +87,8 @@ def main():
         print(f"Golden decompressed file: {golden_decompressed_files[num]}")
 
         print(f"For more debug data, run: ")
-        print(
-            f"make compare_vector image={test_vector_folder}/{input_raw_files[num]} header={test_vector_folder}/{input_header_files[num]} image_format=s32be correct={test_vector_folder}/{golden_compressed_files[num]} optional_tables={test_vector_folder}/{input_optional_tables[num]} error_limits={test_vector_folder}/{input_error_limits[num]} accu={test_vector_folder}/{input_hybrid_tables[num]} "
-        )
-        print(
-            f"header_tool -t {test_vector_folder}/{input_optional_tables[num]} -d {test_vector_folder}/{input_header_files[num]}"
-        )
+        print(f"make compare_vector image={test_vector_folder}/{input_raw_files[num]} header={test_vector_folder}/{input_header_files[num]} image_format=s32be correct={test_vector_folder}/{golden_compressed_files[num]} optional_tables={test_vector_folder}/{input_optional_tables[num]} error_limits={test_vector_folder}/{input_error_limits[num]} accu={test_vector_folder}/{input_hybrid_tables[num]} ")
+        print(f"header_tool -t {test_vector_folder}/{input_optional_tables[num]} -d {test_vector_folder}/{input_header_files[num]}")
 
         if num in skip:
             skipped += 1
@@ -115,28 +96,19 @@ def main():
 
         comparison_files_golden = [
             f"{test_vector_folder}/{golden_compressed_files[num]}",
-            f"{test_vector_folder}/{golden_decompressed_files[num]}",
             f"{test_vector_folder}/{input_header_files[num]}",
             f"{test_vector_folder}/{input_optional_tables[num]}",
             f"{test_vector_folder}/{input_error_limits[num]}",
             f"{test_vector_folder}/{input_hybrid_tables[num]}",
         ]
+        if args.decompress:
+            comparison_files_golden.append(f"{test_vector_folder}/{golden_decompressed_files[num]}")
 
-        dut_compressor = ccsds123.CCSDS123(
-            f"{test_vector_folder}/{input_raw_files[num]}"
-        )
-        dut_compressor.set_header_file(
-            f"{test_vector_folder}/{input_header_files[num]}"
-        )
-        dut_compressor.set_optional_tables_file(
-            f"{test_vector_folder}/{input_optional_tables[num]}"
-        )
-        dut_compressor.set_error_limits_file(
-            f"{test_vector_folder}/{input_error_limits[num]}"
-        )
-        dut_compressor.set_hybrid_accu_init_file(
-            f"{test_vector_folder}/{input_hybrid_tables[num]}"
-        )
+        dut_compressor = ccsds123.CCSDS123(f"{test_vector_folder}/{input_raw_files[num]}")
+        dut_compressor.set_header_file(f"{test_vector_folder}/{input_header_files[num]}")
+        dut_compressor.set_optional_tables_file(f"{test_vector_folder}/{input_optional_tables[num]}")
+        dut_compressor.set_error_limits_file(f"{test_vector_folder}/{input_error_limits[num]}")
+        dut_compressor.set_hybrid_accu_init_file(f"{test_vector_folder}/{input_hybrid_tables[num]}")
 
         # in case we do not support the config in the provided header
         try:
@@ -145,35 +117,28 @@ def main():
             print("Invalid header (", e, "), skipping")
             skipped += 1
             skipped_list.append(num)
+            print("Skipping")
             continue
 
-        # if dut_compressor.header.entropy_coder_type != hd.EntropyCoderType.HYBRID:
-        #     skipped += 1
-        #     continue
-
-        # if (
-        #     dut_compressor.header.periodic_error_updating_flag
-        #     == hd.PeriodicErrorUpdatingFlag.USED
-        # ):
-        #     skipped += 1
-        #     skipped_list.append(num)
-        #     continue
+        if args.decompress and dut_compressor.header.entropy_coder_type != hd.EntropyCoderType.HYBRID:
+            skipped += 1
+            print("Skipping")
+            continue
 
         dut_compressor.compress_image()
 
-        try:
-            dut_compressor.decompress_image()
-        except Exception as e:
-            print("Decompressor exception (", e, ")")
-            failure += 1
-            failure_list.append(num)
-            continue
+        if args.decompress:
+            try:
+                dut_compressor.decompress_image()
+            except Exception as e:
+                print("Decompressor exception (", e, ")")
+                failure += 1
+                failure_list.append(num)
+                continue
 
         correct = 0
         for i in range(len(comparison_files_golden)):
-            with open(comparison_files_golden[i], "rb") as file1, open(
-                comparison_files_hlm[i], "rb"
-            ) as file2:
+            with open(comparison_files_golden[i], "rb") as file1, open(comparison_files_hlm[i], "rb") as file2:
                 content1 = file1.read()
                 content2 = file2.read()
 
@@ -181,12 +146,10 @@ def main():
                     correct += 1
                 else:
                     print("Mismatch on file: ", comparison_files_hlm[i])
-                    if i == 1:
+                    if i == 5:
                         if get_int_list(content1) == get_int_list(content2):
                             correct += 1
-                            print(
-                                "Same, just wrong ordering"
-                            )  # about 100 of the tests are failing due to wrong ordering
+                            print("Same, just wrong ordering")
 
         if correct == len(comparison_files_golden):
             print(f"Files in test {num} are identical")

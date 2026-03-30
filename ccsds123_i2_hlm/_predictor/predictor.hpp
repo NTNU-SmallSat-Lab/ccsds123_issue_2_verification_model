@@ -34,7 +34,7 @@ class Sampler;
 class Predictor
 {
 public:
-  Predictor(py::object header, py::object image_constants, bool save_intermediates = false);
+  Predictor(py::object header, py::object image_constants, bool delayed_weight_updates = false, bool save_intermediates = false);
   ~Predictor();
   NumpyArr<ll> compress(NumpyArr<ll> image_sample);
   NumpyArr<ll> decompress(NumpyArr<ll> mqi);
@@ -59,19 +59,21 @@ private:
   std::unique_ptr<Sampler<ll, 3>> qismpl;    // quantizer index
   std::unique_ptr<Sampler<ll, 3>> cqbcsmpl;  // clipped quantizer bin center
   std::unique_ptr<Sampler<ll, 3>> drsrsmpl;  // double resolution sample representative
-  std::unique_ptr<Sampler<ll, 3>> drpesmpl;  // double resolution prediction error
   std::unique_ptr<Sampler<ll, 3>> tsmpl;     // scaled prediction endpoint difference (theta)
 
   // these are samplers that need to store their values no matter what
-  std::unique_ptr<Sampler<ll, 3>> mqismpl; // mapped quantizer indices
-  std::unique_ptr<Sampler<ll, 3>> srsmpl;  // sample representative
-  std::unique_ptr<Sampler<ll, 4>> ldvsmpl; // local difference vectors
-  std::unique_ptr<Sampler<ll, 4>> wvsmpl;  // weight vectors
+  std::unique_ptr<Sampler<ll, 3>> mqismpl;  // mapped quantizer indices
+  std::unique_ptr<Sampler<ll, 3>> srsmpl;   // sample representative
+  std::unique_ptr<Sampler<ll, 3>> drpesmpl; // double resolution prediction error
+  std::unique_ptr<Sampler<ll, 4>> ldvsmpl;  // local difference vectors
+  std::unique_ptr<Sampler<ll, 4>> wvsmpl;   // weight vectors
 
   /******************** Constants ********************/
 
   ll x_size, y_size, z_size;
+
   bool save_intermediates;
+  bool delayed_weight_updates;
 
   ll local_difference_values_num;
 
@@ -109,7 +111,7 @@ private:
   ll calc_drpe(ll cqbc, ll drpsv);
   ll calc_theta(ll t, ll psv, ll mev);
   ll calc_mqi(ll qi, ll theta, ll drpsv);
-  std::vector<ll> calc_weight_vector(ll x, ll y, ll z, ll drpe);
+  std::vector<ll> calc_weight_vector(ll x, ll y, ll z);
 
   ll decalc_qi(ll theta, ll mqi, ll psv, ll drpsv);
   ll decalc_pr(ll t, ll qi, ll mev);

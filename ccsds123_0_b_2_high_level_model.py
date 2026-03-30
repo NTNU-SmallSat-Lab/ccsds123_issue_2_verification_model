@@ -17,9 +17,7 @@ def get_file_size(file_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Compress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging"
-    )
+    parser = argparse.ArgumentParser(description="Compress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging")
 
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument("-c", "--compress", action="store_true", default="True")
@@ -59,7 +57,13 @@ def main():
 
     start_time = time.time()
 
-    ccsds = ccsds123.CCSDS123(args.image_file, image_ordering=args.image_ordering)
+    ccsds = ccsds123.CCSDS123(
+        args.image_file,
+        image_ordering=args.image_ordering,
+        delayed_weight_updates=True,
+        save_intermediates=False,
+        use_old_predictor=False,
+    )
 
     if len(args.header) > 0:
         ccsds.set_header_file(args.header)
@@ -71,6 +75,7 @@ def main():
         ccsds.set_error_limits_file(args.error_limits)
 
     if args.decompress:
+        ccsds.compress_image()  # temporary
         ccsds.decompress_image()
     elif args.compress:
         ccsds.compress_image()
@@ -78,9 +83,7 @@ def main():
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
     print(f"Memory usage: {get_memory_usage():.2f} MB")
-    # print(
-    #     f"Compression ratio: {get_file_size(args.image_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream-enc.bin'):.2f}"
-    # )
+    print(f"Compression ratio: {get_file_size(args.image_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream-enc.bin'):.2f}")
 
 
 if __name__ == "__main__":

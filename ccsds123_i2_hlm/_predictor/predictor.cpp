@@ -44,11 +44,17 @@ static inline ll sgn_positive(ll value)
   return -1;
 }
 
+static inline ll floor_div2(ll x)
+{
+  return x >= 0 ? x / 2 : (x - 1) / 2;
+}
+
 /******************** (de)Constructor ********************/
 
-Predictor::Predictor(py::object header, py::object image_constants, bool save_intermediates)
+Predictor::Predictor(py::object header, py::object image_constants, bool delayed_weight_updates, bool save_intermediates)
     : header(header),
       image_constants(image_constants),
+      delayed_weight_updates(delayed_weight_updates),
       save_intermediates(save_intermediates)
 {
   x_size = header.attr("x_size").cast<ll>();
@@ -123,7 +129,7 @@ NumpyArr<ll> Predictor::compress(NumpyArr<ll> image_sample)
         // sample representatives
         ll drsr = drsrsmpl->sample(calc_drsr(z, cqbc, qi, mev, hrpsv), y, x, z);
         srsmpl->sample(calc_sample_representative(x, y, z, cqbc, drsr, image_sample), y, x, z);
-        ll drpe = drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z);
+        drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z);
 
         // mapping
         ll theta = tsmpl->sample(calc_theta(t, psv, mev), y, x, z);
@@ -139,7 +145,7 @@ NumpyArr<ll> Predictor::compress(NumpyArr<ll> image_sample)
         ll y_weight_update = (t + 1) / x_size;
         assert(x_weight_update < x_size && y_weight_update < y_size);
 
-        auto updated_weight_vector = calc_weight_vector(x, y, z, drpe);
+        auto updated_weight_vector = calc_weight_vector(x, y, z);
         for (int i = 0; i < updated_weight_vector.size(); i++) // sets weights for t+1
           wvsmpl->sample(updated_weight_vector.at(i), y_weight_update, x_weight_update, z, i);
       }
@@ -209,7 +215,7 @@ NumpyArr<ll> Predictor::decompress(NumpyArr<ll> mqi)
         ll cqbc = cqbcsmpl->sample(calc_cqbc(x, y, z, psv, mev, qi, decompressed_image_sample), y, x, z);
         ll drsr = drsrsmpl->sample(calc_drsr(z, cqbc, qi, mev, hrpsv), y, x, z);
         srsmpl->sample(calc_sample_representative(x, y, z, cqbc, drsr, decompressed_image_sample), y, x, z);
-        ll drpe = drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z);
+        drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z);
 
         prev_ls = ls;
 
@@ -221,7 +227,7 @@ NumpyArr<ll> Predictor::decompress(NumpyArr<ll> mqi)
         ll y_weight_update = (t + 1) / x_size;
         assert(x_weight_update < x_size && y_weight_update < y_size);
 
-        auto updated_weight_vector = calc_weight_vector(x, y, z, drpe);
+        auto updated_weight_vector = calc_weight_vector(x, y, z);
         for (int i = 0; i < updated_weight_vector.size(); i++) // sets weights for t+1
           wvsmpl->sample(updated_weight_vector.at(i), y_weight_update, x_weight_update, z, i);
       }
@@ -403,14 +409,14 @@ void Predictor::init_predictor_arrays()
   qismpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1, save_intermediates);    // quantizer index
   cqbcsmpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1, save_intermediates);  // clipped quantizer bin center
   drsrsmpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1, save_intermediates);  // double resolution sample representative
-  drpesmpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1, save_intermediates);  // double resolution prediction error
   tsmpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1, save_intermediates);     // scaled prediction endpoint difference (theta)
 
   // these must be stored as they are accessed during execution
-  mqismpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1); // mapped quantizer indices
-  srsmpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1);  // sample representative
-  ldvsmpl = std::make_unique<Sampler<ll, 4>>(ldv_shape, 0);    // local difference vectors
-  wvsmpl = std::make_unique<Sampler<ll, 4>>(ldv_shape, 0);     // weight vectors
+  drpesmpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1); // double resolution prediction error
+  mqismpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1);  // mapped quantizer indices
+  srsmpl = std::make_unique<Sampler<ll, 3>>(image_shape, -1);   // sample representative
+  ldvsmpl = std::make_unique<Sampler<ll, 4>>(ldv_shape, 0);     // local difference vectors
+  wvsmpl = std::make_unique<Sampler<ll, 4>>(ldv_shape, 0);      // weight vectors
 
   init_weights(); // populate the initial weight values
 
@@ -424,17 +430,17 @@ void Predictor::init_predictor_arrays()
   hrpsvsmpl->set_reference("reference/predictor-04-high_resolution_predicted_sample_value.csv");   //
   drpsvsmpl->set_reference("reference/predictor-05-double_resolution_predicted_sample_value.csv"); //
   psvsmpl->set_reference("reference/predictor-06-predicted_sample_value.csv");                     //
-  // prsmpl->set_reference("reference/predictor-07-prediction_residual.csv");                         //
-  mevsmpl->set_reference("reference/predictor-22-maximum_error.csv");                            //
-  qismpl->set_reference("reference/predictor-09-quantizer_index.csv");                           //
-  cqbcsmpl->set_reference("reference/predictor-10-clipped_quantizer_bin_center.csv");            //
-  drsrsmpl->set_reference("reference/predictor-11-double_resolution_sample_representative.csv"); //
-  srsmpl->set_reference("reference/predictor-12-sample_representative.csv");                     //
-  drpesmpl->set_reference("reference/predictor-13-double_resolution_prediction_error.csv");      //
-  tsmpl->set_reference("reference/predictor-18-scaled_prediction_endpoint_difference.csv");      //
-  mqismpl->set_reference("reference/predictor-14-mapped_quantizer_index.csv");                   //
-  wvsmpl->set_reference("reference/predictor-02-weight_vector.csv");                             //
-#endif                                                                                           //
+  prsmpl->set_reference("reference/predictor-07-prediction_residual.csv");                         //
+  mevsmpl->set_reference("reference/predictor-22-maximum_error.csv");                              //
+  qismpl->set_reference("reference/predictor-09-quantizer_index.csv");                             //
+  cqbcsmpl->set_reference("reference/predictor-10-clipped_quantizer_bin_center.csv");              //
+  drsrsmpl->set_reference("reference/predictor-11-double_resolution_sample_representative.csv");   //
+  srsmpl->set_reference("reference/predictor-12-sample_representative.csv");                       //
+  drpesmpl->set_reference("reference/predictor-13-double_resolution_prediction_error.csv");        //
+  tsmpl->set_reference("reference/predictor-18-scaled_prediction_endpoint_difference.csv");        //
+  mqismpl->set_reference("reference/predictor-14-mapped_quantizer_index.csv");                     //
+  wvsmpl->set_reference("reference/predictor-02-weight_vector.csv");                               //
+#endif                                                                                             //
 }
 
 ll Predictor::calc_ls(ll x, ll y, ll z)
@@ -773,13 +779,17 @@ ll calc_weight_offset(ll local_diff, ll weight_update_scaling_exponent, ll weigh
     return ((((sgn_positive(drpe) * local_diff) << (-exponent)) + 1) >> 1);
 }
 
-std::vector<ll> Predictor::calc_weight_vector(ll x, ll y, ll z, ll drpe)
+std::vector<ll> Predictor::calc_weight_vector(ll x, ll y, ll z)
 {
   if (x == 0 && y == 0)
     throw std::invalid_argument("weight vector not defined for t=0");
 
   ll t = x + y * x_size;
-  ll weight_update_scaling_exponent = std::clamp(weight_update_initial_parameter + (t - x_size) / weight_update_change_interval,
+  ll t_weight_update = delayed_weight_updates ? t - 3 : t;
+  ll x_weight_update = delayed_weight_updates ? t_weight_update % x_size : x;
+  ll y_weight_update = delayed_weight_updates ? t_weight_update / x_size : y;
+
+  ll weight_update_scaling_exponent = std::clamp(weight_update_initial_parameter + (t_weight_update - x_size) / weight_update_change_interval,
                                                  weight_update_initial_parameter,
                                                  weight_update_final_parameter)
                                       + image_constants.attr("dynamic_range_bits").cast<ll>()
@@ -790,11 +800,24 @@ std::vector<ll> Predictor::calc_weight_vector(ll x, ll y, ll z, ll drpe)
   // calculates weight vector for t+1
   for (int i = 0; i < weight_vector.size(); i++)
   {
-    ll local_diff = (*ldvsmpl)(y, x, z, i);
+    if (delayed_weight_updates && x < 3)
+    { // keep weight
+      weight_vector.at(i) = (*wvsmpl)(y, x, z, i);
+      continue;
+    }
+
+    ll local_diff = (*ldvsmpl)(y_weight_update, x_weight_update, z, i);
+    ll drpe = (*drpesmpl)(y_weight_update, x_weight_update, z);
     ll weo = (*weight_exponent_offset)(z, i);
 
     ll weight_offset = calc_weight_offset(local_diff, weight_update_scaling_exponent, weo, drpe);
-    ll weight_unclipped = (*wvsmpl)(y, x, z, i) + weight_offset;
+    ll weight_unclipped = (*wvsmpl)(y_weight_update, x_weight_update, z, i) + weight_offset;
+
+    if (delayed_weight_updates && x > 3)
+    { // refine weight
+      weight_unclipped = weight_unclipped + (*wvsmpl)(y, x, z, i);
+      weight_unclipped = floor_div2(weight_unclipped); // to avoid weird rounding errors of negative numbers
+    }
 
     weight_vector.at(i) = std::clamp(weight_unclipped, weight_min, weight_max);
   }

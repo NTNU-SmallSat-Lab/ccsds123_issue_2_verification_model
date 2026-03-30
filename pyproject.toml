@@ -3,7 +3,7 @@ name = "ccsds123_i2_hlm"
 version = "0.0.1"
 authors = [
   { name="Daniel Vorhaug", email="dvorhaug@gmail.com" },
-  { name="Aasmund Nørsett", email="aasmund.norsett@gmail.com" },
+  { name="Aasmund Norsett", email="aasmund.norsett@gmail.com" },
 ]
 description = "A ccsds 123 issue 2 high-level model"
 readme = "README.md"
@@ -23,3 +23,6 @@ logging.level = "INFO"
 
 [tool.pyright]
 typeCheckingMode = "off"
+
+[tool.black]
+line-length = 9999
