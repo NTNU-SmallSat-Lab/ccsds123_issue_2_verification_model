@@ -13,10 +13,9 @@ class HybridEncoder:
     accu_init_file = None
     use_accu_init_file = False
 
-    def __init__(self, header, image_constants, mapped_quantizer_index):
+    def __init__(self, header, image_constants):
         self.header = header
         self.image_constants = image_constants
-        self.mapped_quantizer_index = mapped_quantizer_index
 
     unary_length_limit = None  # Symbol: U_max
     rescaling_counter_size = None  # Symbol: gamma*
@@ -48,7 +47,7 @@ class HybridEncoder:
     prefix_match_index = None
 
     def __init_encoder_arrays(self):
-        image_shape = self.mapped_quantizer_index.shape
+        image_shape = (self.header.y_size, self.header.x_size, self.header.z_size)
         self.accumulator = np.zeros(image_shape, dtype=np.int64)
         self.counter = np.zeros(image_shape[:2], dtype=np.int64)
         self.variable_length_code = np.full(image_shape, fill_value=-1, dtype=np.int64)
@@ -238,7 +237,9 @@ class HybridEncoder:
         self.accu_init_file = accu_init_file
         self.use_accu_init_file = True
 
-    def run_encoder(self):
+    def run_encoder(self, mapped_quantizer_index):
+        self.mapped_quantizer_index = mapped_quantizer_index
+
         self.__init_encoder_constants()
         self.__init_encoder_arrays()
 

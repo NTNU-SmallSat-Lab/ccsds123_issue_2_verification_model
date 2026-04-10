@@ -1,4 +1,4 @@
-bitarray==2.8.2
+bitarray==3.8.1
 numpy==1.26.4
 psutil==5.9.5
 scikit_build_core==0.12.2

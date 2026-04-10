@@ -9,6 +9,7 @@ from . import _predictor as pred
 import numpy as np
 import time
 from pathlib import Path
+from bitarray import bitarray
 
 
 class CCSDS123:
@@ -24,9 +25,11 @@ class CCSDS123:
     predictor = None
     image_file = None
     image_name = None
+    compressed_image_file = None
     image_ordering = None
     sample_format = None
     image_sample = None  # Symbol: s
+    compressed_bitstream = None
     output_folder = str(Path(__file__).resolve().parent.parent) + "/output"
     header_file = None
     optional_tables_file = None
@@ -34,11 +37,9 @@ class CCSDS123:
     use_header_file = False
     accu_init_file = None
     use_accu_init_file = False
-    mqi = None
+    mapped_quantizer_index = None
 
-    def __init__(self, image_file, image_ordering="BSQ", delayed_weight_updates=True, save_intermediates=False, use_old_predictor=False):
-        self.image_file = image_file
-        self.image_name = image_file.split("/")[-1]
+    def __init__(self, image_ordering="BSQ", delayed_weight_updates=False, save_intermediates=False, use_old_predictor=False):
         self.image_ordering = image_ordering
         self.delayed_weight_updates = delayed_weight_updates
         self.save_intermediates = save_intermediates
@@ -111,8 +112,13 @@ class CCSDS123:
     def set_output_dir(self, output):
         self.output_folder = output
 
-    def compress_image(self):
+    def compress_image(self, image_file):
+        print(f"Compressing '{image_file}'")
+
         start_time = time.time()
+
+        self.image_file = image_file
+        self.image_name = image_file.split("/")[-1]
 
         self.header = hd.Header(self.image_name)
         if self.use_header_file:
@@ -128,34 +134,33 @@ class CCSDS123:
         else:
             self.predictor = pred.Predictor(self.header, self.image_constants, self.delayed_weight_updates, self.save_intermediates)
 
-        predictor_output = None
-
         if self.use_old_predictor:
-            print("Compressing with old predictor")
-            predictor_output = self.predictor_old.run_predictor()
+            print("Using old predictor")
+            self.mapped_quantizer_index = self.predictor_old.run_predictor()
         else:
-            print("Compressing with new predictor")
+            print("Using new predictor")
             try:
-                predictor_output = self.predictor.compress(self.image_sample)
+                self.mapped_quantizer_index = self.predictor.compress(self.image_sample)
             except Exception as e:
                 self.predictor.save_data(self.output_folder)
                 print("Predictor threw exception (", e, "), saving and exiting")
                 raise RuntimeError
 
-        self.mqi = predictor_output  # for debugging of decompression
+        # ??
+        # self.mapped_quantizer_index = self.mapped_quantizer_index.transpose(0, 2, 1)  # (y,z,x)
 
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
         if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
-            self.encoder = sa_enc.SampleAdaptiveEncoder(self.header, self.image_constants, predictor_output)
+            self.encoder = sa_enc.SampleAdaptiveEncoder(self.header, self.image_constants)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
-            self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants, predictor_output)
+            self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants)
             if self.use_accu_init_file:
                 self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.BLOCK_ADAPTIVE:
-            self.encoder = ba_enc.BlockAdaptiveEncoder(self.header, self.image_constants, predictor_output)
+            self.encoder = ba_enc.BlockAdaptiveEncoder(self.header, self.image_constants)
 
-        self.encoder.run_encoder()
+        self.encoder.run_encoder(self.mapped_quantizer_index)
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
 
         if self.use_old_predictor:
@@ -168,29 +173,55 @@ class CCSDS123:
 
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")
 
-    def decompress_image(self):
+    def decompress_image(self, compressed_image_file):
+        print(f"Decompressing '{compressed_image_file}'")
+
         start_time = time.time()
 
-        # need to add support for reading config from compressed bitstream
-        self.header = hd.Header(self.image_name)
-        if self.use_header_file:
-            self.header.set_config_from_file(self.header_file, self.optional_tables_file, self.error_limits_file)
+        self.compressed_image_file = compressed_image_file
 
+        ########################################################################################################################
+        # Reading config
+        ########################################################################################################################
+
+        self.compressed_bitstream = bitarray()
+        with open(self.compressed_image_file, "rb") as file:
+            self.compressed_bitstream.fromfile(file)
+
+        print("Reading header config from compressed bitstream")
+        self.header = hd.Header()
+        compressed_body_size = self.header.set_config_from_file(self.compressed_bitstream, self.optional_tables_file)
         self.image_constants = const.ImageConstants(self.header)
 
         print(f"{time.time() - start_time:.3f} seconds. Done with loading")
 
-        print("Decompressing")
+        ########################################################################################################################
+        # Decompression
+        ########################################################################################################################
+
+        if self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
+            self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants)
+            if self.use_accu_init_file:
+                self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
+        else:
+            raise RuntimeError("Unsupported entropy encoder for decompression")
+
+        self.mapped_quantizer_index = self.encoder.run_decoder(self.compressed_bitstream[-(8 * compressed_body_size) :])
+
+        print(f"{time.time() - start_time:.3f} seconds. Done with decoder")
 
         self.predictor = pred.Predictor(self.header, self.image_constants, self.delayed_weight_updates, self.save_intermediates)
-
         decompressed = None
         try:
-            decompressed = self.predictor.decompress(self.mqi)
+            decompressed = self.predictor.decompress(self.mapped_quantizer_index)
         except Exception as e:
             raise e
 
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
+
+        ########################################################################################################################
+        # Store result
+        ########################################################################################################################
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
         np.savetxt(
@@ -212,7 +243,9 @@ class CCSDS123:
                 print("BRUH!")  # TODO: fix
 
         self.predictor.save_data(self.output_folder)
-        with open(f"{self.output_folder}/z-output-bitstream-dec.bin", "wb") as f:
-            f.write(decompressed.astype(self.get_sample_format()).tobytes())
+
+        # where to get the sample format from?
+        # with open(f"{self.output_folder}/z-output-bitstream-dec.bin", "wb") as f:
+        #     f.write(decompressed.astype(self.get_sample_format()).tobytes())
 
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")

@@ -148,14 +148,10 @@ class Header:
     large_d_flag = LargeDFlag.SMALL_D
     dynamic_range = 0  # D. Encode as D%16. 2<=D<=32
     sample_encoding_order = SampleEncodingOrder.BI
-    sub_frame_interleaving_depth = (
-        1  # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
-    )
+    sub_frame_interleaving_depth = 1  # M. Encode as M%2^16. M=1 for BIL, M=z_size for BIP. 1<=M<=z_size
     output_word_size = 0  # B. Encode as B%8. 1<=B<=8
     entropy_coder_type = EntropyCoderType.HYBRID
-    quantizer_fidelity_control_method = (
-        QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-    )
+    quantizer_fidelity_control_method = QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
     supplementary_information_table_count = 0  # tau. 0<=tau<=15
     supplementary_information_tables = []
 
@@ -169,21 +165,13 @@ class Header:
     local_sum_type = LocalSumType.NARROW_COLUMN_ORIENTED
     register_size = 0  # R. Encode as R%64. max{32,D+Omega+2}<=R<=64
     weight_component_resolution = 15  # Omega. Encode as Omega-4. 4<=Omega<=19
-    weight_update_change_interval = (
-        2  # t_inc. Encode as log2(t_inc)-4. 2^4<=t_inc<=2^11
-    )
-    weight_update_initial_parameter = (
-        5  # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
-    )
-    weight_update_final_parameter = (
-        10  # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
-    )
+    weight_update_change_interval = 2  # t_inc. Encode as log2(t_inc)-4. 2^4<=t_inc<=2^11
+    weight_update_initial_parameter = 5  # nu_min. Encode as nu_min+6. -6<=nu_min<=nu_max<=9
+    weight_update_final_parameter = 10  # nu_max. Encode as nu_max+6. -6<=nu_min<=nu_max<=9
     weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag.NOT_INCLUDED
     weight_init_method = WeightInitMethod.DEFAULT
     weight_init_table_flag = WeightInitTableFlag.NOT_INCLUDED
-    weight_init_resolution = (
-        0  # Q. Encode as 0 if weight_init_method=DEFAULT, otherwise as Q. 3<=Q<=Omega+3
-    )
+    weight_init_resolution = 0  # Q. Encode as 0 if weight_init_method=DEFAULT, otherwise as Q. 3<=Q<=Omega+3
 
     # Weight initialization table
     weight_init_table_value = 0  # The default value the weight initialization table cells are initialized to. Not part of standard
@@ -191,9 +179,7 @@ class Header:
 
     # Weight exponent offset table
     weight_exponent_offset_value = 0  # The default value the weight exponent offset table cells are initialized to. Not part of standard
-    weight_exponent_offset_table = (
-        None  # sigma (in word-final position). Array of size N_z * C_z
-    )
+    weight_exponent_offset_table = None  # sigma (in word-final position). Array of size N_z * C_z
 
     # Quantization
     # Error limit update
@@ -229,9 +215,7 @@ class Header:
     ########################
     # Sample-adaptive entropy coder and Hybrid entropy coder
     unary_length_limit = 18  # U_max. Encode as U_max%32. 8<=U_max<=32
-    rescaling_counter_size = (
-        2  # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=gamma*<=11
-    )
+    rescaling_counter_size = 2  # gamma*. Encode as gamma*-4. Max{4,gamma_0+1}<=gamma*<=11
     initial_count_exponent = 1  # gamma_0. Encode as gamma_0%8. 1<=gamma_0<=8
     # Remaining sample-adaptive entropy coder
     accumulator_init_constant = 0  # K. Encode as 15 if K is not used. 0<=K<=min(D-2,14)
@@ -255,22 +239,12 @@ class Header:
             self.set_weight_init_table_array_to_default()
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             self.set_weight_exponent_offset_table_array_to_default()
-        if (
-            self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-            or self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-        ):
+        if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_ONLY or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
                 self.set_absolute_error_limit_table_array_to_default()
             elif self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
                 self.set_periodic_absolute_error_limit_table_array_to_default()
-        if (
-            self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.RELATIVE_ONLY
-            or self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-        ):
+        if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.RELATIVE_ONLY or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
                 self.set_relative_error_limit_table_array_to_default()
             elif self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
@@ -288,90 +262,67 @@ class Header:
         self.z_size = int(image_name.split("x")[0].split("-")[-1])
         format = re.findall("-(.*)-", image_name)[0]
         format = image_name.split("-")[-2].split("-")[-1]
-        self.sample_type = (
-            SampleType.UNSIGNED_INTEGER
-            if format[0] == "u"
-            else SampleType.SIGNED_INTEGER
-        )
+        self.sample_type = SampleType.UNSIGNED_INTEGER if format[0] == "u" else SampleType.SIGNED_INTEGER
 
     def __init_weight_init_table_array(self):
         weight_init_table_shape = (
             self.z_size + 2**16 * int(self.z_size == 0),
-            self.prediction_bands_num
-            + 3 * int(self.prediction_mode == PredictionMode.FULL),
+            self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL),
         )
         self.weight_init_table = np.zeros(weight_init_table_shape, dtype=np.int64)
 
     def __init_weight_exponent_offset_table_array(self):
         weight_exponent_offset_table_shape = (
             self.z_size + 2**16 * int(self.z_size == 0),
-            self.prediction_bands_num
-            + int(self.prediction_mode == PredictionMode.FULL),
+            self.prediction_bands_num + int(self.prediction_mode == PredictionMode.FULL),
         )
-        self.weight_exponent_offset_table = np.zeros(
-            weight_exponent_offset_table_shape, dtype=np.int64
-        )
+        self.weight_exponent_offset_table = np.zeros(weight_exponent_offset_table_shape, dtype=np.int64)
 
     def __init_periodic_absolute_error_limit_table_array(self):
         periodic_absolute_error_limit_table_shape = (
-            ceil(
-                (self.y_size + 2**16 * int(self.y_size == 0))
-                / 2**self.error_update_period_exponent
-            ),
+            ceil((self.y_size + 2**16 * int(self.y_size == 0)) / 2**self.error_update_period_exponent),
             self.z_size + 2**16 * int(self.z_size == 0),
         )
-        self.periodic_absolute_error_limit_table = np.zeros(
-            periodic_absolute_error_limit_table_shape, dtype=np.int64
-        )
+        self.periodic_absolute_error_limit_table = np.zeros(periodic_absolute_error_limit_table_shape, dtype=np.int64)
 
     def __init_periodic_relative_error_limit_table_array(self):
         periodic_relative_error_limit_table_shape = (
-            ceil(
-                (self.y_size + 2**16 * int(self.y_size == 0))
-                / 2**self.error_update_period_exponent
-            ),
+            ceil((self.y_size + 2**16 * int(self.y_size == 0)) / 2**self.error_update_period_exponent),
             self.z_size + 2**16 * int(self.z_size == 0),
         )
-        self.periodic_relative_error_limit_table = np.zeros(
-            periodic_relative_error_limit_table_shape, dtype=np.int64
-        )
+        self.periodic_relative_error_limit_table = np.zeros(periodic_relative_error_limit_table_shape, dtype=np.int64)
 
     def __init_absolute_error_limit_table_array(self):
-        self.absolute_error_limit_table = np.zeros(
-            self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64
-        )
+        self.absolute_error_limit_table = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
 
     def __init_relative_error_limit_table_array(self):
-        self.relative_error_limit_table = np.zeros(
-            self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64
-        )
+        self.relative_error_limit_table = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
 
     def __init_damping_table_array(self):
-        self.damping_table_array = np.zeros(
-            self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64
-        )
+        self.damping_table_array = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
 
     def __init_damping_offset_table_array(self):
-        self.damping_offset_table_array = np.zeros(
-            self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64
-        )
+        self.damping_offset_table_array = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
 
     def __init_accumulator_init_table(self):
-        self.accumulator_init_table = np.zeros(
-            self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64
-        )
+        self.accumulator_init_table = np.zeros(self.z_size + 2**16 * int(self.z_size == 0), dtype=np.int64)
 
     def set_config_from_file(
         self,
-        header_file_location,
+        header_input=None,  # either a path to a header file or a header bitarray (for example from a compressed image file)
         optional_tables_file_location=None,
         error_limits_file_location=None,
     ):
-        header_file = bitarray()
+        read_from_compressed_bitstream = isinstance(header_input, bitarray)
+
+        header_bitstream = bitarray()
         optional_tables_file = bitarray()
 
-        with open(header_file_location, "rb") as file:
-            header_file.fromfile(file)
+        if read_from_compressed_bitstream:
+            header_bitstream = header_input
+        else:
+            with open(header_input, "rb") as file:
+                header_bitstream.fromfile(file)
 
         if optional_tables_file_location is not None:
             with open(optional_tables_file_location, "rb") as file:
@@ -379,412 +330,254 @@ class Header:
         else:
             optional_tables_file = bitarray()  # Empty bitarray
 
-        assert len(header_file) % 8 == 0
+        assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
         # Image metadata
         # Essential subpart
-        self.user_defined_data = int(header_file[0:8].to01(), 2)
-        self.x_size = int(header_file[8:24].to01(), 2)
-        self.y_size = int(header_file[24:40].to01(), 2)
-        self.z_size = int(header_file[40:56].to01(), 2)
-        self.sample_type = SampleType(int(header_file[56:57].to01(), 2))
-        assert header_file[57:58].to01() == "0"  # Reserved
-        self.large_d_flag = LargeDFlag(int(header_file[58:59].to01(), 2))
-        self.dynamic_range = int(header_file[59:63].to01(), 2)
-        self.sample_encoding_order = SampleEncodingOrder(
-            int(header_file[63:64].to01(), 2)
-        )
-        self.sub_frame_interleaving_depth = int(header_file[64:80].to01(), 2)
-        assert header_file[80:82].to01() == "00"  # Reserved
-        self.output_word_size = int(header_file[82:85].to01(), 2)
-        self.entropy_coder_type = EntropyCoderType(int(header_file[85:87].to01(), 2))
-        assert header_file[87:88].to01() == "0"  # Reserved
-        self.quantizer_fidelity_control_method = QuantizerFidelityControlMethod(
-            int(header_file[88:90].to01(), 2)
-        )
-        assert header_file[90:92].to01() == "00"  # Reserved
-        self.supplementary_information_table_count = int(header_file[92:96].to01(), 2)
+        self.user_defined_data = int(header_bitstream[0:8].to01(), 2)
+        self.x_size = int(header_bitstream[8:24].to01(), 2)
+        self.y_size = int(header_bitstream[24:40].to01(), 2)
+        self.z_size = int(header_bitstream[40:56].to01(), 2)
+        self.sample_type = SampleType(int(header_bitstream[56:57].to01(), 2))
+        assert header_bitstream[57:58].to01() == "0"  # Reserved
+        self.large_d_flag = LargeDFlag(int(header_bitstream[58:59].to01(), 2))
+        self.dynamic_range = int(header_bitstream[59:63].to01(), 2)
+        self.sample_encoding_order = SampleEncodingOrder(int(header_bitstream[63:64].to01(), 2))
+        self.sub_frame_interleaving_depth = int(header_bitstream[64:80].to01(), 2)
+        assert header_bitstream[80:82].to01() == "00"  # Reserved
+        self.output_word_size = int(header_bitstream[82:85].to01(), 2)
+        self.entropy_coder_type = EntropyCoderType(int(header_bitstream[85:87].to01(), 2))
+        assert header_bitstream[87:88].to01() == "0"  # Reserved
+        self.quantizer_fidelity_control_method = QuantizerFidelityControlMethod(int(header_bitstream[88:90].to01(), 2))
+        assert header_bitstream[90:92].to01() == "00"  # Reserved
+        self.supplementary_information_table_count = int(header_bitstream[92:96].to01(), 2)
 
-        header_file = header_file[96:]
-        assert len(header_file) % 8 == 0
+        header_bitstream = header_bitstream[96:]
+        assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
         # Supplementary information tables
-        self.supplementary_information_tables = [
-            SupplementaryInformationTable()
-            for i in range(self.supplementary_information_table_count)
-        ]
+        self.supplementary_information_tables = [SupplementaryInformationTable() for i in range(self.supplementary_information_table_count)]
         for i in range(self.supplementary_information_table_count):
-            self.supplementary_information_tables[i].table_type = TableType(
-                int(header_file[0:2].to01(), 2)
-            )
-            assert header_file[2:4].to01() == "00"  # Reserved
-            self.supplementary_information_tables[i].table_purpose = int(
-                header_file[4:8].to01(), 2
-            )
-            assert header_file[8:9].to01() == "0"  # Reserved
-            self.supplementary_information_tables[i].table_structure = TableStructure(
-                int(header_file[9:11].to01(), 2)
-            )
-            assert header_file[11:12].to01() == "0"  # Reserved
-            self.supplementary_information_tables[i].user_defined_data = int(
-                header_file[12:16].to01(), 2
-            )
-            header_file = header_file[16:]
+            self.supplementary_information_tables[i].table_type = TableType(int(header_bitstream[0:2].to01(), 2))
+            assert header_bitstream[2:4].to01() == "00"  # Reserved
+            self.supplementary_information_tables[i].table_purpose = int(header_bitstream[4:8].to01(), 2)
+            assert header_bitstream[8:9].to01() == "0"  # Reserved
+            self.supplementary_information_tables[i].table_structure = TableStructure(int(header_bitstream[9:11].to01(), 2))
+            assert header_bitstream[11:12].to01() == "0"  # Reserved
+            self.supplementary_information_tables[i].user_defined_data = int(header_bitstream[12:16].to01(), 2)
+            header_bitstream = header_bitstream[16:]
 
             table_size = 0
-            if (
-                self.supplementary_information_tables[i].table_structure
-                == TableStructure.ZERO_DIMENSIONAL
-            ):
+            if self.supplementary_information_tables[i].table_structure == TableStructure.ZERO_DIMENSIONAL:
                 table_size = 1
-            elif (
-                self.supplementary_information_tables[i].table_structure
-                == TableStructure.ONE_DIMENSIONAL
-            ):
+            elif self.supplementary_information_tables[i].table_structure == TableStructure.ONE_DIMENSIONAL:
                 table_size = self.z_size + 2**16 * int(self.z_size == 0)
-            elif (
-                self.supplementary_information_tables[i].table_structure
-                == TableStructure.TWO_DIMENSIONAL_ZX
-            ):
-                table_size = (self.z_size + 2**16 * int(self.z_size == 0)) * (
-                    self.x_size + 2**16 * int(self.x_size == 0)
-                )
-            elif (
-                self.supplementary_information_tables[i].table_structure
-                == TableStructure.TWO_DIMENSIONAL_YX
-            ):
-                table_size = (self.y_size + 2**16 * int(self.y_size == 0)) * (
-                    self.x_size + 2**16 * int(self.x_size == 0)
-                )
+            elif self.supplementary_information_tables[i].table_structure == TableStructure.TWO_DIMENSIONAL_ZX:
+                table_size = (self.z_size + 2**16 * int(self.z_size == 0)) * (self.x_size + 2**16 * int(self.x_size == 0))
+            elif self.supplementary_information_tables[i].table_structure == TableStructure.TWO_DIMENSIONAL_YX:
+                table_size = (self.y_size + 2**16 * int(self.y_size == 0)) * (self.x_size + 2**16 * int(self.x_size == 0))
 
             data_subblock_bits = 0
             if self.supplementary_information_tables[i].table_type != TableType.FLOAT:
-                bit_depth = int(header_file[0:5].to01(), 2)
+                bit_depth = int(header_bitstream[0:5].to01(), 2)
                 bit_depth += 2**5 * int(bit_depth == 0)
                 data_subblock_bits = bit_depth * table_size + 5
 
             elif self.supplementary_information_tables[i].table_type == TableType.FLOAT:
-                significand_bit_depth = int(header_file[0:5].to01(), 2)
-                exponent_bit_depth = int(header_file[5:8].to01(), 2)
-                bit_depth = (
-                    significand_bit_depth
-                    + exponent_bit_depth
-                    + 8 * int(exponent_bit_depth == 0)
-                    + 1
-                )
-                data_subblock_bits = (
-                    bit_depth * table_size
-                    + 8
-                    + exponent_bit_depth
-                    + 8 * int(exponent_bit_depth == 0)
-                )  # Exponent bias is included
+                significand_bit_depth = int(header_bitstream[0:5].to01(), 2)
+                exponent_bit_depth = int(header_bitstream[5:8].to01(), 2)
+                bit_depth = significand_bit_depth + exponent_bit_depth + 8 * int(exponent_bit_depth == 0) + 1
+                data_subblock_bits = bit_depth * table_size + 8 + exponent_bit_depth + 8 * int(exponent_bit_depth == 0)  # Exponent bias is included
 
             data_subblock_bits += (8 - data_subblock_bits % 8) % 8  # Add fill bits
-            self.supplementary_information_tables[i].table_data_subblock = header_file[
-                0:data_subblock_bits
-            ]
-            header_file = header_file[data_subblock_bits:]
+            self.supplementary_information_tables[i].table_data_subblock = header_bitstream[0:data_subblock_bits]
+            header_bitstream = header_bitstream[data_subblock_bits:]
 
-        assert len(header_file) % 8 == 0
+        assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
         # Predictor metadata
         # Predictor primary structure
-        assert header_file[0:1].to01() == "0"
-        self.sample_representative_flag = SampleRepresentativeFlag(
-            int(header_file[1:2].to01(), 2)
-        )
-        self.prediction_bands_num = int(header_file[2:6].to01(), 2)
-        self.prediction_mode = PredictionMode(int(header_file[6:7].to01(), 2))
-        self.weight_exponent_offset_flag = WeightExponentOffsetFlag(
-            int(header_file[7:8].to01(), 2)
-        )
-        self.local_sum_type = LocalSumType(int(header_file[8:10].to01(), 2))
-        self.register_size = int(header_file[10:16].to01(), 2)
-        self.weight_component_resolution = int(header_file[16:20].to01(), 2)
-        self.weight_update_change_interval = int(header_file[20:24].to01(), 2)
-        self.weight_update_initial_parameter = int(header_file[24:28].to01(), 2)
-        self.weight_update_final_parameter = int(header_file[28:32].to01(), 2)
-        self.weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag(
-            int(header_file[32:33].to01(), 2)
-        )
-        self.weight_init_method = WeightInitMethod(int(header_file[33:34].to01(), 2))
-        self.weight_init_table_flag = WeightInitTableFlag(
-            int(header_file[34:35].to01(), 2)
-        )
-        self.weight_init_resolution = int(header_file[35:40].to01(), 2)
-        header_file = header_file[40:]
+        assert header_bitstream[0:1].to01() == "0"
+        self.sample_representative_flag = SampleRepresentativeFlag(int(header_bitstream[1:2].to01(), 2))
+        self.prediction_bands_num = int(header_bitstream[2:6].to01(), 2)
+        self.prediction_mode = PredictionMode(int(header_bitstream[6:7].to01(), 2))
+        self.weight_exponent_offset_flag = WeightExponentOffsetFlag(int(header_bitstream[7:8].to01(), 2))
+        self.local_sum_type = LocalSumType(int(header_bitstream[8:10].to01(), 2))
+        self.register_size = int(header_bitstream[10:16].to01(), 2)
+        self.weight_component_resolution = int(header_bitstream[16:20].to01(), 2)
+        self.weight_update_change_interval = int(header_bitstream[20:24].to01(), 2)
+        self.weight_update_initial_parameter = int(header_bitstream[24:28].to01(), 2)
+        self.weight_update_final_parameter = int(header_bitstream[28:32].to01(), 2)
+        self.weight_exponent_offset_table_flag = WeightExponentOffsetTableFlag(int(header_bitstream[32:33].to01(), 2))
+        self.weight_init_method = WeightInitMethod(int(header_bitstream[33:34].to01(), 2))
+        self.weight_init_table_flag = WeightInitTableFlag(int(header_bitstream[34:35].to01(), 2))
+        self.weight_init_resolution = int(header_bitstream[35:40].to01(), 2)
+        header_bitstream = header_bitstream[40:]
 
-        assert len(header_file) % 8 == 0
+        assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
         # Weight tables subpart
         if self.weight_init_method == WeightInitMethod.CUSTOM:
             self.__init_weight_init_table_array()
             for z in range(self.weight_init_table.shape[0]):
-                for j in range(
-                    min(z, self.prediction_bands_num)
-                    + 3 * int(self.prediction_mode == PredictionMode.FULL)
-                ):
+                for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
                     if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
-                        number = header_file[
-                            0 : self.weight_init_resolution
-                        ].to01()  # extract 4 bit two's complement number
-                        self.weight_init_table[z, j] = int(number[0] == "1") * -(
-                            2 ** (self.weight_init_resolution - 1)
-                        ) + int(number[1:], 2)
-                        header_file = header_file[self.weight_init_resolution :]
-                    elif (
-                        self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED
-                    ):
+                        number = header_bitstream[0 : self.weight_init_resolution].to01()  # extract 4 bit two's complement number
+                        self.weight_init_table[z, j] = int(number[0] == "1") * -(2 ** (self.weight_init_resolution - 1)) + int(number[1:], 2)
+                        header_bitstream = header_bitstream[self.weight_init_resolution :]
+                    elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
                         assert optional_tables_file_location is not None
-                        number = optional_tables_file[
-                            0 : self.weight_init_resolution
-                        ].to01()  # extract 4 bit two's complement number
-                        self.weight_init_table[z, j] = int(number[0] == "1") * -(
-                            2 ** (self.weight_init_resolution - 1)
-                        ) + int(number[1:], 2)
-                        optional_tables_file = optional_tables_file[
-                            self.weight_init_resolution :
-                        ]
+                        number = optional_tables_file[0 : self.weight_init_resolution].to01()  # extract 4 bit two's complement number
+                        self.weight_init_table[z, j] = int(number[0] == "1") * -(2 ** (self.weight_init_resolution - 1)) + int(number[1:], 2)
+                        optional_tables_file = optional_tables_file[self.weight_init_resolution :]
             # Skip fill bits
             if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
-                header_file = header_file[len(header_file) % 8 :]
+                header_bitstream = header_bitstream[len(header_bitstream) % 8 :]
             elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
-                optional_tables_file = optional_tables_file[
-                    len(optional_tables_file) % 8 :
-                ]
+                optional_tables_file = optional_tables_file[len(optional_tables_file) % 8 :]
 
-        assert len(header_file) % 8 == 0
+        assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             self.__init_weight_exponent_offset_table_array()
             for z in range(self.weight_exponent_offset_table.shape[0]):
-                for j in range(
-                    min(z, self.prediction_bands_num)
-                    + int(self.prediction_mode == PredictionMode.FULL)
-                ):
-                    if (
-                        self.weight_exponent_offset_table_flag
-                        == WeightExponentOffsetTableFlag.INCLUDED
-                    ):
-                        number = header_file[
-                            0:4
-                        ].to01()  # extract 4 bit two's complement number
-                        self.weight_exponent_offset_table[z, j] = int(
-                            number[0] == "1"
-                        ) * -(2**3) + int(number[1:4], 2)
-                        header_file = header_file[4:]
-                    elif (
-                        self.weight_exponent_offset_table_flag
-                        == WeightExponentOffsetTableFlag.NOT_INCLUDED
-                    ):
+                for j in range(min(z, self.prediction_bands_num) + int(self.prediction_mode == PredictionMode.FULL)):
+                    if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+                        number = header_bitstream[0:4].to01()  # extract 4 bit two's complement number
+                        self.weight_exponent_offset_table[z, j] = int(number[0] == "1") * -(2**3) + int(number[1:4], 2)
+                        header_bitstream = header_bitstream[4:]
+                    elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
                         assert optional_tables_file_location is not None
-                        number = optional_tables_file[
-                            0:4
-                        ].to01()  # extract 4 bit two's complement number
-                        self.weight_exponent_offset_table[z, j] = int(
-                            number[0] == "1"
-                        ) * -(2**3) + int(number[1:4], 2)
+                        number = optional_tables_file[0:4].to01()  # extract 4 bit two's complement number
+                        self.weight_exponent_offset_table[z, j] = int(number[0] == "1") * -(2**3) + int(number[1:4], 2)
                         optional_tables_file = optional_tables_file[4:]
             # Skip fill bits
-            if (
-                self.weight_exponent_offset_table_flag
-                == WeightExponentOffsetTableFlag.INCLUDED
-            ):
-                header_file = header_file[len(header_file) % 8 :]
-            elif (
-                self.weight_exponent_offset_table_flag
-                == WeightExponentOffsetTableFlag.NOT_INCLUDED
-            ):
-                optional_tables_file = optional_tables_file[
-                    len(optional_tables_file) % 8 :
-                ]
+            if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
+                header_bitstream = header_bitstream[len(header_bitstream) % 8 :]
+            elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
+                optional_tables_file = optional_tables_file[len(optional_tables_file) % 8 :]
 
-        assert len(header_file) % 8 == 0
+        assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
         # Predictor quantization structure
-        if (
-            self.quantizer_fidelity_control_method
-            != QuantizerFidelityControlMethod.LOSSLESS
-        ):
+        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
 
             # Predictor quantization error limit update period structure
             if self.sample_encoding_order != SampleEncodingOrder.BSQ:
-                assert header_file[0:1].to01() == "0"
-                self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag(
-                    int(header_file[1:2].to01(), 2)
-                )
-                assert header_file[2:4].to01() == "00"
-                self.error_update_period_exponent = int(header_file[4:8].to01(), 2)
-                header_file = header_file[8:]
+                assert header_bitstream[0:1].to01() == "0"
+                self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag(int(header_bitstream[1:2].to01(), 2))
+                assert header_bitstream[2:4].to01() == "00"
+                self.error_update_period_exponent = int(header_bitstream[4:8].to01(), 2)
+                header_bitstream = header_bitstream[8:]
             else:
                 self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
                 self.error_update_period_exponent = 0
 
-            assert len(header_file) % 8 == 0
+            assert len(header_bitstream) % 8 == 0
             assert len(optional_tables_file) % 8 == 0
 
             # Predictor quantization absolute error limit structure
-            if (
-                self.quantizer_fidelity_control_method
-                != QuantizerFidelityControlMethod.RELATIVE_ONLY
-            ):
-                assert header_file[0:1].to01() == "0"
-                self.absolute_error_limit_assignment_method = (
-                    ErrorLimitAssignmentMethod(int(header_file[1:2].to01(), 2))
-                )
-                assert header_file[2:4].to01() == "00"
-                self.absolute_error_limit_bit_depth = int(header_file[4:8].to01(), 2)
-                header_file = header_file[8:]
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                assert header_bitstream[0:1].to01() == "0"
+                self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(header_bitstream[1:2].to01(), 2))
+                assert header_bitstream[2:4].to01() == "00"
+                self.absolute_error_limit_bit_depth = int(header_bitstream[4:8].to01(), 2)
+                header_bitstream = header_bitstream[8:]
 
-                if (
-                    self.periodic_error_updating_flag
-                    == PeriodicErrorUpdatingFlag.NOT_USED
-                ):
-                    if (
-                        self.absolute_error_limit_assignment_method
-                        == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                    ):
+                if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
+                    if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                         self.absolute_error_limit_value = int(
-                            header_file[
-                                : self.get_absolute_error_limit_bit_depth_value()
-                            ].to01(),
+                            header_bitstream[: self.get_absolute_error_limit_bit_depth_value()].to01(),
                             2,
                         )
                         self.set_absolute_error_limit_table_array_to_default()
-                        header_file = header_file[
-                            self.get_absolute_error_limit_bit_depth_value() :
-                        ]
-                    elif (
-                        self.absolute_error_limit_assignment_method
-                        == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-                    ):
+                        header_bitstream = header_bitstream[self.get_absolute_error_limit_bit_depth_value() :]
+                    elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                         self.__init_absolute_error_limit_table_array()
                         for z in range(self.absolute_error_limit_table.shape[0]):
                             self.absolute_error_limit_table[z] = int(
-                                header_file[
-                                    : self.get_absolute_error_limit_bit_depth_value()
-                                ].to01(),
+                                header_bitstream[: self.get_absolute_error_limit_bit_depth_value()].to01(),
                                 2,
                             )
-                            header_file = header_file[
-                                self.get_absolute_error_limit_bit_depth_value() :
-                            ]
+                            header_bitstream = header_bitstream[self.get_absolute_error_limit_bit_depth_value() :]
 
-                    header_file = header_file[len(header_file) % 8 :]  # Skip fill bits
+                    header_bitstream = header_bitstream[len(header_bitstream) % 8 :]  # Skip fill bits
 
             else:
-                self.absolute_error_limit_assignment_method = (
-                    ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                )
+                self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
                 self.absolute_error_limit_bit_depth = 0
                 self.absolute_error_limit_value = 0
 
-            assert len(header_file) % 8 == 0
+            assert len(header_bitstream) % 8 == 0
             assert len(optional_tables_file) % 8 == 0
 
             # Predictor quantization relative error limit structure
-            if (
-                self.quantizer_fidelity_control_method
-                != QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-            ):
-                assert header_file[0:1].to01() == "0"
-                self.relative_error_limit_assignment_method = (
-                    ErrorLimitAssignmentMethod(int(header_file[1:2].to01(), 2))
-                )
-                assert header_file[2:4].to01() == "00"
-                self.relative_error_limit_bit_depth = int(header_file[4:8].to01(), 2)
-                header_file = header_file[8:]
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                assert header_bitstream[0:1].to01() == "0"
+                self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod(int(header_bitstream[1:2].to01(), 2))
+                assert header_bitstream[2:4].to01() == "00"
+                self.relative_error_limit_bit_depth = int(header_bitstream[4:8].to01(), 2)
+                header_bitstream = header_bitstream[8:]
 
-                if (
-                    self.periodic_error_updating_flag
-                    == PeriodicErrorUpdatingFlag.NOT_USED
-                ):
-                    if (
-                        self.relative_error_limit_assignment_method
-                        == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                    ):
+                if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
+                    if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                         self.relative_error_limit_value = int(
-                            header_file[
-                                : self.get_relative_error_limit_bit_depth_value()
-                            ].to01(),
+                            header_bitstream[: self.get_relative_error_limit_bit_depth_value()].to01(),
                             2,
                         )
                         self.set_relative_error_limit_table_array_to_default()
-                        header_file = header_file[
-                            self.get_relative_error_limit_bit_depth_value() :
-                        ]
-                    elif (
-                        self.relative_error_limit_assignment_method
-                        == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-                    ):
+                        header_bitstream = header_bitstream[self.get_relative_error_limit_bit_depth_value() :]
+                    elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                         self.__init_relative_error_limit_table_array()
                         for z in range(self.relative_error_limit_table.shape[0]):
                             self.relative_error_limit_table[z] = int(
-                                header_file[
-                                    : self.get_relative_error_limit_bit_depth_value()
-                                ].to01(),
+                                header_bitstream[: self.get_relative_error_limit_bit_depth_value()].to01(),
                                 2,
                             )
-                            header_file = header_file[
-                                self.get_relative_error_limit_bit_depth_value() :
-                            ]
+                            header_bitstream = header_bitstream[self.get_relative_error_limit_bit_depth_value() :]
 
-                    header_file = header_file[len(header_file) % 8 :]  # Skip fill bits
+                    header_bitstream = header_bitstream[len(header_bitstream) % 8 :]  # Skip fill bits
 
             else:
-                self.relative_error_limit_assignment_method = (
-                    ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                )
+                self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
                 self.relative_error_limit_bit_depth = 0
                 self.relative_error_limit_value = 0
         else:
             self.periodic_error_updating_flag = PeriodicErrorUpdatingFlag.NOT_USED
             self.error_update_period_exponent = 0
-            self.absolute_error_limit_assignment_method = (
-                ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            )
+            self.absolute_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
             self.absolute_error_limit_bit_depth = 1
             self.absolute_error_limit_value = 0
-            self.relative_error_limit_assignment_method = (
-                ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            )
+            self.relative_error_limit_assignment_method = ErrorLimitAssignmentMethod.BAND_INDEPENDENT
             self.relative_error_limit_bit_depth = 1
             self.relative_error_limit_value = 0
 
-        assert len(header_file) % 8 == 0
+        assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
         # Predictor sample representative structure
         if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
-            assert header_file[0:5].to01() == "00000"
-            self.sample_representative_resolution = int(header_file[5:8].to01(), 2)
-            assert header_file[8:9].to01() == "0"
-            self.band_varying_damping_flag = BandVaryingDampingFlag(
-                int(header_file[9:10].to01(), 2)
-            )
-            self.damping_table_flag = DampingTableFlag(
-                int(header_file[10:11].to01(), 2)
-            )
-            assert header_file[11:12].to01() == "0"
-            self.fixed_damping_value = int(header_file[12:16].to01(), 2)
-            assert header_file[16:17].to01() == "0"
-            self.band_varying_offset_flag = BandVaryingOffsetFlag(
-                int(header_file[17:18].to01(), 2)
-            )
-            self.damping_offset_table_flag = OffsetTableFlag(
-                int(header_file[18:19].to01(), 2)
-            )
-            assert header_file[19:20].to01() == "0"
-            self.fixed_offset_value = int(header_file[20:24].to01(), 2)
-            header_file = header_file[24:]
+            assert header_bitstream[0:5].to01() == "00000"
+            self.sample_representative_resolution = int(header_bitstream[5:8].to01(), 2)
+            assert header_bitstream[8:9].to01() == "0"
+            self.band_varying_damping_flag = BandVaryingDampingFlag(int(header_bitstream[9:10].to01(), 2))
+            self.damping_table_flag = DampingTableFlag(int(header_bitstream[10:11].to01(), 2))
+            assert header_bitstream[11:12].to01() == "0"
+            self.fixed_damping_value = int(header_bitstream[12:16].to01(), 2)
+            assert header_bitstream[16:17].to01() == "0"
+            self.band_varying_offset_flag = BandVaryingOffsetFlag(int(header_bitstream[17:18].to01(), 2))
+            self.damping_offset_table_flag = OffsetTableFlag(int(header_bitstream[18:19].to01(), 2))
+            assert header_bitstream[19:20].to01() == "0"
+            self.fixed_offset_value = int(header_bitstream[20:24].to01(), 2)
+            header_bitstream = header_bitstream[24:]
 
-            assert len(header_file) % 8 == 0
+            assert len(header_bitstream) % 8 == 0
             assert len(optional_tables_file) % 8 == 0
 
             # Damping and offset table sublocks
@@ -793,36 +586,25 @@ class Header:
                 for i in range(self.damping_table_array.shape[0]):
                     if self.damping_table_flag == DampingTableFlag.INCLUDED:
                         self.damping_table_array[i] = int(
-                            header_file[: self.sample_representative_resolution].to01(),
+                            header_bitstream[: self.sample_representative_resolution].to01(),
                             2,
                         )
-                        header_file = header_file[
-                            self.sample_representative_resolution :
-                        ]
+                        header_bitstream = header_bitstream[self.sample_representative_resolution :]
                     elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
                         assert optional_tables_file_location is not None
                         self.damping_table_array[i] = int(
-                            optional_tables_file[
-                                : self.sample_representative_resolution
-                            ].to01(),
+                            optional_tables_file[: self.sample_representative_resolution].to01(),
                             2,
                         )
-                        optional_tables_file = optional_tables_file[
-                            self.sample_representative_resolution :
-                        ]
+                        optional_tables_file = optional_tables_file[self.sample_representative_resolution :]
                 if self.damping_table_flag == DampingTableFlag.INCLUDED:
-                    header_file = header_file[len(header_file) % 8 :]
+                    header_bitstream = header_bitstream[len(header_bitstream) % 8 :]
                 elif self.damping_table_flag == DampingTableFlag.NOT_INCLUDED:
-                    optional_tables_file = optional_tables_file[
-                        len(optional_tables_file) % 8 :
-                    ]
-            elif (
-                self.band_varying_damping_flag
-                == BandVaryingDampingFlag.BAND_INDEPENDENT
-            ):
+                    optional_tables_file = optional_tables_file[len(optional_tables_file) % 8 :]
+            elif self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_INDEPENDENT:
                 self.set_damping_table_array_to_default()
 
-            assert len(header_file) % 8 == 0
+            assert len(header_bitstream) % 8 == 0
             assert len(optional_tables_file) % 8 == 0
 
             if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
@@ -830,32 +612,22 @@ class Header:
                 for i in range(self.damping_offset_table_array.shape[0]):
                     if self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
                         self.damping_offset_table_array[i] = int(
-                            header_file[: self.sample_representative_resolution].to01(),
+                            header_bitstream[: self.sample_representative_resolution].to01(),
                             2,
                         )
-                        header_file = header_file[
-                            self.sample_representative_resolution :
-                        ]
+                        header_bitstream = header_bitstream[self.sample_representative_resolution :]
                     elif self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED:
                         assert optional_tables_file_location is not None
                         self.damping_offset_table_array[i] = int(
-                            optional_tables_file[
-                                : self.sample_representative_resolution
-                            ].to01(),
+                            optional_tables_file[: self.sample_representative_resolution].to01(),
                             2,
                         )
-                        optional_tables_file = optional_tables_file[
-                            self.sample_representative_resolution :
-                        ]
+                        optional_tables_file = optional_tables_file[self.sample_representative_resolution :]
                 if self.damping_offset_table_flag == OffsetTableFlag.INCLUDED:
-                    header_file = header_file[len(header_file) % 8 :]
+                    header_bitstream = header_bitstream[len(header_bitstream) % 8 :]
                 elif self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED:
-                    optional_tables_file = optional_tables_file[
-                        len(optional_tables_file) % 8 :
-                    ]
-            elif (
-                self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_INDEPENDENT
-            ):
+                    optional_tables_file = optional_tables_file[len(optional_tables_file) % 8 :]
+            elif self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_INDEPENDENT:
                 self.set_damping_offset_table_array_to_default()
 
         else:
@@ -869,151 +641,96 @@ class Header:
             self.set_damping_table_array_to_default()
             self.set_damping_offset_table_array_to_default()
 
-        assert len(header_file) % 8 == 0
+        assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
         # Entropy coder metadata
         # Sample-adaptive entropy coder
         if self.entropy_coder_type == EntropyCoderType.SAMPLE_ADAPTIVE:
-            self.unary_length_limit = int(header_file[0:5].to01(), 2)
-            self.rescaling_counter_size = int(header_file[5:8].to01(), 2)
-            self.initial_count_exponent = int(header_file[8:11].to01(), 2)
-            self.accumulator_init_constant = int(header_file[11:15].to01(), 2)
-            self.accumulator_init_table_flag = AccumulatorInitTableFlag(
-                int(header_file[15:16].to01(), 2)
-            )
-            header_file = header_file[16:]
+            self.unary_length_limit = int(header_bitstream[0:5].to01(), 2)
+            self.rescaling_counter_size = int(header_bitstream[5:8].to01(), 2)
+            self.initial_count_exponent = int(header_bitstream[8:11].to01(), 2)
+            self.accumulator_init_constant = int(header_bitstream[11:15].to01(), 2)
+            self.accumulator_init_table_flag = AccumulatorInitTableFlag(int(header_bitstream[15:16].to01(), 2))
+            header_bitstream = header_bitstream[16:]
 
             # Accumulator initialization table subblock
             if self.accumulator_init_constant == 15:
                 self.__init_accumulator_init_table()
                 for z in range(self.accumulator_init_table.shape[0]):
-                    if (
-                        self.accumulator_init_table_flag
-                        == AccumulatorInitTableFlag.INCLUDED
-                    ):
-                        self.accumulator_init_table[z] = int(header_file[:4].to01(), 2)
-                        header_file = header_file[4:]
-                    elif (
-                        self.accumulator_init_table_flag
-                        == AccumulatorInitTableFlag.NOT_INCLUDED
-                    ):
+                    if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
+                        self.accumulator_init_table[z] = int(header_bitstream[:4].to01(), 2)
+                        header_bitstream = header_bitstream[4:]
+                    elif self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED:
                         assert optional_tables_file_location is not None
-                        self.accumulator_init_table[z] = int(
-                            optional_tables_file[:4].to01(), 2
-                        )
+                        self.accumulator_init_table[z] = int(optional_tables_file[:4].to01(), 2)
                         optional_tables_file = optional_tables_file[4:]
-                if (
-                    self.accumulator_init_table_flag
-                    == AccumulatorInitTableFlag.INCLUDED
-                ):
-                    header_file = header_file[len(header_file) % 8 :]
-                elif (
-                    self.accumulator_init_table_flag
-                    == AccumulatorInitTableFlag.NOT_INCLUDED
-                ):
-                    optional_tables_file = optional_tables_file[
-                        len(optional_tables_file) % 8 :
-                    ]
+                if self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED:
+                    header_bitstream = header_bitstream[len(header_bitstream) % 8 :]
+                elif self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED:
+                    optional_tables_file = optional_tables_file[len(optional_tables_file) % 8 :]
             else:
                 self.set_accumulator_init_table_to_default()
 
         # Hybrid entropy coder
         elif self.entropy_coder_type == EntropyCoderType.HYBRID:
-            self.unary_length_limit = int(header_file[0:5].to01(), 2)
-            self.rescaling_counter_size = int(header_file[5:8].to01(), 2)
-            self.initial_count_exponent = int(header_file[8:11].to01(), 2)
-            assert header_file[11:16].to01() == "00000"
-            header_file = header_file[16:]
+            self.unary_length_limit = int(header_bitstream[0:5].to01(), 2)
+            self.rescaling_counter_size = int(header_bitstream[5:8].to01(), 2)
+            self.initial_count_exponent = int(header_bitstream[8:11].to01(), 2)
+            assert header_bitstream[11:16].to01() == "00000"
+            header_bitstream = header_bitstream[16:]
 
         # Block-adaptive entropy coder
         elif self.entropy_coder_type == EntropyCoderType.BLOCK_ADAPTIVE:
-            assert header_file[0:1].to01() == "0"
-            self.block_size = int(header_file[1:3].to01(), 2)
-            self.restricted_code_options_flag = RestrictedCodeOptionsFlag(
-                int(header_file[3:4].to01(), 2)
-            )
-            self.reference_sample_interval = int(header_file[4:16].to01(), 2)
-            header_file = header_file[16:]
+            assert header_bitstream[0:1].to01() == "0"
+            self.block_size = int(header_bitstream[1:3].to01(), 2)
+            self.restricted_code_options_flag = RestrictedCodeOptionsFlag(int(header_bitstream[3:4].to01(), 2))
+            self.reference_sample_interval = int(header_bitstream[4:16].to01(), 2)
+            header_bitstream = header_bitstream[16:]
 
-        assert len(header_file) == 0
+        # entire header file should be read...
+        if not read_from_compressed_bitstream:
+            assert len(header_bitstream) == 0
         assert len(optional_tables_file) == 0
 
-        # Read error limit file for periodic error limit updating
+        # init periodic error updating tables
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                self.__init_periodic_absolute_error_limit_table_array()
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                self.__init_periodic_relative_error_limit_table_array()
+
+        # read error limit file for periodic error limit updating, when decompressing these are read from the compressed bitstream
+        if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED and not read_from_compressed_bitstream:
             assert error_limits_file_location is not None
 
             error_limits_file = bitarray()
             with open(error_limits_file_location, "rb") as file:
                 error_limits_file.fromfile(file)
+            for i in range(ceil((self.y_size + 2**16 * int(self.y_size == 0)) / 2**self.error_update_period_exponent)):
 
-            if (
-                self.quantizer_fidelity_control_method
-                != QuantizerFidelityControlMethod.RELATIVE_ONLY
-            ):
-                self.__init_periodic_absolute_error_limit_table_array()
-            if (
-                self.quantizer_fidelity_control_method
-                != QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-            ):
-                self.__init_periodic_relative_error_limit_table_array()
-
-            for i in range(
-                ceil(
-                    (self.y_size + 2**16 * int(self.y_size == 0))
-                    / 2**self.error_update_period_exponent
-                )
-            ):
-
-                if (
-                    self.quantizer_fidelity_control_method
-                    != QuantizerFidelityControlMethod.RELATIVE_ONLY
-                ):
-                    if (
-                        self.absolute_error_limit_assignment_method
-                        == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                    ):
-                        self.periodic_absolute_error_limit_table[i, :] = int(
-                            error_limits_file[:16].to01(), 2
-                        )
+                if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                    if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                        self.periodic_absolute_error_limit_table[i, :] = int(error_limits_file[:16].to01(), 2)
                         error_limits_file = error_limits_file[16:]
-                    elif (
-                        self.absolute_error_limit_assignment_method
-                        == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-                    ):
-                        for z in range(
-                            self.periodic_absolute_error_limit_table.shape[1]
-                        ):
-                            self.periodic_absolute_error_limit_table[i, z] = int(
-                                error_limits_file[:16].to01(), 2
-                            )
+                    elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                        for z in range(self.periodic_absolute_error_limit_table.shape[1]):
+                            self.periodic_absolute_error_limit_table[i, z] = int(error_limits_file[:16].to01(), 2)
                             error_limits_file = error_limits_file[16:]
 
-                if (
-                    self.quantizer_fidelity_control_method
-                    != QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-                ):
-                    if (
-                        self.relative_error_limit_assignment_method
-                        == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                    ):
-                        self.periodic_relative_error_limit_table[i, :] = int(
-                            error_limits_file[:16].to01(), 2
-                        )
+                if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                    if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                        self.periodic_relative_error_limit_table[i, :] = int(error_limits_file[:16].to01(), 2)
                         error_limits_file = error_limits_file[16:]
-                    elif (
-                        self.relative_error_limit_assignment_method
-                        == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-                    ):
-                        for z in range(
-                            self.periodic_relative_error_limit_table.shape[1]
-                        ):
-                            self.periodic_relative_error_limit_table[i, z] = int(
-                                error_limits_file[:16].to01(), 2
-                            )
+                    elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                        for z in range(self.periodic_relative_error_limit_table.shape[1]):
+                            self.periodic_relative_error_limit_table[i, z] = int(error_limits_file[:16].to01(), 2)
                             error_limits_file = error_limits_file[16:]
 
         self.check_legal_config()
+
+        # ...otherwise we return the size of the compressed image body, needed by the decompressor
+        return header_bitstream.buffer_info().nbytes
 
     def check_legal_config(self):
         assert 0 <= self.user_defined_data and self.user_defined_data < 2**8
@@ -1024,319 +741,115 @@ class Header:
         assert self.large_d_flag in LargeDFlag
         assert 0 <= self.dynamic_range and self.dynamic_range < 16
         assert self.sample_encoding_order in SampleEncodingOrder
-        assert (
-            self.sub_frame_interleaving_depth == 0
-            and self.sample_encoding_order == SampleEncodingOrder.BSQ
-        ) or (
-            0 <= self.sub_frame_interleaving_depth
-            and self.sub_frame_interleaving_depth
-            + 2**16 * (self.sub_frame_interleaving_depth == 0)
-            <= self.z_size
-            and self.sample_encoding_order == SampleEncodingOrder.BI
-        )
+        assert (self.sub_frame_interleaving_depth == 0 and self.sample_encoding_order == SampleEncodingOrder.BSQ) or (0 <= self.sub_frame_interleaving_depth and self.sub_frame_interleaving_depth + 2**16 * (self.sub_frame_interleaving_depth == 0) <= self.z_size and self.sample_encoding_order == SampleEncodingOrder.BI)
         assert 0 <= self.output_word_size and self.output_word_size < 8
         assert self.entropy_coder_type in EntropyCoderType
         assert self.quantizer_fidelity_control_method in QuantizerFidelityControlMethod
-        assert (
-            0 <= self.supplementary_information_table_count
-            and self.supplementary_information_table_count <= 15
-        )
-        assert self.supplementary_information_table_count == len(
-            self.supplementary_information_tables
-        )
+        assert 0 <= self.supplementary_information_table_count and self.supplementary_information_table_count <= 15
+        assert self.supplementary_information_table_count == len(self.supplementary_information_tables)
 
         assert self.sample_representative_flag in SampleRepresentativeFlag
         assert 0 <= self.prediction_bands_num and self.prediction_bands_num < 16
         assert self.prediction_mode in PredictionMode
-        assert (
-            self.x_size != 1 or self.prediction_mode == PredictionMode.REDUCED
-        )  # Can't use full prediction mode if x_size = 1. See standard section 4.3.1
+        assert self.x_size != 1 or self.prediction_mode == PredictionMode.REDUCED  # Can't use full prediction mode if x_size = 1. See standard section 4.3.1
         assert self.weight_exponent_offset_flag in WeightExponentOffsetFlag
         assert self.local_sum_type in LocalSumType
         assert (
             max(
                 32,
-                self.get_dynamic_range_bits()
-                + (self.weight_component_resolution + 4)
-                + 2,
+                self.get_dynamic_range_bits() + (self.weight_component_resolution + 4) + 2,
             )
             <= self.register_size + 64 * int(self.register_size == 0)
             and self.register_size < 64
         )
-        assert (
-            4 <= self.weight_component_resolution + 4
-            and self.weight_component_resolution + 4 <= 19
-        )
-        assert (
-            4 <= self.weight_update_change_interval + 4
-            and self.weight_update_change_interval + 4 <= 11
-        )
-        assert (
-            -6 <= self.weight_update_initial_parameter - 6
-            and self.weight_update_initial_parameter - 6 <= 9
-        )
-        assert (
-            -6 <= self.weight_update_final_parameter - 6
-            and self.weight_update_final_parameter - 6 <= 9
-        )
+        assert 4 <= self.weight_component_resolution + 4 and self.weight_component_resolution + 4 <= 19
+        assert 4 <= self.weight_update_change_interval + 4 and self.weight_update_change_interval + 4 <= 11
+        assert -6 <= self.weight_update_initial_parameter - 6 and self.weight_update_initial_parameter - 6 <= 9
+        assert -6 <= self.weight_update_final_parameter - 6 and self.weight_update_final_parameter - 6 <= 9
         assert self.weight_exponent_offset_table_flag in WeightExponentOffsetTableFlag
-        assert (
-            self.weight_exponent_offset_table_flag
-            == WeightExponentOffsetTableFlag.NOT_INCLUDED
-            or (
-                self.weight_exponent_offset_table_flag
-                == WeightExponentOffsetTableFlag.INCLUDED
-                and self.weight_exponent_offset_flag
-                == WeightExponentOffsetFlag.NOT_ALL_ZERO
-            )
-        )
-        assert (
-            self.weight_exponent_offset_flag == WeightExponentOffsetFlag.ALL_ZERO
-            or self.weight_exponent_offset_table.shape
-            == (
-                self.z_size + 2**16 * (self.z_size == 0),
-                self.prediction_bands_num
-                + int(self.prediction_mode == PredictionMode.FULL),
-            )
+        assert self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED or (self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED and self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO)
+        assert self.weight_exponent_offset_flag == WeightExponentOffsetFlag.ALL_ZERO or self.weight_exponent_offset_table.shape == (
+            self.z_size + 2**16 * (self.z_size == 0),
+            self.prediction_bands_num + int(self.prediction_mode == PredictionMode.FULL),
         )
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             for i in range(self.weight_exponent_offset_table.shape[0]):
                 for j in range(self.weight_exponent_offset_table.shape[1]):
-                    assert (
-                        -6 <= self.weight_exponent_offset_table[i, j]
-                        and self.weight_exponent_offset_table[i, j] <= 5
-                    )
+                    assert -6 <= self.weight_exponent_offset_table[i, j] and self.weight_exponent_offset_table[i, j] <= 5
         assert self.weight_init_method in WeightInitMethod
         assert self.weight_init_table_flag in WeightInitTableFlag
-        assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED or (
-            self.weight_init_table_flag == WeightInitTableFlag.INCLUDED
-            and self.weight_init_method == WeightInitMethod.CUSTOM
-        )
-        assert (
-            self.weight_init_method == WeightInitMethod.DEFAULT
-            or self.weight_init_table.shape
-            == (
-                self.z_size + 2**16 * (self.z_size == 0),
-                self.prediction_bands_num
-                + 3 * int(self.prediction_mode == PredictionMode.FULL),
-            )
+        assert self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED or (self.weight_init_table_flag == WeightInitTableFlag.INCLUDED and self.weight_init_method == WeightInitMethod.CUSTOM)
+        assert self.weight_init_method == WeightInitMethod.DEFAULT or self.weight_init_table.shape == (
+            self.z_size + 2**16 * (self.z_size == 0),
+            self.prediction_bands_num + 3 * int(self.prediction_mode == PredictionMode.FULL),
         )
         if self.weight_init_method == WeightInitMethod.CUSTOM:
             for i in range(self.weight_init_table.shape[0]):
                 for j in range(self.weight_init_table.shape[1]):
-                    assert (
-                        -(2 ** (self.weight_init_resolution - 1))
-                        <= self.weight_init_table[i, j]
-                        and self.weight_init_table[i, j]
-                        <= 2 ** (self.weight_init_resolution - 1) - 1
-                    )
-        assert (
-            self.weight_init_method == WeightInitMethod.CUSTOM
-            and 3 <= self.weight_init_resolution
-            and self.weight_init_resolution <= self.weight_component_resolution + 4 + 3
-        ) or (
-            self.weight_init_method == WeightInitMethod.DEFAULT
-            and self.weight_init_resolution == 0
-        )
+                    assert -(2 ** (self.weight_init_resolution - 1)) <= self.weight_init_table[i, j] and self.weight_init_table[i, j] <= 2 ** (self.weight_init_resolution - 1) - 1
+        assert (self.weight_init_method == WeightInitMethod.CUSTOM and 3 <= self.weight_init_resolution and self.weight_init_resolution <= self.weight_component_resolution + 4 + 3) or (self.weight_init_method == WeightInitMethod.DEFAULT and self.weight_init_resolution == 0)
 
         assert self.periodic_error_updating_flag in PeriodicErrorUpdatingFlag
-        assert (
-            self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED
-            and self.quantizer_fidelity_control_method
-            != QuantizerFidelityControlMethod.LOSSLESS
-            or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED
-        )
-        assert (
-            self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED
-            and 0 <= self.error_update_period_exponent
-            and self.error_update_period_exponent <= 9
-        ) or (
-            self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED
-            and self.error_update_period_exponent == 0
-        )
+        assert self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED and self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED
+        assert (self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED and 0 <= self.error_update_period_exponent and self.error_update_period_exponent <= 9) or (self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED and self.error_update_period_exponent == 0)
         assert self.absolute_error_limit_assignment_method in ErrorLimitAssignmentMethod
-        assert (
-            0 < self.get_absolute_error_limit_bit_depth_value()
-            and self.get_absolute_error_limit_bit_depth_value()
-            <= min(self.get_dynamic_range_bits() - 1, 16)
-            or self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.LOSSLESS
-            or self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.RELATIVE_ONLY
-        )
-        assert (
-            (
-                0 <= self.absolute_error_limit_value
-                and self.absolute_error_limit_value
-                <= 2 ** self.get_absolute_error_limit_bit_depth_value() - 1
-            )
-            or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED
-            or self.absolute_error_limit_assignment_method
-            == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-        )
-        if (
-            self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-            or self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-        ):
+        assert 0 < self.get_absolute_error_limit_bit_depth_value() and self.get_absolute_error_limit_bit_depth_value() <= min(self.get_dynamic_range_bits() - 1, 16) or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.LOSSLESS or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.RELATIVE_ONLY
+        assert (0 <= self.absolute_error_limit_value and self.absolute_error_limit_value <= 2 ** self.get_absolute_error_limit_bit_depth_value() - 1) or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED or self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT
+        if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_ONLY or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
                 for z in range(self.absolute_error_limit_table.shape[0]):
-                    assert (
-                        0 <= self.absolute_error_limit_table[z]
-                        and self.absolute_error_limit_table[z]
-                        <= 2 ** self.get_absolute_error_limit_bit_depth_value() - 1
-                    )
+                    assert 0 <= self.absolute_error_limit_table[z] and self.absolute_error_limit_table[z] <= 2 ** self.get_absolute_error_limit_bit_depth_value() - 1
             elif self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
                 for i in range(self.periodic_absolute_error_limit_table.shape[0]):
                     for z in range(self.periodic_absolute_error_limit_table.shape[1]):
-                        assert (
-                            0 <= self.periodic_absolute_error_limit_table[i, z]
-                            and self.periodic_absolute_error_limit_table[i, z]
-                            <= 2 ** self.get_absolute_error_limit_bit_depth_value() - 1
-                        )
+                        assert 0 <= self.periodic_absolute_error_limit_table[i, z] and self.periodic_absolute_error_limit_table[i, z] <= 2 ** self.get_absolute_error_limit_bit_depth_value() - 1
         assert self.relative_error_limit_assignment_method in ErrorLimitAssignmentMethod
-        assert (
-            0 < self.get_relative_error_limit_bit_depth_value()
-            and self.get_relative_error_limit_bit_depth_value()
-            <= min(self.get_dynamic_range_bits() - 1, 16)
-            or self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.LOSSLESS
-            or self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-        )
-        assert (
-            (
-                0 <= self.relative_error_limit_value
-                and self.relative_error_limit_value
-                <= 2 ** self.get_relative_error_limit_bit_depth_value() - 1
-            )
-            or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED
-            or self.relative_error_limit_assignment_method
-            == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-        )
-        if (
-            self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.RELATIVE_ONLY
-            or self.quantizer_fidelity_control_method
-            == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE
-        ):
+        assert 0 < self.get_relative_error_limit_bit_depth_value() and self.get_relative_error_limit_bit_depth_value() <= min(self.get_dynamic_range_bits() - 1, 16) or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.LOSSLESS or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_ONLY
+        assert (0 <= self.relative_error_limit_value and self.relative_error_limit_value <= 2 ** self.get_relative_error_limit_bit_depth_value() - 1) or self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED or self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT
+        if self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.RELATIVE_ONLY or self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
             if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
                 for z in range(self.relative_error_limit_table.shape[0]):
-                    assert (
-                        0 <= self.relative_error_limit_table[z]
-                        and self.relative_error_limit_table[z]
-                        <= 2 ** self.get_relative_error_limit_bit_depth_value() - 1
-                    )
+                    assert 0 <= self.relative_error_limit_table[z] and self.relative_error_limit_table[z] <= 2 ** self.get_relative_error_limit_bit_depth_value() - 1
             elif self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.USED:
                 for i in range(self.periodic_relative_error_limit_table.shape[0]):
                     for z in range(self.periodic_relative_error_limit_table.shape[1]):
-                        assert (
-                            0 <= self.periodic_relative_error_limit_table[i, z]
-                            and self.periodic_relative_error_limit_table[i, z]
-                            <= 2 ** self.get_relative_error_limit_bit_depth_value() - 1
-                        )
+                        assert 0 <= self.periodic_relative_error_limit_table[i, z] and self.periodic_relative_error_limit_table[i, z] <= 2 ** self.get_relative_error_limit_bit_depth_value() - 1
 
-        assert (
-            0 <= self.sample_representative_resolution
-            and self.sample_representative_resolution <= 4
-        )
-        assert (
-            0 <= self.sample_representative_resolution
-            and self.sample_representative_resolution <= 4
-            and self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED
-            or self.sample_representative_flag == SampleRepresentativeFlag.NOT_INCLUDED
-        )
+        assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4
+        assert 0 <= self.sample_representative_resolution and self.sample_representative_resolution <= 4 and self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED or self.sample_representative_flag == SampleRepresentativeFlag.NOT_INCLUDED
         assert self.band_varying_damping_flag in BandVaryingDampingFlag
         assert self.damping_table_flag in DampingTableFlag
-        assert (
-            self.damping_table_flag == DampingTableFlag.NOT_INCLUDED
-            or self.damping_table_flag == DampingTableFlag.INCLUDED
-            and self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT
-        )
-        assert (
-            self.damping_table_flag == DampingTableFlag.NOT_INCLUDED
-            and 0 <= self.fixed_damping_value
-            and self.fixed_damping_value <= 2**self.sample_representative_resolution - 1
-        ) or (
-            self.damping_table_flag == DampingTableFlag.INCLUDED
-            and self.fixed_damping_value == 0
-        )
+        assert self.damping_table_flag == DampingTableFlag.NOT_INCLUDED or self.damping_table_flag == DampingTableFlag.INCLUDED and self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT
+        assert (self.damping_table_flag == DampingTableFlag.NOT_INCLUDED and 0 <= self.fixed_damping_value and self.fixed_damping_value <= 2**self.sample_representative_resolution - 1) or (self.damping_table_flag == DampingTableFlag.INCLUDED and self.fixed_damping_value == 0)
         assert self.band_varying_offset_flag in BandVaryingOffsetFlag
         assert self.damping_offset_table_flag in OffsetTableFlag
-        assert (
-            self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED
-            or self.damping_offset_table_flag == OffsetTableFlag.INCLUDED
-            and self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT
-        )
-        assert (
-            self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED
-            and 0 <= self.fixed_offset_value
-            and self.fixed_offset_value <= 2**self.sample_representative_resolution - 1
-        ) or (
-            self.damping_offset_table_flag == OffsetTableFlag.INCLUDED
-            and self.fixed_offset_value == 0
-        )
-        assert (
-            self.quantizer_fidelity_control_method
-            != QuantizerFidelityControlMethod.LOSSLESS
-            or self.fixed_offset_value == 0
-        )
+        assert self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED or self.damping_offset_table_flag == OffsetTableFlag.INCLUDED and self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT
+        assert (self.damping_offset_table_flag == OffsetTableFlag.NOT_INCLUDED and 0 <= self.fixed_offset_value and self.fixed_offset_value <= 2**self.sample_representative_resolution - 1) or (self.damping_offset_table_flag == OffsetTableFlag.INCLUDED and self.fixed_offset_value == 0)
+        assert self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS or self.fixed_offset_value == 0
         if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
             for damping in self.damping_table_array:
-                assert (
-                    0 <= damping
-                    and damping <= 2**self.sample_representative_resolution - 1
-                )
+                assert 0 <= damping and damping <= 2**self.sample_representative_resolution - 1
         if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
             for offset in self.damping_offset_table_array:
-                assert (
-                    0 <= offset
-                    and offset <= 2**self.sample_representative_resolution - 1
-                    and self.quantizer_fidelity_control_method
-                    != QuantizerFidelityControlMethod.LOSSLESS
-                    or offset == 0
-                    and self.quantizer_fidelity_control_method
-                    == QuantizerFidelityControlMethod.LOSSLESS
-                )
+                assert 0 <= offset and offset <= 2**self.sample_representative_resolution - 1 and self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS or offset == 0 and self.quantizer_fidelity_control_method == QuantizerFidelityControlMethod.LOSSLESS
 
-        assert (
-            8 <= self.unary_length_limit and self.unary_length_limit < 32
-        ) or self.unary_length_limit == 0
+        assert (8 <= self.unary_length_limit and self.unary_length_limit < 32) or self.unary_length_limit == 0
         assert (
             max(
                 4,
-                self.initial_count_exponent
-                + 8 * int(self.initial_count_exponent == 0)
-                - 1,
+                self.initial_count_exponent + 8 * int(self.initial_count_exponent == 0) - 1,
             )
             <= self.rescaling_counter_size + 4
             and self.rescaling_counter_size + 4 <= 11
         )
         assert 0 <= self.initial_count_exponent and self.initial_count_exponent < 8
-        assert (
-            0 <= self.accumulator_init_constant
-            and self.accumulator_init_constant
-            <= min(self.get_dynamic_range_bits() - 2, 14)
-            or self.accumulator_init_constant == 15
-        )
-        assert (
-            self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED
-            or (
-                self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED
-                and self.accumulator_init_constant == 15
-            )
-        )
+        assert 0 <= self.accumulator_init_constant and self.accumulator_init_constant <= min(self.get_dynamic_range_bits() - 2, 14) or self.accumulator_init_constant == 15
+        assert self.accumulator_init_table_flag == AccumulatorInitTableFlag.NOT_INCLUDED or (self.accumulator_init_table_flag == AccumulatorInitTableFlag.INCLUDED and self.accumulator_init_constant == 15)
         assert self.accumulator_init_table_flag in AccumulatorInitTableFlag
 
         assert self.block_size in range(4)
         assert self.restricted_code_options_flag in RestrictedCodeOptionsFlag
-        assert (
-            self.restricted_code_options_flag == RestrictedCodeOptionsFlag.UNRESTRICTED
-            or self.restricted_code_options_flag == RestrictedCodeOptionsFlag.RESTRICTED
-            and self.dynamic_range in range(1, 5)
-            and self.large_d_flag == LargeDFlag.SMALL_D
-        )
+        assert self.restricted_code_options_flag == RestrictedCodeOptionsFlag.UNRESTRICTED or self.restricted_code_options_flag == RestrictedCodeOptionsFlag.RESTRICTED and self.dynamic_range in range(1, 5) and self.large_d_flag == LargeDFlag.SMALL_D
         assert self.reference_sample_interval in range(2**12)
 
     def __encode_essential_subpart_structure(self):
@@ -1363,21 +876,13 @@ class Header:
 
     def __encode_supplementary_information_table_structure(self, index):
         bitstream = bitarray()
-        bitstream += bin(self.supplementary_information_tables[index].table_type.value)[
-            2:
-        ].zfill(2)
+        bitstream += bin(self.supplementary_information_tables[index].table_type.value)[2:].zfill(2)
         bitstream += 2 * "0"  # Reserved
-        bitstream += bin(self.supplementary_information_tables[index].table_purpose)[
-            2:
-        ].zfill(4)
+        bitstream += bin(self.supplementary_information_tables[index].table_purpose)[2:].zfill(4)
         bitstream += 1 * "0"  # Reserved
-        bitstream += bin(
-            self.supplementary_information_tables[index].table_structure.value
-        )[2:].zfill(2)
+        bitstream += bin(self.supplementary_information_tables[index].table_structure.value)[2:].zfill(2)
         bitstream += 1 * "0"  # Reserved
-        bitstream += bin(
-            self.supplementary_information_tables[index].user_defined_data
-        )[2:].zfill(4)
+        bitstream += bin(self.supplementary_information_tables[index].user_defined_data)[2:].zfill(4)
         assert len(bitstream) == 2 * 8
         bitstream += self.supplementary_information_tables[index].table_data_subblock
         assert len(bitstream) % 8 == 0
@@ -1398,9 +903,7 @@ class Header:
         header_bitstream += bin(self.weight_update_change_interval)[2:].zfill(4)
         header_bitstream += bin(self.weight_update_initial_parameter)[2:].zfill(4)
         header_bitstream += bin(self.weight_update_final_parameter)[2:].zfill(4)
-        header_bitstream += bin(self.weight_exponent_offset_table_flag.value)[2:].zfill(
-            1
-        )
+        header_bitstream += bin(self.weight_exponent_offset_table_flag.value)[2:].zfill(1)
         header_bitstream += bin(self.weight_init_method.value)[2:].zfill(1)
         header_bitstream += bin(self.weight_init_table_flag.value)[2:].zfill(1)
         header_bitstream += bin(self.weight_init_resolution)[2:].zfill(5)
@@ -1408,10 +911,7 @@ class Header:
 
         if self.weight_init_method == WeightInitMethod.CUSTOM:
             for z in range(self.weight_init_table.shape[0]):
-                for j in range(
-                    min(z, self.prediction_bands_num)
-                    + 3 * int(self.prediction_mode == PredictionMode.FULL)
-                ):
+                for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
                     # Transform into two's complement
                     number = self.weight_init_table[z, j]
                     if bin(number)[0] == "-":
@@ -1419,9 +919,7 @@ class Header:
                     number = bin(number)[2:].zfill(self.weight_init_resolution)
                     if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
                         header_bitstream += number
-                    elif (
-                        self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED
-                    ):
+                    elif self.weight_init_table_flag == WeightInitTableFlag.NOT_INCLUDED:
                         optional_tables_bitstream += number
             if self.weight_init_table_flag == WeightInitTableFlag.INCLUDED:
                 fill_bits = (8 - len(header_bitstream) % 8) % 8
@@ -1434,36 +932,21 @@ class Header:
 
         if self.weight_exponent_offset_flag == WeightExponentOffsetFlag.NOT_ALL_ZERO:
             for z in range(self.weight_exponent_offset_table.shape[0]):
-                for j in range(
-                    min(z, self.prediction_bands_num)
-                    + int(self.prediction_mode == PredictionMode.FULL)
-                ):
+                for j in range(min(z, self.prediction_bands_num) + int(self.prediction_mode == PredictionMode.FULL)):
                     # Transform into two's complement
                     number = self.weight_exponent_offset_table[z, j]
                     if bin(number)[0] == "-":
                         number += 2**4
                     number = bin(number)[2:].zfill(4)
-                    if (
-                        self.weight_exponent_offset_table_flag
-                        == WeightExponentOffsetTableFlag.INCLUDED
-                    ):
+                    if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
                         header_bitstream += number
-                    elif (
-                        self.weight_exponent_offset_table_flag
-                        == WeightExponentOffsetTableFlag.NOT_INCLUDED
-                    ):
+                    elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
                         optional_tables_bitstream += number
-            if (
-                self.weight_exponent_offset_table_flag
-                == WeightExponentOffsetTableFlag.INCLUDED
-            ):
+            if self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.INCLUDED:
                 fill_bits = (8 - len(header_bitstream) % 8) % 8
                 header_bitstream += fill_bits * "0"
                 assert len(header_bitstream) % 8 == 0
-            elif (
-                self.weight_exponent_offset_table_flag
-                == WeightExponentOffsetTableFlag.NOT_INCLUDED
-            ):
+            elif self.weight_exponent_offset_table_flag == WeightExponentOffsetTableFlag.NOT_INCLUDED:
                 fill_bits = (8 - len(optional_tables_bitstream) % 8) % 8
                 optional_tables_bitstream += fill_bits * "0"
                 assert len(optional_tables_bitstream) % 8 == 0
@@ -1487,27 +970,13 @@ class Header:
         bitstream += bin(self.absolute_error_limit_bit_depth)[2:].zfill(4)
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
             error_limit_bit_depth = self.get_absolute_error_limit_bit_depth_value()
-            if (
-                self.absolute_error_limit_assignment_method
-                == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            ):
-                bitstream += bin(self.absolute_error_limit_value)[2:].zfill(
-                    error_limit_bit_depth
-                )
+            if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                bitstream += bin(self.absolute_error_limit_value)[2:].zfill(error_limit_bit_depth)
                 assert len(bitstream) == error_limit_bit_depth + 8
-            elif (
-                self.absolute_error_limit_assignment_method
-                == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-            ):
+            elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.absolute_error_limit_table.shape[0]):
-                    bitstream += bin(self.absolute_error_limit_table[z])[2:].zfill(
-                        error_limit_bit_depth
-                    )
-                assert (
-                    len(bitstream)
-                    == self.absolute_error_limit_table.shape[0] * error_limit_bit_depth
-                    + 8
-                )
+                    bitstream += bin(self.absolute_error_limit_table[z])[2:].zfill(error_limit_bit_depth)
+                assert len(bitstream) == self.absolute_error_limit_table.shape[0] * error_limit_bit_depth + 8
             fill_bits = (8 - len(bitstream) % 8) % 8
             bitstream += fill_bits * "0"
         assert len(bitstream) % 8 == 0
@@ -1521,27 +990,13 @@ class Header:
         bitstream += bin(self.relative_error_limit_bit_depth)[2:].zfill(4)
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
             error_limit_bit_depth = self.get_relative_error_limit_bit_depth_value()
-            if (
-                self.relative_error_limit_assignment_method
-                == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            ):
-                bitstream += bin(self.relative_error_limit_value)[2:].zfill(
-                    error_limit_bit_depth
-                )
+            if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                bitstream += bin(self.relative_error_limit_value)[2:].zfill(error_limit_bit_depth)
                 assert len(bitstream) == error_limit_bit_depth + 8
-            elif (
-                self.relative_error_limit_assignment_method
-                == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-            ):
+            elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 for z in range(self.relative_error_limit_table.shape[0]):
-                    bitstream += bin(self.relative_error_limit_table[z])[2:].zfill(
-                        error_limit_bit_depth
-                    )
-                assert (
-                    len(bitstream)
-                    == self.relative_error_limit_table.shape[0] * error_limit_bit_depth
-                    + 8
-                )
+                    bitstream += bin(self.relative_error_limit_table[z])[2:].zfill(error_limit_bit_depth)
+                assert len(bitstream) == self.relative_error_limit_table.shape[0] * error_limit_bit_depth + 8
             fill_bits = (8 - len(bitstream) % 8) % 8
             bitstream += fill_bits * "0"
         assert len(bitstream) % 8 == 0
@@ -1550,23 +1005,11 @@ class Header:
     def __encode_predictor_quantization_structure(self):
         bitstream = bitarray()
         if self.sample_encoding_order != SampleEncodingOrder.BSQ:
-            bitstream += (
-                self.__encode_predictor_quantization_error_limit_update_period_structure()
-            )
-        if (
-            self.quantizer_fidelity_control_method
-            != QuantizerFidelityControlMethod.RELATIVE_ONLY
-        ):
-            bitstream += (
-                self.__encode_predictor_quantization_absolute_error_limit_structure()
-            )
-        if (
-            self.quantizer_fidelity_control_method
-            != QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-        ):
-            bitstream += (
-                self.__encode_predictor_quantization_relative_error_limit_structure()
-            )
+            bitstream += self.__encode_predictor_quantization_error_limit_update_period_structure()
+        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+            bitstream += self.__encode_predictor_quantization_absolute_error_limit_structure()
+        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+            bitstream += self.__encode_predictor_quantization_relative_error_limit_structure()
         return bitstream
 
     def __encode_predictor_sample_representative_structure(self):
@@ -1590,9 +1033,7 @@ class Header:
         bitstream = bitarray()
         if self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT:
             for z in range(self.damping_table_array.shape[0]):
-                bitstream += bin(self.damping_table_array[z])[2:].zfill(
-                    self.sample_representative_resolution
-                )
+                bitstream += bin(self.damping_table_array[z])[2:].zfill(self.sample_representative_resolution)
             fill_bits = (8 - len(bitstream) % 8) % 8
             bitstream += fill_bits * "0"
             assert len(bitstream) % 8 == 0
@@ -1604,9 +1045,7 @@ class Header:
         bitstream = bitarray()
         if self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
             for z in range(self.damping_offset_table_array.shape[0]):
-                bitstream += bin(self.damping_offset_table_array[z])[2:].zfill(
-                    self.sample_representative_resolution
-                )
+                bitstream += bin(self.damping_offset_table_array[z])[2:].zfill(self.sample_representative_resolution)
             fill_bits = (8 - len(bitstream) % 8) % 8
             bitstream += fill_bits * "0"
             assert len(bitstream) % 8 == 0
@@ -1668,18 +1107,13 @@ class Header:
         header_bitstream += self.__encode_essential_subpart_structure()
 
         for index in range(self.supplementary_information_table_count):
-            header_bitstream += self.__encode_supplementary_information_table_structure(
-                index
-            )
+            header_bitstream += self.__encode_supplementary_information_table_structure(index)
 
         bitstreams = self.__encode_predictor_primary_structure()
         header_bitstream += bitstreams[0]
         optional_tables_bitstream += bitstreams[1]
 
-        if (
-            self.quantizer_fidelity_control_method
-            != QuantizerFidelityControlMethod.LOSSLESS
-        ):
+        if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.LOSSLESS:
             header_bitstream += self.__encode_predictor_quantization_structure()
         if self.sample_representative_flag == SampleRepresentativeFlag.INCLUDED:
             bitstreams = self.__encode_predictor_sample_representative_structure()
@@ -1709,54 +1143,32 @@ class Header:
         # The default values here are arbitrary, not set from standard
         self.__init_weight_init_table_array()
         for z in range(self.weight_init_table.shape[0]):
-            for j in range(
-                min(z, self.prediction_bands_num)
-                + 3 * int(self.prediction_mode == PredictionMode.FULL)
-            ):
+            for j in range(min(z, self.prediction_bands_num) + 3 * int(self.prediction_mode == PredictionMode.FULL)):
                 self.weight_init_table[z, j] = self.weight_init_table_value
 
     def set_weight_exponent_offset_table_array_to_default(self):
         # The default values here are arbitrary, not set from standard
         self.__init_weight_exponent_offset_table_array()
         for z in range(self.weight_exponent_offset_table.shape[0]):
-            for j in range(
-                min(z, self.prediction_bands_num)
-                + int(self.prediction_mode == PredictionMode.FULL)
-            ):
-                self.weight_exponent_offset_table[z, j] = (
-                    self.weight_exponent_offset_value
-                )
+            for j in range(min(z, self.prediction_bands_num) + int(self.prediction_mode == PredictionMode.FULL)):
+                self.weight_exponent_offset_table[z, j] = self.weight_exponent_offset_value
 
     def set_absolute_error_limit_table_array_to_default(self):
         # The default values here are arbitrary, not set from standard
         self.__init_absolute_error_limit_table_array()
         for z in range(self.absolute_error_limit_table.shape[0]):
-            if (
-                self.absolute_error_limit_assignment_method
-                == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            ):
+            if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                 self.absolute_error_limit_table[z] = self.absolute_error_limit_value
-            elif (
-                self.absolute_error_limit_assignment_method
-                == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-            ):
-                self.absolute_error_limit_table[z] = min(
-                    z, 2 ** self.get_absolute_error_limit_bit_depth_value() - 1
-                )
+            elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                self.absolute_error_limit_table[z] = min(z, 2 ** self.get_absolute_error_limit_bit_depth_value() - 1)
 
     def set_relative_error_limit_table_array_to_default(self):
         # The default values here are arbitrary, not set from standard
         self.__init_relative_error_limit_table_array()
         for z in range(self.relative_error_limit_table.shape[0]):
-            if (
-                self.relative_error_limit_assignment_method
-                == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-            ):
+            if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
                 self.relative_error_limit_table[z] = self.relative_error_limit_value
-            elif (
-                self.relative_error_limit_assignment_method
-                == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-            ):
+            elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                 self.relative_error_limit_table[z] = min(
                     self.relative_error_limit_value + 2 * z,
                     2 ** self.get_relative_error_limit_bit_depth_value() - 1,
@@ -1767,40 +1179,20 @@ class Header:
         self.__init_periodic_absolute_error_limit_table_array()
         for i in range(self.periodic_absolute_error_limit_table.shape[0]):
             for z in range(self.periodic_absolute_error_limit_table.shape[1]):
-                if (
-                    self.absolute_error_limit_assignment_method
-                    == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                ):
-                    self.periodic_absolute_error_limit_table[i, z] = (
-                        i * self.periodic_absolute_error_limit_table.shape[1]
-                    ) % (2 ** self.get_absolute_error_limit_bit_depth_value() - 1)
-                elif (
-                    self.absolute_error_limit_assignment_method
-                    == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-                ):
-                    self.periodic_absolute_error_limit_table[i, z] = (
-                        i * self.periodic_absolute_error_limit_table.shape[1] + z
-                    ) % (2 ** self.get_absolute_error_limit_bit_depth_value() - 1)
+                if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    self.periodic_absolute_error_limit_table[i, z] = (i * self.periodic_absolute_error_limit_table.shape[1]) % (2 ** self.get_absolute_error_limit_bit_depth_value() - 1)
+                elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    self.periodic_absolute_error_limit_table[i, z] = (i * self.periodic_absolute_error_limit_table.shape[1] + z) % (2 ** self.get_absolute_error_limit_bit_depth_value() - 1)
 
     def set_periodic_relative_error_limit_table_array_to_default(self):
         # The default values here are arbitrary, not set from standard
         self.__init_periodic_relative_error_limit_table_array()
         for i in range(self.periodic_relative_error_limit_table.shape[0]):
             for z in range(self.periodic_relative_error_limit_table.shape[1]):
-                if (
-                    self.relative_error_limit_assignment_method
-                    == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                ):
-                    self.periodic_relative_error_limit_table[i, z] = (
-                        i * self.periodic_relative_error_limit_table.shape[1]
-                    ) % (2 ** self.get_relative_error_limit_bit_depth_value() - 1)
-                elif (
-                    self.relative_error_limit_assignment_method
-                    == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-                ):
-                    self.periodic_relative_error_limit_table[i, z] = (
-                        i * self.periodic_relative_error_limit_table.shape[1] + z
-                    ) % (2 ** self.get_relative_error_limit_bit_depth_value() - 1)
+                if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    self.periodic_relative_error_limit_table[i, z] = (i * self.periodic_relative_error_limit_table.shape[1]) % (2 ** self.get_relative_error_limit_bit_depth_value() - 1)
+                elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
+                    self.periodic_relative_error_limit_table[i, z] = (i * self.periodic_relative_error_limit_table.shape[1] + z) % (2 ** self.get_relative_error_limit_bit_depth_value() - 1)
 
     def set_damping_table_array_to_default(self):
         # The default values here are arbitrary, not set from standard
@@ -1809,9 +1201,7 @@ class Header:
             self.damping_table_array[:] = self.fixed_damping_value
         elif self.band_varying_damping_flag == BandVaryingDampingFlag.BAND_DEPENDENT:
             for z in range(self.damping_table_array.shape[0]):
-                self.damping_table_array[z] = z % (
-                    2**self.sample_representative_resolution - 1
-                )
+                self.damping_table_array[z] = z % (2**self.sample_representative_resolution - 1)
 
     def set_damping_offset_table_array_to_default(self):
         # The default values here are arbitrary, not set from standard
@@ -1820,18 +1210,14 @@ class Header:
             self.damping_offset_table_array[:] = self.fixed_offset_value
         elif self.band_varying_offset_flag == BandVaryingOffsetFlag.BAND_DEPENDENT:
             for z in range(self.damping_offset_table_array.shape[0]):
-                self.damping_offset_table_array[z] = z % (
-                    2**self.sample_representative_resolution - 1
-                )
+                self.damping_offset_table_array[z] = z % (2**self.sample_representative_resolution - 1)
 
     def set_accumulator_init_table_to_default(self):
         # The default values here are arbitrary, not set from standard
         self.__init_accumulator_init_table()
         if self.accumulator_init_constant == 15:
             for z in range(self.accumulator_init_table.shape[0]):
-                self.accumulator_init_table[z] = z % min(
-                    self.get_dynamic_range_bits() - 2, 14
-                )
+                self.accumulator_init_table[z] = z % min(self.get_dynamic_range_bits() - 2, 14)
         else:
             self.accumulator_init_table[:] = self.accumulator_init_constant
 
@@ -1851,9 +1237,7 @@ class Header:
         self.sample_type = sample_type
 
     def set_dynamic_range(self, dynamic_range):
-        self.large_d_flag = (
-            LargeDFlag.LARGE_D if dynamic_range > 16 else LargeDFlag.SMALL_D
-        )
+        self.large_d_flag = LargeDFlag.LARGE_D if dynamic_range > 16 else LargeDFlag.SMALL_D
         self.dynamic_range = dynamic_range % 16
 
     def set_sample_encoding_order(self, sample_encoding_order):
@@ -1871,12 +1255,8 @@ class Header:
     def set_quantizer_fidelity_control_method(self, quantizer_fidelity_control_method):
         self.quantizer_fidelity_control_method = quantizer_fidelity_control_method
 
-    def set_supplementary_information_table_count(
-        self, supplementary_information_table_count
-    ):
-        self.supplementary_information_table_count = (
-            supplementary_information_table_count
-        )
+    def set_supplementary_information_table_count(self, supplementary_information_table_count):
+        self.supplementary_information_table_count = supplementary_information_table_count
 
     def set_sample_representative_flag(self, sample_representative_flag):
         self.sample_representative_flag = sample_representative_flag
@@ -1900,9 +1280,7 @@ class Header:
         self.weight_component_resolution = weight_component_resolution - 4
 
     def set_weight_update_change_interval(self, weight_update_change_interval):
-        self.weight_update_change_interval = (
-            int(log2(weight_update_change_interval)) - 4
-        )
+        self.weight_update_change_interval = int(log2(weight_update_change_interval)) - 4
 
     def set_weight_update_initial_parameter(self, weight_update_initial_parameter):
         self.weight_update_initial_parameter = weight_update_initial_parameter + 6
@@ -1928,12 +1306,8 @@ class Header:
     def set_error_update_period_exponent(self, error_update_period_exponent):
         self.error_update_period_exponent = error_update_period_exponent
 
-    def set_absolute_error_limit_assignment_method(
-        self, absolute_error_limit_assignment_method
-    ):
-        self.absolute_error_limit_assignment_method = (
-            absolute_error_limit_assignment_method
-        )
+    def set_absolute_error_limit_assignment_method(self, absolute_error_limit_assignment_method):
+        self.absolute_error_limit_assignment_method = absolute_error_limit_assignment_method
 
     def set_absolute_error_limit_bit_depth(self, absolute_error_limit_bit_depth):
         self.absolute_error_limit_bit_depth = absolute_error_limit_bit_depth % 16
@@ -1942,12 +1316,8 @@ class Header:
         self.absolute_error_limit_value = absolute_error_limit_value
         self.set_absolute_error_limit_table_array_to_default()
 
-    def set_relative_error_limit_assignment_method(
-        self, relative_error_limit_assignment_method
-    ):
-        self.relative_error_limit_assignment_method = (
-            relative_error_limit_assignment_method
-        )
+    def set_relative_error_limit_assignment_method(self, relative_error_limit_assignment_method):
+        self.relative_error_limit_assignment_method = relative_error_limit_assignment_method
 
     def set_relative_error_limit_bit_depth(self, relative_error_limit_bit_depth):
         self.relative_error_limit_bit_depth = relative_error_limit_bit_depth % 16
@@ -2028,14 +1398,10 @@ class Header:
         return self.weight_update_final_parameter - 6
 
     def get_absolute_error_limit_bit_depth_value(self):
-        return self.absolute_error_limit_bit_depth + 16 * int(
-            self.absolute_error_limit_bit_depth == 0
-        )
+        return self.absolute_error_limit_bit_depth + 16 * int(self.absolute_error_limit_bit_depth == 0)
 
     def get_relative_error_limit_bit_depth_value(self):
-        return self.relative_error_limit_bit_depth + 16 * int(
-            self.relative_error_limit_bit_depth == 0
-        )
+        return self.relative_error_limit_bit_depth + 16 * int(self.relative_error_limit_bit_depth == 0)
 
     def get_initial_count_exponent(self):
         return self.initial_count_exponent if self.initial_count_exponent != 0 else 8
@@ -2049,52 +1415,21 @@ class Header:
         if self.periodic_error_updating_flag == PeriodicErrorUpdatingFlag.NOT_USED:
             return bitstream
 
-        for i in range(
-            ceil(
-                (self.y_size + 2**16 * int(self.y_size == 0))
-                / 2**self.error_update_period_exponent
-            )
-        ):
+        for i in range(ceil((self.y_size + 2**16 * int(self.y_size == 0)) / 2**self.error_update_period_exponent)):
 
-            if (
-                self.quantizer_fidelity_control_method
-                != QuantizerFidelityControlMethod.RELATIVE_ONLY
-            ):
-                if (
-                    self.absolute_error_limit_assignment_method
-                    == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                ):
-                    bitstream += bin(self.periodic_absolute_error_limit_table[i, 0])[
-                        2:
-                    ].zfill(16)
-                elif (
-                    self.absolute_error_limit_assignment_method
-                    == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-                ):
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.RELATIVE_ONLY:
+                if self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    bitstream += bin(self.periodic_absolute_error_limit_table[i, 0])[2:].zfill(16)
+                elif self.absolute_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     for z in range(self.periodic_absolute_error_limit_table.shape[1]):
-                        bitstream += bin(
-                            self.periodic_absolute_error_limit_table[i, z]
-                        )[2:].zfill(16)
+                        bitstream += bin(self.periodic_absolute_error_limit_table[i, z])[2:].zfill(16)
 
-            if (
-                self.quantizer_fidelity_control_method
-                != QuantizerFidelityControlMethod.ABSOLUTE_ONLY
-            ):
-                if (
-                    self.relative_error_limit_assignment_method
-                    == ErrorLimitAssignmentMethod.BAND_INDEPENDENT
-                ):
-                    bitstream += bin(self.periodic_relative_error_limit_table[i, 0])[
-                        2:
-                    ].zfill(16)
-                elif (
-                    self.relative_error_limit_assignment_method
-                    == ErrorLimitAssignmentMethod.BAND_DEPENDENT
-                ):
+            if self.quantizer_fidelity_control_method != QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
+                if self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
+                    bitstream += bin(self.periodic_relative_error_limit_table[i, 0])[2:].zfill(16)
+                elif self.relative_error_limit_assignment_method == ErrorLimitAssignmentMethod.BAND_DEPENDENT:
                     for z in range(self.periodic_relative_error_limit_table.shape[1]):
-                        bitstream += bin(
-                            self.periodic_relative_error_limit_table[i, z]
-                        )[2:].zfill(16)
+                        bitstream += bin(self.periodic_relative_error_limit_table[i, z])[2:].zfill(16)
 
         return bitstream
 

@@ -24,8 +24,8 @@ def main():
     group.add_argument("-d", "--decompress", action="store_true")
 
     parser.add_argument(
-        "image_file",
-        help="Path to the raw uncompressed image file. The filename must be on the format <name>-<datatype>-<z_size>x<y_size>x<x_size>.raw like CCSDS TestData images. For example Landsat_mountain-u16be-6x50x100.raw.",
+        "target_file",
+        help="Path to the raw uncompressed image file or compressed bitstream file. Uncompressed image filename must be on the format <name>-<datatype>-<z_size>x<y_size>x<x_size>.raw like CCSDS TestData images. For example Landsat_mountain-u16be-6x50x100.raw.",
     )
 
     parser.add_argument(
@@ -36,7 +36,7 @@ def main():
     parser.add_argument(
         "--image_ordering",
         default="BSQ",
-        help="Image file ordering, supported values are 'BSQ' and 'BIP'.",
+        help="Raw image file ordering, supported values are 'BSQ' and 'BIP'. Read from header when using decompressor.",
     )
     parser.add_argument(
         "--accu",
@@ -58,9 +58,8 @@ def main():
     start_time = time.time()
 
     ccsds = ccsds123.CCSDS123(
-        args.image_file,
         image_ordering=args.image_ordering,
-        delayed_weight_updates=True,
+        delayed_weight_updates=False,
         save_intermediates=False,
         use_old_predictor=False,
     )
@@ -75,15 +74,15 @@ def main():
         ccsds.set_error_limits_file(args.error_limits)
 
     if args.decompress:
-        ccsds.compress_image()  # temporary
-        ccsds.decompress_image()
+        ccsds.decompress_image(args.target_file)
     elif args.compress:
-        ccsds.compress_image()
+        ccsds.compress_image(args.target_file)
 
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
     print(f"Memory usage: {get_memory_usage():.2f} MB")
-    print(f"Compression ratio: {get_file_size(args.image_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream-enc.bin'):.2f}")
+    if not args.decompress:
+        print(f"Compression ratio: {get_file_size(args.target_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream-enc.bin'):.2f}")
 
 
 if __name__ == "__main__":

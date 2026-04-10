@@ -129,7 +129,7 @@ NumpyArr<ll> Predictor::compress(NumpyArr<ll> image_sample)
         // sample representatives
         ll drsr = drsrsmpl->sample(calc_drsr(z, cqbc, qi, mev, hrpsv), y, x, z);
         srsmpl->sample(calc_sample_representative(x, y, z, cqbc, drsr, image_sample), y, x, z);
-        drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z);
+        ll drpe = drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z);
 
         // mapping
         ll theta = tsmpl->sample(calc_theta(t, psv, mev), y, x, z);
