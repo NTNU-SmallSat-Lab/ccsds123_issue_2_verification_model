@@ -18,7 +18,6 @@ def get_file_size(file_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Compress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging")
-
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument("-c", "--compress", action="store_true", default="True")
     group.add_argument("-d", "--decompress", action="store_true")

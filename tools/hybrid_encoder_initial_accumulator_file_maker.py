@@ -15,10 +15,11 @@ def main():
 def create_file(output_file, accumulators, accumulator_size_bits, value):
     bitstream = bitarray()
     bitstream += bin(int(value))[2:].zfill(int(accumulator_size_bits)) * int(accumulators)
-    bitstream += '0' * (8 - len(bitstream))
+    bitstream += "0" * (8 - len(bitstream))
 
     with open(output_file, "wb") as file:
         bitstream.tofile(file)
+
 
 if __name__ == "__main__":
     main()
