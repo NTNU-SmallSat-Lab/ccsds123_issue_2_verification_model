@@ -2,6 +2,7 @@ from ccsds123_i2_hlm import ccsds123
 import os
 import argparse
 
+
 def main():
 
     parser = argparse.ArgumentParser(description="Verify the CCSDS 123.0-B-2 High level model using CCSDS provided test vectors")
@@ -45,7 +46,7 @@ def main():
     skipped = 0
     failure_list = []
     for num in range(start_num, end_num):
-        os.system('cls' if os.name == 'nt' else 'clear')
+        os.system("cls" if os.name == "nt" else "clear")
         print(f"Success: {success}/{num} Failure: {failure}/{num} Skipped: {skipped}/{num}")
         print(f"Failure list: {failure_list}\n")
 
@@ -72,20 +73,17 @@ def main():
 
         dut_compressor.compress_image()
 
-        with open("output/z-output-bitstream.bin", 'rb') as file1, \
-            open(f"{test_vector_folder}/{golden_compressed_files[num]}", 'rb') as file2:
+        with open("output/z-output-bitstream.bin", "rb") as file1, open(f"{test_vector_folder}/{golden_compressed_files[num]}", "rb") as file2:
             content1 = file1.read()
             content2 = file2.read()
-        
-        with open("output/header.bin", 'rb') as file1, \
-            open(f"{test_vector_folder}/{input_header_files[num]}", 'rb') as file2:
+
+        with open("output/header.bin", "rb") as file1, open(f"{test_vector_folder}/{input_header_files[num]}", "rb") as file2:
             content1 = file1.read()
             content2 = file2.read()
 
         correct = 0
         for i in range(len(comparison_files_golden)):
-            with open(comparison_files_golden[i], 'rb') as file1, \
-                open(comparison_files_hlm[i], 'rb') as file2:
+            with open(comparison_files_golden[i], "rb") as file1, open(comparison_files_hlm[i], "rb") as file2:
                 content1 = file1.read()
                 content2 = file2.read()
                 if content1 == content2:
@@ -98,7 +96,6 @@ def main():
             print(f"Files in test {num} are different")
             failure += 1
             failure_list.append(num)
-            
 
 
 if __name__ == "__main__":
