@@ -843,7 +843,7 @@ ll Predictor::decalc_pr(ll t, ll qi, ll mev)
 {
   if (t == 0)
     return qi;
-  return sgn(qi) * (std::abs(qi) * (2 * mev + 1) - mev);
+  return sgn(qi) * std::abs(qi) * (2 * mev + 1);
 }
 
 ll Predictor::decalc_sample(ll pr, ll psv)
