@@ -25,7 +25,7 @@ using NumpyArr = py::array_t<T, py::array::c_style | py::array::forcecast>;
 template <typename data_t, ssize_t dims_t>
 using _NumpyArr = py::detail::unchecked_mutable_reference<data_t, dims_t>;
 
-typedef long long ll;
+typedef long long ll; // not very idiomatic
 
 // forward declaration
 template <typename data_t, ssize_t dims_t>

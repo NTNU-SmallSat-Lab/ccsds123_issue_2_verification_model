@@ -256,7 +256,7 @@ class Header:
         if image_name != None:
             self.check_legal_config()
 
-    def __set_config_according_to_image_name(self, image_name):
+    def __set_config_according_to_image_name(self, image_name):  # this one is weird, should be set from header instead
         self.x_size = int(re.findall("x(.*).raw", image_name)[0].split("x")[-1])
         self.y_size = int(re.findall("x(.+)x", image_name)[0])
         self.z_size = int(image_name.split("x")[0].split("-")[-1])
@@ -318,8 +318,10 @@ class Header:
         header_bitstream = bitarray()
         optional_tables_file = bitarray()
 
+        bitstream_size = 0
         if read_from_compressed_bitstream:
             header_bitstream = header_input
+            bitstream_size = header_bitstream.buffer_info().nbytes
         else:
             with open(header_input, "rb") as file:
                 header_bitstream.fromfile(file)
@@ -691,6 +693,8 @@ class Header:
         # entire header file should be read...
         if not read_from_compressed_bitstream:
             assert len(header_bitstream) == 0
+        else:
+            print(f"Read encoded header of size {bitstream_size - header_bitstream.buffer_info().nbytes}B from compressed bitstream")
         assert len(optional_tables_file) == 0
 
         # init periodic error updating tables

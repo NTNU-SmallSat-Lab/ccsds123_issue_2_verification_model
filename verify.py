@@ -1,21 +1,23 @@
-from ccsds123_i2_hlm import ccsds123
+from numpy import save
+from ccsds123_i2_hlm import ccsds123, predictor_old
 from ccsds123_i2_hlm import header as hd
 import os
 import argparse
-import struct
 
 skip = []
 
+delayed_weight_updates = False
+save_intermediates = False
+use_old_predictor = False
+predictor_only = False
 
-def get_int_list(bytes):
-    n_ints = len(bytes) // 4
-    int_list = list(struct.unpack(f">{n_ints}i", bytes))
-    int_list.sort()
-    return int_list
+# Fails
+# CPP compressor:            [32, 164, 218, 804, 1510, 1871]                                           --> these are shared between cpp predictor compress/decompress
+# Decompress only predictor: [32, 53, 164, 218, 313, 464, 466, 585, 804, 1115, 1510, 1842, 1871, 1927] --> the extra fails are only in decompression part of predictor
+# Full decompressor:         [464, 585]                                                                --> Only hybrid encoder
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="Verify the CCSDS 123.0-B-2 High level model using CCSDS provided test vectors")
     parser.add_argument("folder", help="Path to the folder containing the test vectors")
     parser.add_argument("--start", default="", help="Test vector number to start at")
@@ -71,11 +73,15 @@ def main():
     skipped = 0
     failure_list = []
     skipped_list = []
+    success_list = []
+    not_skipped_list = []
     for num in range(start_num, end_num):
         os.system("cls" if os.name == "nt" else "clear")
         print(f"Success: {success}/{num} Failure: {failure}/{num} Skipped: {skipped}/{num}")
         print(f"Failure list: {failure_list}\n")
-        print(f"Skipped list: {skipped_list}\n")
+        # print(f"Success list: {success_list}\n")
+        # print(f"Skipped list: {skipped_list}\n")
+        # print(f"Not Skipped list: {not_skipped_list}\n")
 
         print(f"Test {num}")
         print(f"Input raw file: {input_raw_files[num]}")
@@ -104,37 +110,23 @@ def main():
         if args.decompress:
             comparison_files_golden.append(f"{test_vector_folder}/{golden_decompressed_files[num]}")
 
-        dut_compressor = ccsds123.CCSDS123(f"{test_vector_folder}/{input_raw_files[num]}")
+        dut_compressor = ccsds123.CCSDS123(delayed_weight_updates=delayed_weight_updates, save_intermediates=save_intermediates, use_old_predictor=use_old_predictor, predictor_only=predictor_only)
         dut_compressor.set_header_file(f"{test_vector_folder}/{input_header_files[num]}")
         dut_compressor.set_optional_tables_file(f"{test_vector_folder}/{input_optional_tables[num]}")
         dut_compressor.set_error_limits_file(f"{test_vector_folder}/{input_error_limits[num]}")
         dut_compressor.set_hybrid_accu_init_file(f"{test_vector_folder}/{input_hybrid_tables[num]}")
 
-        # in case we do not support the config in the provided header
-        try:
-            dut_compressor.set_header()
-        except Exception as e:
-            print("Invalid header (", e, "), skipping")
+        dut_compressor.set_header()  # so that we can check header config values
+        if not predictor_only and args.decompress and dut_compressor.header.entropy_coder_type != hd.EntropyCoderType.HYBRID:
             skipped += 1
             skipped_list.append(num)
             print("Skipping")
             continue
 
-        if args.decompress and dut_compressor.header.entropy_coder_type != hd.EntropyCoderType.HYBRID:
-            skipped += 1
-            print("Skipping")
-            continue
-
-        dut_compressor.compress_image()
+        dut_compressor.compress_image(f"{test_vector_folder}/{input_raw_files[num]}")
 
         if args.decompress:
-            try:
-                dut_compressor.decompress_image()
-            except Exception as e:
-                print("Decompressor exception (", e, ")")
-                failure += 1
-                failure_list.append(num)
-                continue
+            dut_compressor.decompress_image(comparison_files_golden[0])
 
         correct = 0
         for i in range(len(comparison_files_golden)):
@@ -146,14 +138,12 @@ def main():
                     correct += 1
                 else:
                     print("Mismatch on file: ", comparison_files_hlm[i])
-                    if i == 5:
-                        if get_int_list(content1) == get_int_list(content2):
-                            correct += 1
-                            print("Same, just wrong ordering")
 
+        not_skipped_list.append(num)
         if correct == len(comparison_files_golden):
             print(f"Files in test {num} are identical")
             success += 1
+            success_list.append(num)
         else:
             print(f"Files in test {num} are different")
             failure += 1

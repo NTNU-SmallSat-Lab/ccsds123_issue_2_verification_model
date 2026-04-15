@@ -28,10 +28,16 @@ threshold = np.array(
 code_table_max_length = 257
 code_table_input = np.full((16, code_table_max_length), fill_value="Z", dtype="U256")
 code_table_output = np.full((16, code_table_max_length), fill_value="Z", dtype="U256")
+code_table_output_binary = np.full((16, code_table_max_length), fill_value="Z", dtype="U256")
 
 flush_table_max_length = 256
 flush_table_prefix = np.full((16, flush_table_max_length), fill_value="Z", dtype="U256")
 flush_table_word = np.full((16, flush_table_max_length), fill_value="Z", dtype="U256")
+flush_table_word_binary = np.full((16, flush_table_max_length), fill_value="Z", dtype="U256")
+
+
+def table_codeword_to_binary(codeword):
+    return bin(int(codeword.split("'h")[1], 16))[2:].zfill(int(codeword.split("'h")[0]))
 
 
 def tables_init():
@@ -49,6 +55,7 @@ def tables_init():
         )
         code_table_input[i] = data[:, 0]
         code_table_output[i] = data[:, 1]
+        code_table_output_binary[i] = [table_codeword_to_binary(code) if code != "Z" else "Z" for code in code_table_output[i]]
 
     for i in range(16):
         data = np.genfromtxt(
@@ -64,3 +71,4 @@ def tables_init():
         )
         flush_table_prefix[i] = data[:, 0]
         flush_table_word[i] = data[:, 1]
+        flush_table_word_binary[i] = [table_codeword_to_binary(word) if word != "Z" else "Z" for word in flush_table_word[i]]
