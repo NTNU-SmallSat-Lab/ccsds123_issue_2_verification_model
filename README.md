@@ -54,7 +54,7 @@ Raw image files should be formatted as `<name>-<datatype>-<z_size>x<y_size>x<x_s
 
 To decompress an image run:
 
-`python ccsds123_0_b_2_high_level_model.py output/z-output-bistream-dec.bin --file_format u16be --decompress`
+`python ccsds123_0_b_2_high_level_model.py output/z-output-bistream-enc.bin --file_format u16be --decompress`
 
 If no header file is provided for the compressor the header config will use the defaults from the `Header` class in `/ccsds123_i2_hlm/header.py`. Files specifying hybrid encoder initial accumulator values, header optional values, and error limit tables for periodic error limit updates may also be provided when applicable.
 
