@@ -1,8 +1,8 @@
 # CCSDS 123.0-B-2 High-level Model
 
-CCSDS 123.0-B-2 High-Level Model is a verification and debugging tool for the development of CCSDS 123.0-B-2 compliant compressors. Its purpose is to input an uncompressed image and output a CCSDS 123.0-B-2 compliant compressed image, along with all intermediate values needed to compress the image.
+CCSDS 123.0-B-2 High-Level Model is a verification and debugging tool for the development of CCSDS 123.0-B-2 compliant compressors. Its purpose is to input an uncompressed image and output a CCSDS 123.0-B-2 compliant compressed image, along with all intermediate values needed to compress the image. Furthermore, to allow modifications to the algorithm outside of the CCSDS specification, support for decompression of compressed image files is also supported.
 
-As this tool is designed for development purposes and to produce a large amount of output data it might be slow and resource-hungry compared to regular CCSDS 123.0-B-2 compression tools. For regular compression, [this CNES-provided tool](https://www.connectbycnes.fr/en/ccsds-1230-b-2-ccsds-1210-b-3) might for example be a more sensible choice.
+As this tool is designed for development purposes and produces a large amount of output data, it might be slow and resource-hungry compared to regular CCSDS 123.0-B-2 compression tools. For regular compression and decompression within CCSDS specification, [this CNES-provided tool](https://www.connectbycnes.fr/en/ccsds-1230-b-2-ccsds-1210-b-3) might for example be a more sensible choice. To slightly remedy the calculation speed, the predictor module is written in C++ using a library named _pybind11_ to allow integration with Python.
 
 ## Usage Rights
 
@@ -12,72 +12,64 @@ If you use this code in your research, please cite our paper:
 
 D. Vorhaug, S. Boyle and M. Orlandić, "High-Level CCSDS 123.0-B-2 Hyperspectral Image Compressor Verification Model", Workshop on Hyperspectral Image and Signal Processing: Evolution in Remote Sensing (WHISPERS), Helsinki, Finland, Dec. 2024
 
+> As of June 2026, the codebase has been modified to include decompression.
+
 ## Prerequisites  
 - Python 3
-
-## How to install and setup this tool
-
-1. Clone or download this repository
-2. Install necessary Python packages. Do this by running from the repository root folder (ccsds123_0-b-2_high_level_model): `pip install -r requirements.txt`
+- Cmake
+- A C++ compiler
 
 ## Install package
 
-From the root directory, install with `pip install .`. This will automatically build the predictor C++ submodule.
+Clone the repository and run `pip install .` from the repository root directory.
 
-To install C++ submodule locally for development purposes, use the following commands from the root directory.
+## Setup for development
 
+1. Clone or download this repository
+2. Install necessary Python packages. Do this by running from the repository root folder (ccsds123_0-b-2_high_level_model): `pip install -r requirements.txt`
+3. Compile C++ predictor with the following commands:
 ```
 > mkdir build
 > cd build
-> cmake .. -DCMAKE_INSTALL_PREFIX=/repository/path
+> cmake .. -Dpybind11_DIR=/path-to-pybind11
 > make install
 ```
+This installs the C++ predictor sub-module as a shared object file into the _ccsds123_i2_hlm_ folder. If changes are made to the predictor, rebuild it using `make install`.
 
-This builds a shared library file that can by included by python. Rerun `make install` when making changes to the C++ source files.
+> _pybind11_DIR_ needs to be set to the path of the _pybind11Config.cmake_ corresponding to your installation. When using _pip_ as above, this path can be found by looking at the _Location_ field in `pip show pybind11`, and then appending `/pybind11/share/cmake/pybind11`.
 
 ## Usage
 
-### Tool overview
+### Tool overview and examples
 
-To use the tool, run from repo root:
+The tool can be used as a command line tool, or integrated into other python projects. Some simple examples will be shown here, but for a full explanation of command line flags run the help command as follows.
 
-`python ccsds123_0_b_2_high_level_model.py <image_file> [--header HEADER] [--accu ACCU] [--optional OPTIONAL] [--error_limits ERROR_LIMITS]`
+`python ccsds123_0_b_2_high_level_model.py --help`
 
-Mandatory arguments:
-- `image_file`: Path to the raw uncompressed image file. The filename must be in the format `<name>-<datatype>-<z_size>x<y_size>x<x_size>.raw`, as described in the [CCSDS TestData README](https://cwe.ccsds.org/sls/docs/SLS-DC/123.0-B-Info/TestData/README.txt). For example Landsat_mountain-u16be-6x50x100.raw.
+Two main operations are provided, compression and decompression, controlled by the presence of the `--decompress` flag.
 
-Optional arguments:
-- `--header HEADER`: Path to the CCSDS 123.0-B-2 header binary file used to set compression settings. The header is formatted as it is in a CCSDS 123.0-B-2 compressed image. When no header binary file is provided, the configuration set in the properties of the `Header` class in `/ccsds123_i2_hlm/header.py` is used. The user can change these properties to change the compression configuration.
-- `--accu ACCU`: Path to the hybrid encoder accumulator initial values binary file. Stored as unsigned integers in increasing band order, using D+gamma_0 bits, in a file that is zero-padded to the nearest byte at the end.
-- `--optional OPTIONAL`: Path to the optional tables binary file. These are tables that could also be stored in the header. Values are stored as they would be in the header. Tables are stored in the order they would be in the header.
-- `--error_limits ERROR_LIMITS`: Path to the error limits binary file for when using periodic error limit updating. Values are stored as 16-bit unsigned integers in the same order they would be in the image.
+Raw image files should be formatted as `<name>-<datatype>-<z_size>x<y_size>x<x_size>.raw`, and may be compressed using:
+`python ccsds123_0_b_2_high_level_model.py raw_images/Landsat_mountain-u16be-6x50x100.raw --header raw_images/landsat-hdr.bin`
+
+To decompress an image run:
+`python ccsds123_0_b_2_high_level_model.py output/z-output-bistream-dec.bin --file_format u16be --decompress`
+
+If no header file is provided for the compressor the header config will use the defaults from the `Header` class in `/ccsds123_i2_hlm/header.py`. Files specifying hybrid encoder initial accumulator values, header optional values, and error limit tables for periodic error limit updates may also be provided when applicable.
+
+When decompressing, the header config is read from the compressed bitstream. Furthermore, the file format of the decompressed image file must be provided on the command line.
 
 Outputs:
 
-All outputs from the tool are placed in the `/output/` folder. 
-- The compressed image is placed in the `/output/z-output-bistream.bin` file.
+All outputs from the tool are placed in the `/output/` folder. Some additional intermediate results from the predictor may be stored by adding the command line flag `--save_intermediates`. 
+- The compressed image bitstream is placed in the `/output/z-output-bistream-enc.bin` file.
+- Decompressed image is placed in the `/output/z-output-bistream-dec.bin` file.
 - Intermediate values are stored in `.csv` files. Refer to the `save_data`-methods of the respective classes in `/ccsds123_i2_hlm/` for the exact ordering of these files.
 - The header binary file is placed in the `/output/header.bin` file.
 - The standard does not define initial values for the hybrid encoder accumulator or have it encoded in the header. Hence, when the hybrid encoder is used, initial values are placed in the `/output/hybrid_initial_accumulator.bin` file. The file is in the same format as the `ACCU` optional argument file. If not used, the file exists but is empty.
 - If header configurations are used where additional information is necessary to decompress the image, and this additional data can be placed in the header, but is not, the additional data is placed in the `/output/optional_tables.bin` file. The file is in the same format as the `OPTIONAL` optional argument file. If not used, the file exists but is empty.
 - If periodic error limit updating is used, the error limits are placed in the `/output/error_limits.bin` file. The file is in the same format as the `ERROR_LIMITS` optional argument file. If not used, the file exists but is empty.
 
-### Example: Simple compression of image
-To compress an image, run from the repo root folder:
-
-`python ccsds123_0_b_2_high_level_model.py <image_file>`
-
-Concrete example:
-
-`python ccsds123_0_b_2_high_level_model.py raw_images/Landsat_mountain-u16be-6x50x100.raw`
-
-Note:
-- Since no header binary file is provided in this example, the configuration set in the properties of the `Header` class in `/ccsds123_i2_hlm/header.py` is used. The user can change these properties to change the compression configuration.
-
-### Example: Compression of image with an external header file
-
-`python ccsds123_0_b_2_high_level_model.py <image_file> --header <header_file>`
-
+> When decompressing, only the resulting image is stored. This can be changed by adding the _save_data_ methods manually in the code, but might overwrite values from the compressor when using the verification script.
 
 ## Verification
 

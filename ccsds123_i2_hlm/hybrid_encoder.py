@@ -332,14 +332,13 @@ class HybridEncoder:
 
         if self.header.quantizer_fidelity_control_method != hd.QuantizerFidelityControlMethod.ABSOLUTE_ONLY:
             if self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_INDEPENDENT:
-                # read self.header.get_relative_error_limit_bit_depth_value()
                 bits = bitarray()
                 for _ in range(self.header.get_relative_error_limit_bit_depth_value()):
                     bits.insert(0, self.bitstream.pop())
                 self.header.periodic_relative_error_limit_table[period_index][0] = ba2int(bits, signed=False)
 
             elif self.header.relative_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
-                for z in range(self.header.z_size):
+                for z in range(self.header.z_size - 1, -1, -1):
                     bits = bitarray()
                     for _ in range(self.header.get_relative_error_limit_bit_depth_value()):
                         bits.insert(0, self.bitstream.pop())
@@ -353,7 +352,7 @@ class HybridEncoder:
                 self.header.periodic_absolute_error_limit_table[period_index][0] = ba2int(bits, signed=False)
 
             elif self.header.absolute_error_limit_assignment_method == hd.ErrorLimitAssignmentMethod.BAND_DEPENDENT:
-                for z in range(self.header.z_size):  # need to reverse z iteration...
+                for z in range(self.header.z_size - 1, -1, -1):
                     bits = bitarray()
                     for _ in range(self.header.get_absolute_error_limit_bit_depth_value()):
                         bits.insert(0, self.bitstream.pop())
