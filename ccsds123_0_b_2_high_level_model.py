@@ -61,7 +61,7 @@ def main():
 
     start_time = time.time()
 
-    ccsds = ccsds123.CCSDS123(image_ordering=args.image_ordering, delayed_weight_updates=args.delayed_weight_updates, save_intermediates=args.save_intermediates, use_old_predictor=args.use_old_predictor, predictor_only=args.predictor_only)
+    ccsds = ccsds123.CCSDS123(image_ordering=args.image_ordering, delayed_weight_updates=args.delayed_weight_updates, save_intermediates=args.save_intermediates, use_old_predictor=args.old_predictor, predictor_only=args.predictor_only)
 
     if len(args.header) > 0:
         ccsds.set_header_file(args.header)
