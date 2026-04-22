@@ -155,7 +155,7 @@ class CCSDS123:
         if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
             self.encoder = sa_enc.SampleAdaptiveEncoder(self.header, self.image_constants)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
-            self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants)
+            self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants, self.save_intermediates)
             if self.use_accu_init_file:
                 self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.BLOCK_ADAPTIVE:
@@ -203,7 +203,7 @@ class CCSDS123:
 
         if not self.predictor_only:  # assumes mapped_quantizer_index is available from previous run of compressor
             if self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
-                self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants)
+                self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants, self.save_intermediates)
                 if self.use_accu_init_file:
                     self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
             else:
