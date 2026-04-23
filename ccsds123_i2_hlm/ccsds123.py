@@ -89,10 +89,13 @@ class CCSDS123:
         if self.image_ordering == "BSQ":
             self.image_sample = self.image_sample.reshape((self.header.z_size, self.header.y_size, self.header.x_size))  # Reshape to z,y,x (BSQ) 3D array
             self.image_sample = self.image_sample.transpose(1, 2, 0)  # Transpose to y,x,z order (BIP)
+        elif self.image_ordering == "BIL":
+            self.image_sample = self.image_sample.reshape((self.header.y_size, self.header.z_size, self.header.x_size))  # Reshape to y,z,x (BIL) 3D array
+            self.image_sample = self.image_sample.transpose(0, 2, 1)  # Transpose to y,x,z order (BIP)
         elif self.image_ordering == "BIP":
             self.image_sample = self.image_sample.reshape((self.header.y_size, self.header.x_size, self.header.z_size))  # Image was stored as BIP
         else:
-            print(f"Image file ordering {self.image_ordering} is unsupported. Suppurted values are 'BSQ' and 'BIP'.")
+            print(f"Image file ordering {self.image_ordering} is unsupported. Suppurted values are 'BSQ', 'BIL' and 'BIP'.")
             raise RuntimeError
 
     def set_header_file(self, header_file):
