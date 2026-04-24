@@ -426,9 +426,9 @@ void Predictor::init_predictor_arrays()
   // except for prediction residual in near-lossless mode
   lssmpl->set_reference("reference/predictor-00-local_sum.csv");                                   //
   ldvsmpl->set_reference("reference/predictor-01-local_difference_vector.csv");                    //
-  pcdsmpl->set_reference("reference/predictor-03-predicted_central_local_difference.csv");         //
-  hrpsvsmpl->set_reference("reference/predictor-04-high_resolution_predicted_sample_value.csv");   //
-  drpsvsmpl->set_reference("reference/predictor-05-double_resolution_predicted_sample_value.csv"); //
+  pcdsmpl->set_reference("reference/predictor-03-predicted_central_local_difference.csv");         // 1 0 2 --> depends on local differences and weights
+  hrpsvsmpl->set_reference("reference/predictor-04-high_resolution_predicted_sample_value.csv");   // 1 0 2
+  drpsvsmpl->set_reference("reference/predictor-05-double_resolution_predicted_sample_value.csv"); // 1 0 2 --> depends on hrpsv
   psvsmpl->set_reference("reference/predictor-06-predicted_sample_value.csv");                     //
   prsmpl->set_reference("reference/predictor-07-prediction_residual.csv");                         //
   mevsmpl->set_reference("reference/predictor-22-maximum_error.csv");                              //
@@ -439,7 +439,7 @@ void Predictor::init_predictor_arrays()
   drpesmpl->set_reference("reference/predictor-13-double_resolution_prediction_error.csv");        //
   tsmpl->set_reference("reference/predictor-18-scaled_prediction_endpoint_difference.csv");        //
   mqismpl->set_reference("reference/predictor-14-mapped_quantizer_index.csv");                     //
-  wvsmpl->set_reference("reference/predictor-02-weight_vector.csv");                               //
+  wvsmpl->set_reference("reference/predictor-02-weight_vector.csv");                               // 2 0 1 0
 #endif                                                                                             //
 }
 
@@ -732,12 +732,16 @@ ll Predictor::calc_mqi(ll qi, ll theta, ll drpsv)
 
 void Predictor::init_weights()
 {
-  if (x_size == 1)
-    return; // weights should be all zero
+  if (x_size == 1 && y_size == 1)
+    return; // weights should be all 0
 
-  // t = 1
-  int x = 1;
+  // set x and y corresponding to t=1
+  int x = 0;
   int y = 0;
+  if (x_size == 1)
+    y = 1;
+  else
+    x = 1;
 
   if (cast_enum<WeightInitMethod>(header.attr("weight_init_method")) == WeightInitMethod::DEFAULT)
   {
