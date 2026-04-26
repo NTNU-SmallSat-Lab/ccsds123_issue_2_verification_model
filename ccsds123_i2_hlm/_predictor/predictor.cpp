@@ -18,14 +18,19 @@ static inline T cast_enum(py::object enum_py)
   return static_cast<T>(value);
 }
 
-static inline ll modulo_star(ll value, ll r)
+static inline long long modulo_star(long long value, long long r)
 {
   if (r == 64)
     return value;
 
-  ll offset = 1LL << (r - 1);
-  ll modulus = 1LL << r;
-  return ((value + offset) % modulus) - offset;
+  long long offset = 1LL << (r - 1);
+  long long modulus = 1LL << r;
+
+  long long wrapped = (value + offset) % modulus;
+  if (wrapped < 0) // cpp and python treats modulo of negative numbers differently
+    wrapped += modulus;
+
+  return wrapped - offset;
 }
 
 static inline ll sgn(ll value)
@@ -46,7 +51,13 @@ static inline ll sgn_positive(ll value)
 
 static inline ll floor_div2(ll x)
 {
-  return x >= 0 ? x / 2 : (x - 1) / 2;
+  ll q = x / 2;
+  ll r = x % 2;
+
+  if (r != 0 && x < 0)
+    --q;
+
+  return q;
 }
 
 /******************** (de)Constructor ********************/
@@ -426,9 +437,9 @@ void Predictor::init_predictor_arrays()
   // except for prediction residual in near-lossless mode
   lssmpl->set_reference("reference/predictor-00-local_sum.csv");                                   //
   ldvsmpl->set_reference("reference/predictor-01-local_difference_vector.csv");                    //
-  pcdsmpl->set_reference("reference/predictor-03-predicted_central_local_difference.csv");         // 1 0 2 --> depends on local differences and weights
-  hrpsvsmpl->set_reference("reference/predictor-04-high_resolution_predicted_sample_value.csv");   // 1 0 2
-  drpsvsmpl->set_reference("reference/predictor-05-double_resolution_predicted_sample_value.csv"); // 1 0 2 --> depends on hrpsv
+  pcdsmpl->set_reference("reference/predictor-03-predicted_central_local_difference.csv");         //
+  hrpsvsmpl->set_reference("reference/predictor-04-high_resolution_predicted_sample_value.csv");   //
+  drpsvsmpl->set_reference("reference/predictor-05-double_resolution_predicted_sample_value.csv"); //
   psvsmpl->set_reference("reference/predictor-06-predicted_sample_value.csv");                     //
   prsmpl->set_reference("reference/predictor-07-prediction_residual.csv");                         //
   mevsmpl->set_reference("reference/predictor-22-maximum_error.csv");                              //
@@ -439,7 +450,7 @@ void Predictor::init_predictor_arrays()
   drpesmpl->set_reference("reference/predictor-13-double_resolution_prediction_error.csv");        //
   tsmpl->set_reference("reference/predictor-18-scaled_prediction_endpoint_difference.csv");        //
   mqismpl->set_reference("reference/predictor-14-mapped_quantizer_index.csv");                     //
-  wvsmpl->set_reference("reference/predictor-02-weight_vector.csv");                               // 2 0 1 0
+  wvsmpl->set_reference("reference/predictor-02-weight_vector.csv");                               //
 #endif                                                                                             //
 }
 
@@ -693,7 +704,7 @@ ll Predictor::calc_sample_representative(ll x, ll y, ll z, ll cqbc, ll drsr, Num
   auto damping_table_array = header.attr("damping_table_array").cast<NumpyArr<ll>>().unchecked<1>();
   auto damping_offset_table_array = header.attr("damping_offset_table_array").cast<NumpyArr<ll>>().unchecked<1>();
 
-  if (damping_table_array(0) == 0 && damping_offset_table_array(0) == 0)
+  if (damping_table_array(z) == 0 && damping_offset_table_array(z) == 0)
     return cqbc;
 
   return (drsr + 1) / 2;
