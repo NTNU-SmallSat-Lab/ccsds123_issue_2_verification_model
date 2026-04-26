@@ -62,7 +62,7 @@ When decompressing, the header config is read from the compressed bitstream. Fur
 
 Outputs:
 
-All outputs from the tool are placed in the `/output/` folder. Some additional intermediate results from the predictor may be stored by adding the command line flag `--save_intermediates`. 
+All outputs from the tool are placed in the `/output/` folder. To store additional intermediates from predictor and encoder use the flag `--save_intermediates`. This increases the memory usage of the tool drastically.
 - The compressed image bitstream is placed in the `/output/z-output-bistream-enc.bin` file.
 - Decompressed image is placed in the `/output/z-output-bistream-dec.bin` file.
 - Intermediate values are stored in `.csv` files. Refer to the `save_data`-methods of the respective classes in `/ccsds123_i2_hlm/` for the exact ordering of these files.

@@ -219,7 +219,13 @@ class CCSDS123:
             print("Using predictor only")
 
         self.predictor = pred.Predictor(self.header, self.image_constants, self.delayed_weight_updates, self.save_intermediates)
-        decompressed = self.predictor.decompress(self.mapped_quantizer_index)
+
+        try:
+            decompressed = self.predictor.decompress(self.mapped_quantizer_index)
+        except Exception as e:
+            self.predictor.save_data(self.output_folder)
+            print("Predictor threw exception (", e, "), saving and exiting")
+            raise RuntimeError
 
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 

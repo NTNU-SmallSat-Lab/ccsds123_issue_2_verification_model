@@ -863,5 +863,7 @@ ll Predictor::decalc_pr(ll t, ll qi, ll mev)
 
 ll Predictor::decalc_sample(ll pr, ll psv)
 {
-  return pr + psv;
+  ll sMin = image_constants.attr("lower_sample_limit").cast<ll>();
+  ll sMax = image_constants.attr("upper_sample_limit").cast<ll>();
+  return std::clamp(pr + psv, sMin, sMax);
 }

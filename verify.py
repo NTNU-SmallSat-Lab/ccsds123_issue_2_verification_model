@@ -1,5 +1,4 @@
-from numpy import save
-from ccsds123_i2_hlm import ccsds123, predictor_old
+from ccsds123_i2_hlm import ccsds123
 from ccsds123_i2_hlm import header as hd
 import os
 import argparse
@@ -10,11 +9,6 @@ delayed_weight_updates = False
 save_intermediates = False
 use_old_predictor = False
 predictor_only = False
-
-# Fails
-# CPP compressor:            [32, 164, 218, 804, 1510, 1871]                                           --> these are shared between cpp predictor compress/decompress
-# Decompress only predictor: [32, 53, 164, 218, 313, 464, 466, 585, 804, 1115, 1510, 1842, 1871, 1927] --> the extra fails are only in decompression part of predictor
-# Full decompressor:         [464, 585]                                                                --> Only hybrid encoder
 
 
 def main():
@@ -92,9 +86,9 @@ def main():
         print(f"Golden compressed file: {golden_compressed_files[num]}")
         print(f"Golden decompressed file: {golden_decompressed_files[num]}")
 
-        print(f"For more debug data, run: ")
-        print(f"make compare_vector image={test_vector_folder}/{input_raw_files[num]} header={test_vector_folder}/{input_header_files[num]} image_format=s32be correct={test_vector_folder}/{golden_compressed_files[num]} optional_tables={test_vector_folder}/{input_optional_tables[num]} error_limits={test_vector_folder}/{input_error_limits[num]} accu={test_vector_folder}/{input_hybrid_tables[num]} ")
-        print(f"header_tool -t {test_vector_folder}/{input_optional_tables[num]} -d {test_vector_folder}/{input_header_files[num]}")
+        # print(f"For more debug data, run: ")
+        # print(f"make compare_vector image={test_vector_folder}/{input_raw_files[num]} header={test_vector_folder}/{input_header_files[num]} image_format=s32be correct={test_vector_folder}/{golden_compressed_files[num]} optional_tables={test_vector_folder}/{input_optional_tables[num]} error_limits={test_vector_folder}/{input_error_limits[num]} accu={test_vector_folder}/{input_hybrid_tables[num]} ")
+        # print(f"header_tool -t {test_vector_folder}/{input_optional_tables[num]} -d {test_vector_folder}/{input_header_files[num]}")
 
         if num in skip:
             skipped += 1
