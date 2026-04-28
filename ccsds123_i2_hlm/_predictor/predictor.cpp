@@ -124,9 +124,9 @@ NumpyArr<ll> Predictor::compress(NumpyArr<ll> image_sample)
         auto ldv = calc_ldv(x, y, z, ls, prev_ls);
         for (int i = 0; i < ldv.size(); i++)
           ldvsmpl->sample(ldv.at(i), y, x, z, i);
-        ll pcd = pcdsmpl->sample(calc_pcd(x, y, z), y, x, z);
 
         // prediction calculation
+        ll pcd = pcdsmpl->sample(calc_pcd(x, y, z), y, x, z);
         ll hrpsv = hrpsvsmpl->sample(calc_hrpsv(x, y, z, ls, pcd), y, x, z);
         ll drpsv = drpsvsmpl->sample(calc_drpsv(x, y, z, hrpsv, image_sample), y, x, z);
         ll psv = psvsmpl->sample(calc_psv(drpsv), y, x, z);
@@ -135,12 +135,12 @@ NumpyArr<ll> Predictor::compress(NumpyArr<ll> image_sample)
         ll pr = prsmpl->sample(calc_pr(_image_sample(y, x, z), psv), y, x, z);
         ll mev = mevsmpl->sample(calc_mev(y, z, psv), y, x, z);
         ll qi = qismpl->sample(calc_qi(t, mev, pr), y, x, z);
-        ll cqbc = cqbcsmpl->sample(calc_cqbc(x, y, z, psv, mev, qi, image_sample), y, x, z);
 
         // sample representatives
+        ll cqbc = cqbcsmpl->sample(calc_cqbc(x, y, z, psv, mev, qi, image_sample), y, x, z);
         ll drsr = drsrsmpl->sample(calc_drsr(z, cqbc, qi, mev, hrpsv), y, x, z);
         srsmpl->sample(calc_sample_representative(x, y, z, cqbc, drsr, image_sample), y, x, z);
-        ll drpe = drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z);
+        drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z); // needed by weight update
 
         // mapping
         ll theta = tsmpl->sample(calc_theta(t, psv, mev), y, x, z);
@@ -208,9 +208,9 @@ NumpyArr<ll> Predictor::decompress(NumpyArr<ll> mqi)
         auto ldv = calc_ldv(x, y, z, ls, prev_ls);
         for (int i = 0; i < ldv.size(); i++)
           ldvsmpl->sample(ldv.at(i), y, x, z, i);
-        ll pcd = pcdsmpl->sample(calc_pcd(x, y, z), y, x, z);
 
         // prediction calculation
+        ll pcd = pcdsmpl->sample(calc_pcd(x, y, z), y, x, z);
         ll hrpsv = hrpsvsmpl->sample(calc_hrpsv(x, y, z, ls, pcd), y, x, z);
         ll drpsv = drpsvsmpl->sample(calc_drpsv(x, y, z, hrpsv, decompressed_image_sample), y, x, z);
         ll psv = psvsmpl->sample(calc_psv(drpsv), y, x, z);
@@ -226,7 +226,7 @@ NumpyArr<ll> Predictor::decompress(NumpyArr<ll> mqi)
         ll cqbc = cqbcsmpl->sample(calc_cqbc(x, y, z, psv, mev, qi, decompressed_image_sample), y, x, z);
         ll drsr = drsrsmpl->sample(calc_drsr(z, cqbc, qi, mev, hrpsv), y, x, z);
         srsmpl->sample(calc_sample_representative(x, y, z, cqbc, drsr, decompressed_image_sample), y, x, z);
-        drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z);
+        drpesmpl->sample(calc_drpe(cqbc, drpsv), y, x, z); // needed by weight update
 
         prev_ls = ls;
 
@@ -251,6 +251,9 @@ NumpyArr<ll> Predictor::decompress(NumpyArr<ll> mqi)
 
 void Predictor::save_data(std::string output_folder)
 {
+  if (!save_intermediates)
+    return;
+
   // import numpy for easy storing to file
   py::object numpy = py::module_::import("numpy");
   py::object savetxt = numpy.attr("savetxt");
@@ -258,7 +261,6 @@ void Predictor::save_data(std::string output_folder)
   auto csv_image_shape = {y_size * x_size, z_size};
   auto csv_vector_shape = {y_size * x_size, z_size * local_difference_values_num};
 
-  // optionally saved
   if (lssmpl->enable_sampling)
     savetxt(output_folder + "/predictor-00-local_sum.csv", lssmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
@@ -298,7 +300,6 @@ void Predictor::save_data(std::string output_folder)
   if (mevsmpl->enable_sampling)
     savetxt(output_folder + "/predictor-22-maximum_error.csv", mevsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
 
-  // always saved
   savetxt(output_folder + "/predictor-01-local_difference_vector.csv", ldvsmpl->get_arr().reshape(csv_vector_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
   savetxt(output_folder + "/predictor-02-weight_vector.csv", wvsmpl->get_arr().reshape(csv_vector_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");
   savetxt(output_folder + "/predictor-12-sample_representative.csv", srsmpl->get_arr().reshape(csv_image_shape), py::arg("delimiter") = ",", py::arg("fmt") = "%d");

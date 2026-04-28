@@ -22,6 +22,7 @@ test_vectors/*
 share
 
 .DS_Store
+.python-version
 test/comparison.txt
 bin
 include

@@ -113,7 +113,7 @@ class CCSDS123:
         self.use_accu_init_file = True
 
     def set_header(self):
-        self.header = hd.Header(self.image_name)
+        self.header = hd.Header(self.image_name, self.save_intermediates)
         if self.use_header_file:
             self.header.set_config_from_file(self.header_file, self.optional_tables_file, self.error_limits_file)
 
@@ -128,7 +128,7 @@ class CCSDS123:
         self.image_file = image_file
         self.image_name = image_file.split("/")[-1]
 
-        self.header = hd.Header(self.image_name)
+        self.header = hd.Header(self.image_name, self.save_intermediates)
         if self.use_header_file:
             self.header.set_config_from_file(self.header_file, self.optional_tables_file, self.error_limits_file)
 
@@ -194,7 +194,7 @@ class CCSDS123:
                 self.compressed_bitstream.fromfile(file)  # we assume here that the compressed bitstream is in big endian
 
             print("Reading header config from compressed bitstream")
-            self.header = hd.Header()  # by not passing image_name we read image size from header bitstream instead
+            self.header = hd.Header(save_intermediates=self.save_intermediates)  # by not passing image_name we read image size from header bitstream instead
             self.compressed_body_size = self.header.set_config_from_file(self.compressed_bitstream, self.optional_tables_file)
             self.image_constants = const.ImageConstants(self.header)
 
@@ -234,12 +234,14 @@ class CCSDS123:
         ########################################################################################################################
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
-        np.savetxt(
-            f"{self.output_folder}/predictor-17-decompressed_image_sample.csv",
-            decompressed.reshape(csv_image_shape),
-            delimiter=",",
-            fmt="%d",
-        )
+
+        if self.save_intermediates:
+            np.savetxt(
+                f"{self.output_folder}/predictor-17-decompressed_image_sample.csv",
+                decompressed.reshape(csv_image_shape),
+                delimiter=",",
+                fmt="%d",
+            )
 
         with open(f"{self.output_folder}/z-output-bitstream-dec.bin", "wb") as f:
             if self.header.sample_encoding_order == hd.SampleEncodingOrder.BSQ:

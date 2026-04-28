@@ -128,6 +128,7 @@ class SupplementaryInformationTable:
     table_purpose = 0
     table_structure = TableStructure.ZERO_DIMENSIONAL
     user_defined_data = 0
+    save_intermediates = None
 
     table_data_subblock = bitarray()
 
@@ -231,9 +232,11 @@ class Header:
     header_bitstream = None
     optional_tables_bitstream = None
 
-    def __init__(self, image_name=None):
+    def __init__(self, image_name=None, save_intermediates=False):
         if image_name != None:
             self.__set_config_according_to_image_name(image_name)
+
+        self.save_intermediates = save_intermediates
 
         if self.weight_init_method == WeightInitMethod.CUSTOM:
             self.set_weight_init_table_array_to_default()
@@ -332,6 +335,7 @@ class Header:
         else:
             optional_tables_file = bitarray()  # Empty bitarray
 
+        assert isinstance(header_bitstream, bitarray)
         assert len(header_bitstream) % 8 == 0
         assert len(optional_tables_file) % 8 == 0
 
@@ -1455,6 +1459,9 @@ class Header:
         self.save_header_binary(f"{output_folder}/header.bin")
         self.save_optional_tables_binary(f"{output_folder}/optional_tables.bin")
         self.save_error_limits_binary(f"{output_folder}/error_limits.bin")
+
+        if not self.save_intermediates:
+            return
 
         if type(self.periodic_absolute_error_limit_table) is np.ndarray:
             np.savetxt(

@@ -62,14 +62,14 @@ When decompressing, the header config is read from the compressed bitstream. Fur
 
 Outputs:
 
-All outputs from the tool are placed in the `/output/` folder. To store additional intermediates from predictor and encoder use the flag `--save_intermediates`. This increases the memory usage of the tool drastically.
+All outputs from the tool are placed in the `/output/` folder. To store additional intermediate values use the flag `--save_intermediates`. This increases the memory usage of the tool drastically.
 - The compressed image bitstream is placed in the `/output/z-output-bistream-enc.bin` file.
 - Decompressed image is placed in the `/output/z-output-bistream-dec.bin` file.
-- Intermediate values are stored in `.csv` files. Refer to the `save_data`-methods of the respective classes in `/ccsds123_i2_hlm/` for the exact ordering of these files.
 - The header binary file is placed in the `/output/header.bin` file.
 - The standard does not define initial values for the hybrid encoder accumulator or have it encoded in the header. Hence, when the hybrid encoder is used, initial values are placed in the `/output/hybrid_initial_accumulator.bin` file. The file is in the same format as the `ACCU` optional argument file. If not used, the file exists but is empty.
 - If header configurations are used where additional information is necessary to decompress the image, and this additional data can be placed in the header, but is not, the additional data is placed in the `/output/optional_tables.bin` file. The file is in the same format as the `OPTIONAL` optional argument file. If not used, the file exists but is empty.
 - If periodic error limit updating is used, the error limits are placed in the `/output/error_limits.bin` file. The file is in the same format as the `ERROR_LIMITS` optional argument file. If not used, the file exists but is empty.
+- Optional intermediate values are stored in `.csv` files. Refer to the `save_data`-methods of the respective classes in `/ccsds123_i2_hlm/` for the exact ordering of these files.
 
 > When decompressing, only the resulting image is stored. This can be changed by adding the _save_data_ methods manually in the code, but might overwrite values from the compressor when using the verification script.
 
