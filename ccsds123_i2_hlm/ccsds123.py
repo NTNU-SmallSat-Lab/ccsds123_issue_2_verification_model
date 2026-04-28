@@ -156,13 +156,13 @@ class CCSDS123:
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
         if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
-            self.encoder = sa_enc.SampleAdaptiveEncoder(self.header, self.image_constants)
+            self.encoder = sa_enc.SampleAdaptiveEncoder(self.header, self.image_constants, self.save_intermediates)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
             self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants, self.save_intermediates)
             if self.use_accu_init_file:
                 self.encoder.set_hybrid_accu_init_file(self.accu_init_file)
         elif self.header.entropy_coder_type == hd.EntropyCoderType.BLOCK_ADAPTIVE:
-            self.encoder = ba_enc.BlockAdaptiveEncoder(self.header, self.image_constants)
+            self.encoder = ba_enc.BlockAdaptiveEncoder(self.header, self.image_constants, self.save_intermediates)
 
         self.encoder.run_encoder(self.mapped_quantizer_index)
         print(f"{time.time() - start_time:.3f} seconds. Done with encoder")

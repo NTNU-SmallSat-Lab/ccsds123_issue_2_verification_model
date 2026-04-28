@@ -11,9 +11,12 @@ class BlockAdaptiveEncoder:
     image_constants = None
     mapped_quantizer_index = None  # Symbol: delta
 
-    def __init__(self, header, image_constants):
+    save_intermediates = None
+
+    def __init__(self, header, image_constants, save_intermediates=False):
         self.header = header
         self.image_constants = image_constants
+        self.save_intermediates = save_intermediates
 
     block_size = None  # Symbol: J
     reference_sample_interval = None  # Symbol: r
@@ -232,6 +235,9 @@ class BlockAdaptiveEncoder:
             self.bitstream.tofile(file)
         with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
             bitarray().tofile(file)  # Create empty file. To simplify creating scripts compatible with all entropy coder types
+
+        if not self.save_intermediates:
+            return
 
         np.savetxt(
             output_folder + "/ba-encoder-00-blocks.csv",

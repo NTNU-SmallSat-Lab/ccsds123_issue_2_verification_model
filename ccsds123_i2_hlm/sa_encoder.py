@@ -11,9 +11,12 @@ class SampleAdaptiveEncoder:
     image_shape = None
     mapped_quantizer_index = None  # Symbol: delta
 
-    def __init__(self, header, image_constants):
+    save_intermediates = None
+
+    def __init__(self, header, image_constants, save_intermediates=False):
         self.header = header
         self.image_constants = image_constants
+        self.save_intermediates = save_intermediates
 
     unary_length_limit = None  # Symbol: U_max
     accumulator_init_parameter_1 = None  # Symbol: k'
@@ -173,6 +176,9 @@ class SampleAdaptiveEncoder:
             self.bitstream.tofile(file)
         with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
             bitarray().tofile(file)  # Create empty file. To simplify creating scripts compatible with all entropy coder types
+
+        if not self.save_intermediates:
+            return
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
         np.savetxt(
