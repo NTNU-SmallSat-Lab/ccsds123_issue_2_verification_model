@@ -94,7 +94,7 @@ NumpyArr<ll> Predictor::compress(NumpyArr<ll> image_sample)
   // tranversing in BIP order
   for (int y = 0; y < y_size; y++)
   {
-    std::cout << "\rProcessing line y=" << y + 1 << "/" << y_size << std::flush;
+    std::cout << "\rProcessing frame y=" << y + 1 << "/" << y_size << std::flush;
     for (int x = 0; x < x_size; x++)
     {
       int t = x + y * x_size;
@@ -178,7 +178,7 @@ NumpyArr<ll> Predictor::decompress(NumpyArr<ll> mqi)
   // tranversing in BIP order
   for (int y = 0; y < y_size; y++)
   {
-    std::cout << "\rProcessing line y=" << y + 1 << "/" << y_size << std::flush;
+    std::cout << "\rProcessing frame y=" << y + 1 << "/" << y_size << std::flush;
     for (int x = 0; x < x_size; x++)
     {
       int t = x + y * x_size;

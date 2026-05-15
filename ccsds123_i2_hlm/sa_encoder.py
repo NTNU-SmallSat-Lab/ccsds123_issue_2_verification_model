@@ -140,7 +140,7 @@ class SampleAdaptiveEncoder:
 
         if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI:
             for y in range(self.header.y_size):
-                print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
+                print(f"\rProcessing frame y={y+1}/{self.header.y_size}", end="")
 
                 if y % 2**self.header.error_update_period_exponent == 0 and self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.USED:
                     self.__encode_error_limits(y)

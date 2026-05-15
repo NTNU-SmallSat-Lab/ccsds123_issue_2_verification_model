@@ -406,7 +406,7 @@ class Predictor:
 
         # tranversing in BIP order
         for y in range(self.header.y_size):
-            print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
+            print(f"\rProcessing frame y={y+1}/{self.header.y_size}", end="")
             for x in range(self.header.x_size):
                 t = x + y * self.header.x_size
                 for z in range(self.header.z_size):

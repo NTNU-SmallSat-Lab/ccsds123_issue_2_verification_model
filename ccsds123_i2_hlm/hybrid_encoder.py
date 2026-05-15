@@ -461,7 +461,7 @@ class HybridEncoder:
 
         if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI:
             for y in range(self.header.y_size):
-                print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
+                print(f"\rProcessing frame y={y+1}/{self.header.y_size}", end="")
 
                 if y % 2**self.header.error_update_period_exponent == 0 and self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.USED:
                     self.__encode_error_limits(y)
@@ -502,7 +502,7 @@ class HybridEncoder:
 
         if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI:
             for y in range(self.header.y_size - 1, -1, -1):
-                print(f"\rProcessing line y={self.header.y_size - y}/{self.header.y_size}", end="")
+                print(f"\rProcessing frame y={self.header.y_size - y}/{self.header.y_size}", end="")
 
                 for i in range(ceil(self.header.z_size / self.header.sub_frame_interleaving_depth) - 1, -1, -1):  # works??
                     for x in range(self.header.x_size - 1, -1, -1):
