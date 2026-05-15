@@ -6,6 +6,7 @@
 *.html
 *.cfg
 *.so
+*.svg
 
 __pycache__/
 .VSCodeCounter/
@@ -20,6 +21,8 @@ reference
 raw_images/
 test_vectors/*
 share
+tools/*
+!tools/*.py
 
 .DS_Store
 .python-version

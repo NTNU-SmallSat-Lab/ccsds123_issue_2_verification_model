@@ -128,11 +128,12 @@ class CCSDS123:
         self.image_file = image_file
         self.image_name = image_file.split("/")[-1]
 
-        self.header = hd.Header(self.image_name, self.save_intermediates)
-        if self.use_header_file:
-            self.header.set_config_from_file(self.header_file, self.optional_tables_file, self.error_limits_file)
+        if self.header == None:
+            self.set_header()
 
         self.__load_raw_image(file_format)
+
+        loading_time = time.time() - start_time
         print(f"{time.time() - start_time:.3f} seconds. Done with loading")
 
         self.image_constants = const.ImageConstants(self.header)
@@ -153,7 +154,8 @@ class CCSDS123:
                 print("Predictor threw exception (", e, "), saving and exiting")
                 raise RuntimeError
 
-        print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
+        predictor_time = time.time() - start_time - loading_time
+        print(f"{predictor_time:.3f} seconds. Done with predictor")
 
         if self.header.entropy_coder_type == hd.EntropyCoderType.SAMPLE_ADAPTIVE:
             self.encoder = sa_enc.SampleAdaptiveEncoder(self.header, self.image_constants, self.save_intermediates)
@@ -165,7 +167,11 @@ class CCSDS123:
             self.encoder = ba_enc.BlockAdaptiveEncoder(self.header, self.image_constants, self.save_intermediates)
 
         self.encoder.run_encoder(self.mapped_quantizer_index)
-        print(f"{time.time() - start_time:.3f} seconds. Done with encoder")
+
+        encoder_time = time.time() - start_time - predictor_time - loading_time
+        print(f"{encoder_time:.3f} seconds. Done with encoder")
+
+        Path(self.output_folder).mkdir(parents=True, exist_ok=True)
 
         if self.use_old_predictor:
             self.predictor_old.save_data(self.output_folder)
@@ -175,7 +181,15 @@ class CCSDS123:
         self.header.save_data(self.output_folder)
         self.encoder.save_data(self.output_folder, self.header.get_header_bitstreams()[0])
 
-        print(f"{time.time() - start_time:.3f} seconds. Done with saving")
+        save_data_time = time.time() - start_time - predictor_time - encoder_time - loading_time
+        print(f"{save_data_time:.3f} seconds. Done with saving")
+
+        return {
+            "loading": loading_time,
+            "predictor": predictor_time,
+            "encoder": encoder_time,
+            "save_data": save_data_time,
+        }
 
     def decompress_image(self, compressed_image_file, output_format=None):
         print(f"-I- Decompressing '{compressed_image_file}'")
@@ -198,12 +212,14 @@ class CCSDS123:
             self.compressed_body_size = self.header.set_config_from_file(self.compressed_bitstream, self.optional_tables_file)
             self.image_constants = const.ImageConstants(self.header)
 
-        print(f"{time.time() - start_time:.3f} seconds. Done with loading")
+        loading_time = time.time() - start_time
+        print(f"{loading_time:.3f} seconds. Done with loading")
 
         ########################################################################################################################
         # Decompression
         ########################################################################################################################
 
+        encoder_time = 0
         if not self.predictor_only:  # assumes mapped_quantizer_index is available from previous run of compressor
             if self.header.entropy_coder_type == hd.EntropyCoderType.HYBRID:
                 self.encoder = hyb_enc.HybridEncoder(self.header, self.image_constants, self.save_intermediates)
@@ -214,6 +230,7 @@ class CCSDS123:
 
             self.mapped_quantizer_index = self.encoder.run_decoder(self.compressed_bitstream[-(8 * self.compressed_body_size) :])
 
+            encoder_time = time.time() - start_time - loading_time
             print(f"{time.time() - start_time:.3f} seconds. Done with decoder")
         else:
             print("Using predictor only")
@@ -227,11 +244,14 @@ class CCSDS123:
             print("Predictor threw exception (", e, "), saving and exiting")
             raise RuntimeError
 
+        predictor_time = time.time() - start_time - encoder_time - loading_time
         print(f"{time.time() - start_time:.3f} seconds. Done with predictor")
 
         ########################################################################################################################
         # Store result
         ########################################################################################################################
+
+        Path(self.output_folder).mkdir(parents=True, exist_ok=True)
 
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
 
@@ -261,4 +281,12 @@ class CCSDS123:
                             chunk = decompressed[y, x, z_start:z_end].astype(dtype)
                             f.write(chunk.tobytes())
 
+        save_data_time = time.time() - start_time - predictor_time - encoder_time - loading_time
         print(f"{time.time() - start_time:.3f} seconds. Done with saving")
+
+        return {
+            "loading": loading_time,
+            "predictor": predictor_time,
+            "encoder": encoder_time,
+            "save_data": save_data_time,
+        }
