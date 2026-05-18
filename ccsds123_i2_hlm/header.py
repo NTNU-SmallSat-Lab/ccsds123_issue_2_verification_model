@@ -283,8 +283,8 @@ class Header:
 
     def __init_periodic_absolute_error_limit_table_array(self):
         periodic_absolute_error_limit_table_shape = (
-            ceil((self.y_size + 2**16 * int(self.y_size == 0)) / 2**self.error_update_period_exponent),
             self.z_size + 2**16 * int(self.z_size == 0),
+            ceil((self.y_size + 2**16 * int(self.y_size == 0)) / 2**self.error_update_period_exponent),
         )
         self.periodic_absolute_error_limit_table = np.zeros(periodic_absolute_error_limit_table_shape, dtype=np.int64)
 
