@@ -13,10 +13,11 @@ class Predictor:
     image_constants = None
     image_sample = None  # Symbol: s
 
-    def __init__(self, header, image_constants, image_sample):
+    def __init__(self, header, image_constants, image_sample, delayed_weight_updates=False):
         self.header = header
         self.image_constants = image_constants
         self.image_sample = image_sample
+        self.delayed_weight_updates = delayed_weight_updates
 
     # Predictor constants
     local_difference_values_num = None
@@ -31,6 +32,7 @@ class Predictor:
     weight_exponent_offset = None  # Symbol: sigma (in word-final position)
     weight_min = None  # Symbol: omega_min
     weight_max = None  # Symbol: omega_max
+    delayed_weight_updates = None  # apply delayed weight updates
 
     register_size = None  # Symbol: R
 
@@ -39,6 +41,7 @@ class Predictor:
 
     def __init_predictor_constants(self):
         self.local_difference_values_num = self.header.prediction_bands_num
+
         if self.header.prediction_mode == hd.PredictionMode.FULL:
             self.local_difference_values_num += 3
 
@@ -52,10 +55,22 @@ class Predictor:
         self.weight_update_final_parameter = self.header.weight_update_final_parameter - 6
         self.weight_update_scaling_exponent = np.empty((self.header.y_size * self.header.x_size), dtype=np.int64)
         for t in range(self.header.y_size * self.header.x_size):
-            self.weight_update_scaling_exponent[t] = clip(self.weight_update_initial_parameter + (t - self.header.x_size) // self.weight_update_change_interval, self.weight_update_initial_parameter, self.weight_update_final_parameter) + self.image_constants.dynamic_range_bits - self.weight_component_resolution
+            self.weight_update_scaling_exponent[t] = (
+                clip(
+                    self.weight_update_initial_parameter + (t - self.header.x_size) // self.weight_update_change_interval,
+                    self.weight_update_initial_parameter,
+                    self.weight_update_final_parameter,
+                )
+                + self.image_constants.dynamic_range_bits
+                - self.weight_component_resolution
+            )
 
         if self.local_difference_values_num > 0:
-            self.weight_exponent_offset = np.full((self.header.z_size, self.local_difference_values_num), 0.0, dtype=np.float64)
+            self.weight_exponent_offset = np.full(
+                (self.header.z_size, self.local_difference_values_num),
+                0.0,
+                dtype=np.float64,
+            )
             if self.header.weight_exponent_offset_flag == hd.WeightExponentOffsetFlag.NOT_ALL_ZERO:
                 if self.header.prediction_mode == hd.PredictionMode.FULL:
                     for i in range(3):  # Set the directional offsets
@@ -130,6 +145,7 @@ class Predictor:
         self.scaled_prediction_endpoint_difference = np.full(image_shape, value, dtype=np.int64)
         self.mapped_quantizer_index = np.full(image_shape, value, dtype=np.int64)
 
+    # return local sum
     def __calculate_local_sum(self, x, y, z, t):
         if t == 0:
             return
@@ -170,6 +186,7 @@ class Predictor:
             elif y == 0 and x > 0 and z == 0:
                 self.local_sum[y, x, z] = self.image_constants.middle_sample_value * 4
 
+    # store central local differences, what about full mode?
     def __calculate_local_difference_vector(self, x, y, z, t):
         if t == 0:
             return
@@ -210,8 +227,14 @@ class Predictor:
                 for i in range(1, self.spectral_bands_used[z]):
                     self.weight_vector[y, x, z, offset + i] = self.weight_vector[y, x, z, offset + i - 1] // 8
         else:
-            self.weight_vector[y, x, z] = 2 ** (self.weight_component_resolution + 3 - self.header.weight_init_resolution) * self.header.weight_init_table[z] + np.ceil(2 ** (self.weight_component_resolution + 2 - self.header.weight_init_resolution) - 1)
+            multiplier = 2 ** (self.weight_component_resolution + 3 - self.header.weight_init_resolution)
+            offset = np.ceil(2 ** (self.weight_component_resolution + 2 - self.header.weight_init_resolution) - 1)
+            self.weight_vector[y, x, z] = multiplier * self.header.weight_init_table[z] + offset
 
+    def __calculate_weight_offset(self, x, y, z, t, i):
+        return floor((float(sign_positive(self.double_resolution_prediction_error[y, x, z])) * float(self.local_difference_vector[y, x, z, i]) * 2.0 ** (-(float(self.weight_update_scaling_exponent[t]) + self.weight_exponent_offset[z, i]))) + 1) // 2
+
+    # store weights
     def __calculate_weight_vector(self, x, y, z, t):
         if t == 0:
             return
@@ -219,17 +242,51 @@ class Predictor:
             self.__init_weights(x, y, z)
             return
 
-        prev_y = y
-        prev_x = x - 1
-        if prev_x < 0:
-            prev_y -= 1
-            prev_x = self.header.x_size - 1
+        # self.weight_update_frequncy dictates how often we should update the weights
+        # set to 1 for the updating scheme of the standard
 
+        prev_x = (t - 1) % self.header.x_size
+        prev_y = (t - 1) // self.header.x_size
         assert t - 1 == prev_x + prev_y * self.header.x_size
 
-        for i in range(self.weight_vector.shape[3]):
-            self.weight_vector[y, x, z, i] = clip(int(self.weight_vector[prev_y, prev_x, z, i]) + (floor(float(sign_positive(self.double_resolution_prediction_error[prev_y, prev_x, z])) * float(self.local_difference_vector[prev_y, prev_x, z, i]) * 2.0 ** (-(float(self.weight_update_scaling_exponent[t - 1]) + self.weight_exponent_offset[z, i]))) + 1) // 2, self.weight_min, self.weight_max)
+        if self.delayed_weight_updates and (x != 0 and x < 4):
+            for i in range(self.weight_vector.shape[3]):
+                self.weight_vector[y, x, z, i] = self.weight_vector[prev_y, prev_x, z, i]
+        else:
+            t_weight_update = t - 1
+            x_weight_update = prev_x
+            y_weight_update = prev_y
 
+            # update weight using weight from four samples ago
+            if self.delayed_weight_updates:
+                t_weight_update = t - 4
+                x_weight_update = t_weight_update % self.header.x_size
+                y_weight_update = t_weight_update // self.header.x_size
+
+            assert t_weight_update == x_weight_update + y_weight_update * self.header.x_size
+
+            for i in range(self.weight_vector.shape[3]):
+                weight_offset = self.__calculate_weight_offset(
+                    x_weight_update,
+                    y_weight_update,
+                    z,
+                    t_weight_update,
+                    i,
+                )
+
+                weight_unclipped = int(self.weight_vector[y_weight_update, x_weight_update, z, i]) + weight_offset
+
+                # refine weight update
+                if self.delayed_weight_updates and (x > 4 or x == 0):
+                    weight_unclipped = floor((weight_unclipped + self.weight_vector[prev_y, prev_x, z, i]) // 2)
+
+                self.weight_vector[y, x, z, i] = clip(
+                    weight_unclipped,
+                    self.weight_min,
+                    self.weight_max,
+                )
+
+    # return predicted central local difference
     def __calculate_predicted_central_local_difference(self, x, y, z, t):
         if t == 0:
             return
@@ -238,9 +295,20 @@ class Predictor:
             return
         self.predicted_central_local_difference[y, x, z] = np.dot(self.weight_vector[y, x, z], self.local_difference_vector[y, x, z])
 
+    # uses pred central local diff, local sum
+    # return predicted sample
     def __calculate_prediction(self, x, y, z, t):
         if t > 0:
-            self.high_resolution_predicted_sample_value[y, x, z] = clip(modulo_star(int(self.predicted_central_local_difference[y, x, z] + 2**self.weight_component_resolution * (self.local_sum[y, x, z] - 4 * self.image_constants.middle_sample_value)), self.register_size) + 2 ** (self.weight_component_resolution + 2) * self.image_constants.middle_sample_value + 2 ** (self.weight_component_resolution + 1), 2 ** (self.weight_component_resolution + 2) * self.image_constants.lower_sample_limit, 2 ** (self.weight_component_resolution + 2) * self.image_constants.upper_sample_limit + 2 ** (self.weight_component_resolution + 1))
+            self.high_resolution_predicted_sample_value[y, x, z] = clip(
+                modulo_star(
+                    int(self.predicted_central_local_difference[y, x, z] + 2**self.weight_component_resolution * (self.local_sum[y, x, z] - 4 * self.image_constants.middle_sample_value)),
+                    self.register_size,
+                )
+                + 2 ** (self.weight_component_resolution + 2) * self.image_constants.middle_sample_value
+                + 2 ** (self.weight_component_resolution + 1),
+                2 ** (self.weight_component_resolution + 2) * self.image_constants.lower_sample_limit,
+                2 ** (self.weight_component_resolution + 2) * self.image_constants.upper_sample_limit + 2 ** (self.weight_component_resolution + 1),
+            )
             self.double_resolution_predicted_sample_value[y, x, z] = self.high_resolution_predicted_sample_value[y, x, z] // 2 ** (self.weight_component_resolution + 1)
         elif t == 0 and self.header.prediction_bands_num > 0 and z > 0:
             self.double_resolution_predicted_sample_value[y, x, z] = 2 * self.image_sample[y, x, z - 1]
@@ -249,6 +317,8 @@ class Predictor:
 
         self.predicted_sample_value[y, x, z] = self.double_resolution_predicted_sample_value[y, x, z] // 2
 
+    # uses predicted sample
+    # return max error
     def __calculate_maximum_error(self, x, y, z, t):
         if self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.LOSSLESS:
             self.maximum_error[y, x, z] = 0
@@ -260,8 +330,13 @@ class Predictor:
             self.maximum_error[y, x, z] = int(self.relative_error_limits[y, z] * self.predicted_sample_value[y, x, z] // self.image_constants.dynamic_range)
 
         elif self.header.quantizer_fidelity_control_method == hd.QuantizerFidelityControlMethod.ABSOLUTE_AND_RELATIVE:
-            self.maximum_error[y, x, z] = min(self.absolute_error_limits[y, z], int(self.relative_error_limits[y, z] * self.predicted_sample_value[y, x, z] // self.image_constants.dynamic_range))
+            self.maximum_error[y, x, z] = min(
+                self.absolute_error_limits[y, z],
+                int(self.relative_error_limits[y, z] * self.predicted_sample_value[y, x, z] // self.image_constants.dynamic_range),
+            )
 
+    # uses pred sample, max error
+    # return quantizer index
     def __calculate_quantization(self, x, y, z, t):
         self.prediction_residual[y, x, z] = self.image_sample[y, x, z] - self.predicted_sample_value[y, x, z]
 
@@ -271,6 +346,8 @@ class Predictor:
 
         self.quantizer_index[y, x, z] = sign(self.prediction_residual[y, x, z]) * ((abs(self.prediction_residual[y, x, z]) + self.maximum_error[y, x, z]) // (2 * self.maximum_error[y, x, z] + 1))
 
+    # uses quantizer index, max error, pred sample, high res pred sample
+    # return sample repr
     def __calculate_sample_representative(self, x, y, z, t):
         if t == 0:
             self.sample_representative[y, x, z] = self.image_sample[y, x, z]
@@ -279,7 +356,11 @@ class Predictor:
         if self.maximum_error[y, x, z] == 0:  # Lossless
             self.clipped_quantizer_bin_center[y, x, z] = self.image_sample[y, x, z]
         else:
-            self.clipped_quantizer_bin_center[y, x, z] = clip(int(self.predicted_sample_value[y, x, z] + self.quantizer_index[y, x, z] * (2 * self.maximum_error[y, x, z] + 1)), self.image_constants.lower_sample_limit, self.image_constants.upper_sample_limit)
+            self.clipped_quantizer_bin_center[y, x, z] = clip(
+                int(self.predicted_sample_value[y, x, z] + self.quantizer_index[y, x, z] * (2 * self.maximum_error[y, x, z] + 1)),
+                self.image_constants.lower_sample_limit,
+                self.image_constants.upper_sample_limit,
+            )
 
         if self.header.damping_table_array[z] == 0 and self.header.damping_offset_table_array[z] == 0:
             self.double_resolution_sample_representative[y, x, z] = 2 * self.clipped_quantizer_bin_center[y, x, z]
@@ -292,14 +373,22 @@ class Predictor:
 
             self.sample_representative[y, x, z] = (self.double_resolution_sample_representative[y, x, z] + 1) // 2
 
+    # uses clipped quant bin center, double res pred sampl
+    # return double res pred error
     def __calculate_prediction_error(self, x, y, z, t):
         self.double_resolution_prediction_error[y, x, z] = 2 * self.clipped_quantizer_bin_center[y, x, z] - self.double_resolution_predicted_sample_value[y, x, z]
 
     def __calculate_mapped_quantizer_index(self, x, y, z, t):
         if t == 0:
-            self.scaled_prediction_endpoint_difference[y, x, z] = min(self.predicted_sample_value[0, 0, z] - self.image_constants.lower_sample_limit, self.image_constants.upper_sample_limit - self.predicted_sample_value[0, 0, z])
+            self.scaled_prediction_endpoint_difference[y, x, z] = min(
+                self.predicted_sample_value[0, 0, z] - self.image_constants.lower_sample_limit,
+                self.image_constants.upper_sample_limit - self.predicted_sample_value[0, 0, z],
+            )
         else:
-            self.scaled_prediction_endpoint_difference[y, x, z] = min((self.predicted_sample_value[y, x, z] - self.image_constants.lower_sample_limit + self.maximum_error[y, x, z]) // (2 * self.maximum_error[y, x, z] + 1), (self.image_constants.upper_sample_limit - self.predicted_sample_value[y, x, z] + self.maximum_error[y, x, z]) // (2 * self.maximum_error[y, x, z] + 1))
+            self.scaled_prediction_endpoint_difference[y, x, z] = min(
+                (self.predicted_sample_value[y, x, z] - self.image_constants.lower_sample_limit + self.maximum_error[y, x, z]) // (2 * self.maximum_error[y, x, z] + 1),
+                (self.image_constants.upper_sample_limit - self.predicted_sample_value[y, x, z] + self.maximum_error[y, x, z]) // (2 * self.maximum_error[y, x, z] + 1),
+            )
 
         term = (-1) ** (self.double_resolution_predicted_sample_value[y, x, z] % 2) * self.quantizer_index[y, x, z]
 
@@ -315,8 +404,9 @@ class Predictor:
         self.__init_predictor_constants()
         self.__init_predictor_arrays()
 
+        # tranversing in BIP order
         for y in range(self.header.y_size):
-            print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
+            print(f"\rProcessing frame y={y+1}/{self.header.y_size}", end="")
             for x in range(self.header.x_size):
                 t = x + y * self.header.x_size
                 for z in range(self.header.z_size):
@@ -332,33 +422,138 @@ class Predictor:
                     self.__calculate_mapped_quantizer_index(x, y, z, t)
         print("")
 
-    def get_predictor_output(self):
-        """Return the outputs of the predictor for the loaded image. The mapped quantizer index."""
         return self.mapped_quantizer_index
 
     def save_data(self, output_folder):
         """Save the predictor data to csv files"""
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
-        csv_vector_shape = (self.header.y_size * self.header.x_size, self.header.z_size * self.local_difference_values_num)
-        np.savetxt(output_folder + "/predictor-00-local_sum.csv", self.local_sum.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-01-local_difference_vector.csv", self.local_difference_vector.reshape(csv_vector_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-02-weight_vector.csv", self.weight_vector.reshape(csv_vector_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-03-predicted_central_local_difference.csv", self.predicted_central_local_difference.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-04-high_resolution_predicted_sample_value.csv", self.high_resolution_predicted_sample_value.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-05-double_resolution_predicted_sample_value.csv", self.double_resolution_predicted_sample_value.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-06-predicted_sample_value.csv", self.predicted_sample_value.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-07-prediction_residual.csv", self.prediction_residual.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-09-quantizer_index.csv", self.quantizer_index.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-10-clipped_quantizer_bin_center.csv", self.clipped_quantizer_bin_center.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-11-double_resolution_sample_representative.csv", self.double_resolution_sample_representative.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-12-sample_representative.csv", self.sample_representative.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-13-double_resolution_prediction_error.csv", self.double_resolution_prediction_error.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-14-mapped_quantizer_index.csv", self.mapped_quantizer_index.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-15-spectral_bands_used.csv", self.spectral_bands_used, delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-16-image_sample.csv", self.image_sample.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-17-weight_update_scaling_exponent.csv", self.weight_update_scaling_exponent.reshape((self.header.y_size, self.header.x_size)), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-18-scaled_prediction_endpoint_difference.csv", self.scaled_prediction_endpoint_difference.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-20-absolute_error_limits.csv", self.absolute_error_limits, delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-21-relative_error_limits.csv", self.relative_error_limits, delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/predictor-22-maximum_error.csv", self.maximum_error.reshape(csv_image_shape), delimiter=",", fmt="%d")
-
+        csv_vector_shape = (
+            self.header.y_size * self.header.x_size,
+            self.header.z_size * self.local_difference_values_num,
+        )
+        np.savetxt(
+            output_folder + "/predictor-00-local_sum.csv",
+            self.local_sum.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-01-local_difference_vector.csv",
+            self.local_difference_vector.reshape(csv_vector_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-02-weight_vector.csv",
+            self.weight_vector.reshape(csv_vector_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-03-predicted_central_local_difference.csv",
+            self.predicted_central_local_difference.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-04-high_resolution_predicted_sample_value.csv",
+            self.high_resolution_predicted_sample_value.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-05-double_resolution_predicted_sample_value.csv",
+            self.double_resolution_predicted_sample_value.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-06-predicted_sample_value.csv",
+            self.predicted_sample_value.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-07-prediction_residual.csv",
+            self.prediction_residual.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-09-quantizer_index.csv",
+            self.quantizer_index.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-10-clipped_quantizer_bin_center.csv",
+            self.clipped_quantizer_bin_center.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-11-double_resolution_sample_representative.csv",
+            self.double_resolution_sample_representative.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-12-sample_representative.csv",
+            self.sample_representative.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-13-double_resolution_prediction_error.csv",
+            self.double_resolution_prediction_error.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-14-mapped_quantizer_index.csv",
+            self.mapped_quantizer_index.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-15-spectral_bands_used.csv",
+            self.spectral_bands_used,
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-16-image_sample.csv",
+            self.image_sample.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-17-weight_update_scaling_exponent.csv",
+            self.weight_update_scaling_exponent.reshape((self.header.y_size, self.header.x_size)),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-18-scaled_prediction_endpoint_difference.csv",
+            self.scaled_prediction_endpoint_difference.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-20-absolute_error_limits.csv",
+            self.absolute_error_limits,
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-21-relative_error_limits.csv",
+            self.relative_error_limits,
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/predictor-22-maximum_error.csv",
+            self.maximum_error.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )

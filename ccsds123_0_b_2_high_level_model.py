@@ -17,32 +17,73 @@ def get_file_size(file_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging")
-    parser.add_argument("image_file", help="Path to the raw uncompressed image file. The filename must be on the format <name>-<datatype>-<z_size>x<y_size>x<x_size>.raw like CCSDS TestData images. For example Landsat_mountain-u16be-6x50x100.raw.")
-    parser.add_argument("--header", default="", help="Path to the CCSDS 123.0-B-2 header binary file used to set compression settings. The header is formatted as it is in a CCSDS 123.0-B-2 compressed image.")
-    parser.add_argument("--accu", default="", help="Path to the hybrid encoder accumulator initial values binary file. Stored as unsigned integers in increasing band order, using D+gamma_0 bits, in a file that is zero padded to the nearest byte at the end.")
-    parser.add_argument("--optional", default="", help="Path to the optional tables binary file. These are tables that could also be stored in the header. Values are stored as they would be in the header. Tables are stored in the order they would be in the header.")
-    parser.add_argument("--error_limits", default="", help="Path to the error limits binary file for when using periodic error limit updating. Values are stored as 16-bit unsigned integers in the same order they would be in the image.")
+    parser = argparse.ArgumentParser(description="Compress or decompress an image using CCSDS 123.0-B-2 and produce intermediate files for debugging.")
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument("-c", "--compress", action="store_true", default="True")
+    group.add_argument("-d", "--decompress", action="store_true")
+    parser.add_argument("-po", "--predictor_only", action="store_true", default=False, help="Pass output of compressor predictor to input of decompressor predictor.")
+    parser.add_argument("-op", "--old_predictor", action="store_true", default=False, help="Use the old Python predictor, only supports compression")
+    parser.add_argument("-dw", "--delayed_weight_updates", action="store_true", default=False, help="Use delayed weight updates")
+    parser.add_argument("-si", "--save_intermediates", action="store_true", default=False, help="Store additional intermediate results from predictor")
+
+    parser.add_argument(
+        "target_file",
+        help="Path to the raw uncompressed image file or compressed bitstream file. Uncompressed image filename must be on the format '<name>-<datatype>-<z_size>x<y_size>x<x_size>.raw' like CCSDS TestData images. For example 'Landsat_mountain-u16be-6x50x100.raw'.",
+    )
+
+    parser.add_argument(
+        "--header",
+        default="",
+        help="Path to the CCSDS 123.0-B-2 header binary file used to set compression settings. The header is formatted as it is in a CCSDS 123.0-B-2 compressed image.",
+    )
+    parser.add_argument(
+        "--image_ordering",
+        default="BSQ",
+        help="Raw image file store order, supported values are 'BSQ' and 'BIP'. Output file order when decompressing is read from encoded header.",
+    )
+    parser.add_argument("--file_format", default=None, help="File format for reading input file or storing decompressed image, optional for correctly formatted uncompressed image file name.")
+    parser.add_argument(
+        "--accu",
+        default="",
+        help="Path to the hybrid encoder accumulator initial values binary file. Stored as unsigned integers in increasing band order, using D+gamma_0 bits, in a file that is zero padded to the nearest byte at the end.",
+    )
+    parser.add_argument(
+        "--optional",
+        default="",
+        help="Path to the optional tables binary file. These are tables that could also be stored in the header. Values are stored as they would be in the header. Tables are stored in the order they would be in the header.",
+    )
+    parser.add_argument(
+        "--error_limits",
+        default="",
+        help="Path to the error limits binary file for when using periodic error limit updating. Values are stored as 16-bit unsigned integers in the same order they would be in the image.",
+    )
     args = parser.parse_args()
 
     start_time = time.time()
 
-    image = ccsds123.CCSDS123(args.image_file)
-    if len(args.header) > 0:
-        image.set_header_file(args.header)
-    if len(args.accu) > 0:
-        image.set_hybrid_accu_init_file(args.accu)
-    if len(args.optional) > 0:
-        image.set_optional_tables_file(args.optional)
-    if len(args.error_limits) > 0:
-        image.set_error_limits_file(args.error_limits)
+    ccsds = ccsds123.CCSDS123(image_ordering=args.image_ordering, delayed_weight_updates=args.delayed_weight_updates, save_intermediates=args.save_intermediates, use_old_predictor=args.old_predictor, predictor_only=args.predictor_only)
 
-    image.compress_image()
+    if len(args.header) > 0:
+        ccsds.set_header_file(args.header)
+    if len(args.accu) > 0:
+        ccsds.set_hybrid_accu_init_file(args.accu)
+    if len(args.optional) > 0:
+        ccsds.set_optional_tables_file(args.optional)
+    if len(args.error_limits) > 0:
+        ccsds.set_error_limits_file(args.error_limits)
+
+    if args.decompress:
+        if args.predictor_only:
+            ccsds.compress_image(args.target_file, args.file_format)
+        ccsds.decompress_image(args.target_file, args.file_format)
+    elif args.compress:
+        ccsds.compress_image(args.target_file, args.file_format)
 
     elapsed_time = time.time() - start_time
     print(f"Done! Script ran for {elapsed_time:.3f} seconds")
     print(f"Memory usage: {get_memory_usage():.2f} MB")
-    print(f"Compression ratio: {get_file_size(args.image_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream.bin'):.2f}")
+    if not args.decompress:
+        print(f"Compression ratio: {get_file_size(args.target_file) / get_file_size(str(Path(__file__).resolve().parent) + '/output/z-output-bitstream-enc.bin'):.2f}")
 
 
 if __name__ == "__main__":

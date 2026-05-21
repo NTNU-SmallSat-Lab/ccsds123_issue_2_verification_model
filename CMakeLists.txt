@@ -1,0 +1,35 @@
+# Require CMake 3.15+ (matching scikit-build-core) Use new versions of all
+# policies up to CMake 4.0
+cmake_minimum_required(VERSION 3.15...4.0)
+
+# Scikit-build-core sets these values for you, or you can just hard-code the
+# name and version.
+project(
+  ${SKBUILD_PROJECT_NAME}
+  VERSION ${SKBUILD_PROJECT_VERSION}
+  LANGUAGES CXX)
+
+
+# Find pybind11
+find_package(pybind11 CONFIG REQUIRED)
+
+# Add a library using FindPython's tooling (pybind11 also provides a helper like
+# this)
+pybind11_add_module(_predictor MODULE 
+  ccsds123_i2_hlm/_predictor/predictor.cpp 
+  ccsds123_i2_hlm/_predictor/predictorpy.cpp 
+)
+target_link_libraries(_predictor PRIVATE pybind11::headers)
+
+# This is passing in the version as a define just as an example
+target_compile_definitions(_predictor PRIVATE VERSION_INFO=${PROJECT_VERSION})
+
+set_target_properties(_predictor PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO
+)
+
+# The install directory is the output (wheel) directory
+set(CMAKE_INSTALL_PREFIX ..)
+install(TARGETS _predictor DESTINATION ccsds123_i2_hlm)

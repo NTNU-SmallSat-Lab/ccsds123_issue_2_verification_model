@@ -8,12 +8,15 @@ class SampleAdaptiveEncoder:
 
     header = None
     image_constants = None
+    image_shape = None
     mapped_quantizer_index = None  # Symbol: delta
 
-    def __init__(self, header, image_constants, mapped_quantizer_index):
+    save_intermediates = None
+
+    def __init__(self, header, image_constants, save_intermediates=False):
         self.header = header
         self.image_constants = image_constants
-        self.mapped_quantizer_index = mapped_quantizer_index
+        self.save_intermediates = save_intermediates
 
     unary_length_limit = None  # Symbol: U_max
     accumulator_init_parameter_1 = None  # Symbol: k'
@@ -37,7 +40,7 @@ class SampleAdaptiveEncoder:
     periodic_error_updating_bitstream_readable = None
 
     def __init_encoder_arrays(self):
-        image_shape = self.mapped_quantizer_index.shape
+        image_shape = (self.header.y_size, self.header.x_size, self.header.z_size)
         self.accumulator = np.zeros(image_shape, dtype=np.int64)
         self.counter = np.zeros(image_shape[:2], dtype=np.int64)
         self.variable_length_code = np.zeros(image_shape, dtype=np.int64)
@@ -75,13 +78,21 @@ class SampleAdaptiveEncoder:
             self.accumulator[y, x, z] = self.accumulator[prev_y, prev_x, z] + self.mapped_quantizer_index[prev_y, prev_x, z]
 
         self.__find_code_length(x, y, z)
-        self.__add_to_bitstream(self.__gpo2(self.mapped_quantizer_index[y, x, z], self.variable_length_code[y, x, z]), x, y, z)
+        self.__add_to_bitstream(
+            self.__gpo2(self.mapped_quantizer_index[y, x, z], self.variable_length_code[y, x, z]),
+            x,
+            y,
+            z,
+        )
 
     def __find_code_length(self, x, y, z):
         if 2 * self.counter[y, x] > self.accumulator[y, x, z] + self.counter[y, x] * 49 // 2**7:
             self.variable_length_code[y, x, z] = 0
         else:
-            self.variable_length_code[y, x, z] = min((log2((self.accumulator[y, x, z] + self.counter[y, x] * 49 // 2**7) // self.counter[y, x])), self.image_constants.dynamic_range_bits - 2)
+            self.variable_length_code[y, x, z] = min(
+                (log2((self.accumulator[y, x, z] + self.counter[y, x] * 49 // 2**7) // self.counter[y, x])),
+                self.image_constants.dynamic_range_bits - 2,
+            )
 
     def __gpo2(self, j, k):
         bitstring_j = bin(j)[2:].zfill(self.image_constants.dynamic_range_bits)
@@ -121,13 +132,15 @@ class SampleAdaptiveEncoder:
         self.bitstream += bitstring
         self.bitstream_readable[y, x, z] += bitstring
 
-    def run_encoder(self):
+    def run_encoder(self, mapped_quantizer_index):
+        self.mapped_quantizer_index = mapped_quantizer_index
+
         self.__init_encoder_constants()
         self.__init_encoder_arrays()
 
         if self.header.sample_encoding_order == hd.SampleEncodingOrder.BI:
             for y in range(self.header.y_size):
-                print(f"\rProcessing line y={y+1}/{self.header.y_size}", end="")
+                print(f"\rProcessing frame y={y+1}/{self.header.y_size}", end="")
 
                 if y % 2**self.header.error_update_period_exponent == 0 and self.header.periodic_error_updating_flag == hd.PeriodicErrorUpdatingFlag.USED:
                     self.__encode_error_limits(y)
@@ -135,7 +148,10 @@ class SampleAdaptiveEncoder:
                 for i in range(ceil(self.header.z_size / self.header.sub_frame_interleaving_depth)):
                     for x in range(self.header.x_size):
                         z_start = i * self.header.sub_frame_interleaving_depth
-                        z_end = min((i + 1) * (self.header.sub_frame_interleaving_depth), self.header.z_size)
+                        z_end = min(
+                            (i + 1) * (self.header.sub_frame_interleaving_depth),
+                            self.header.z_size,
+                        )
 
                         for z in range(z_start, z_end):
                             self.__encode_sample(x, y, z)
@@ -156,16 +172,54 @@ class SampleAdaptiveEncoder:
         fill_bits = (word_bits - (len(self.bitstream)) % word_bits) % word_bits
         self.bitstream += "0" * fill_bits
 
-        with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
+        with open(output_folder + "/z-output-bitstream-enc.bin", "wb") as file:
             self.bitstream.tofile(file)
         with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
             bitarray().tofile(file)  # Create empty file. To simplify creating scripts compatible with all entropy coder types
 
+        if not self.save_intermediates:
+            return
+
         csv_image_shape = (self.header.y_size * self.header.x_size, self.header.z_size)
-        np.savetxt(output_folder + "/sa-encoder-00-accumulator-init-parameter-1.csv", self.accumulator_init_parameter_1, delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/sa-encoder-01-accumulator-init-parameter-2.csv", self.accumulator_init_parameter_2, delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/sa-encoder-02-accumulator.csv", self.accumulator.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/sa-encoder-03-counter.csv", self.counter.reshape(csv_image_shape[:1]), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/sa-encoder-04-bitstream-readable.csv", self.bitstream_readable.reshape(csv_image_shape), delimiter=",", fmt="%s")
-        np.savetxt(output_folder + "/sa-encoder-05-variable-length-code.csv", self.variable_length_code.reshape(csv_image_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/sa-encoder-06-periodic-error-updating-bitstream-readable.csv", self.periodic_error_updating_bitstream_readable, delimiter=",", fmt="%s")
+        np.savetxt(
+            output_folder + "/sa-encoder-00-accumulator-init-parameter-1.csv",
+            self.accumulator_init_parameter_1,
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/sa-encoder-01-accumulator-init-parameter-2.csv",
+            self.accumulator_init_parameter_2,
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/sa-encoder-02-accumulator.csv",
+            self.accumulator.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/sa-encoder-03-counter.csv",
+            self.counter.reshape(csv_image_shape[:1]),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/sa-encoder-04-bitstream-readable.csv",
+            self.bitstream_readable.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%s",
+        )
+        np.savetxt(
+            output_folder + "/sa-encoder-05-variable-length-code.csv",
+            self.variable_length_code.reshape(csv_image_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/sa-encoder-06-periodic-error-updating-bitstream-readable.csv",
+            self.periodic_error_updating_bitstream_readable,
+            delimiter=",",
+            fmt="%s",
+        )

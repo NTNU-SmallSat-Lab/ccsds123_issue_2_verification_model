@@ -3,13 +3,30 @@
 *.csv
 *.bin
 *.egg-info
+*.html
+*.cfg
+*.so
+*.svg
 
 __pycache__/
 .VSCodeCounter/
 .vscode/
 from_golden_model/
-Test1-20190201/
 build/
+release/
+debug/
+test_vectors/*
+test/*
+reference
+raw_images/
+test_vectors/*
+share
+tools/*
+!tools/*.py
 
-
+.DS_Store
+.python-version
 test/comparison.txt
+bin
+include
+lib

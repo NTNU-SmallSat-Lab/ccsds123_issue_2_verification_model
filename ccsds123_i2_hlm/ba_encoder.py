@@ -11,10 +11,12 @@ class BlockAdaptiveEncoder:
     image_constants = None
     mapped_quantizer_index = None  # Symbol: delta
 
-    def __init__(self, header, image_constants, mapped_quantizer_index):
+    save_intermediates = None
+
+    def __init__(self, header, image_constants, save_intermediates=False):
         self.header = header
         self.image_constants = image_constants
-        self.mapped_quantizer_index = mapped_quantizer_index
+        self.save_intermediates = save_intermediates
 
     block_size = None  # Symbol: J
     reference_sample_interval = None  # Symbol: r
@@ -61,9 +63,15 @@ class BlockAdaptiveEncoder:
     bitstream_readable = None
 
     def __init_encoder_arrays(self):
-        image_shape = self.mapped_quantizer_index.shape
+        image_shape = (self.header.y_size, self.header.x_size, self.header.z_size)
         values_to_encoder = image_shape[0] * image_shape[1] * image_shape[2] + self.periodic_error_update_values_num
-        self.blocks = np.zeros((values_to_encoder // self.block_size + int(values_to_encoder % self.block_size != 0), self.block_size), dtype=np.int64)
+        self.blocks = np.zeros(
+            (
+                values_to_encoder // self.block_size + int(values_to_encoder % self.block_size != 0),
+                self.block_size,
+            ),
+            dtype=np.int64,
+        )
         self.blocks_shape = self.blocks.shape
         compressors_results_num = 1 + self.max_sample_split_bits + 1 + 1  # Second extension, sample splitting + 1 for k=0, no compression
         self.encoding_result = np.full((compressors_results_num), fill_value="", dtype="U4096")
@@ -144,7 +152,9 @@ class BlockAdaptiveEncoder:
         self.bitstream += bitstring
         self.bitstream_readable[num] = bitstring
 
-    def run_encoder(self):
+    def run_encoder(self, mapped_quantizer_index):
+        self.mapped_quantizer_index = mapped_quantizer_index
+
         self.__init_encoder_constants()
         self.__init_encoder_arrays()
 
@@ -180,7 +190,10 @@ class BlockAdaptiveEncoder:
                 for i in range(ceil(self.header.z_size / self.header.sub_frame_interleaving_depth)):
                     for x in range(self.header.x_size):
                         z_start = i * self.header.sub_frame_interleaving_depth
-                        z_end = min((i + 1) * (self.header.sub_frame_interleaving_depth), self.header.z_size)
+                        z_end = min(
+                            (i + 1) * (self.header.sub_frame_interleaving_depth),
+                            self.header.z_size,
+                        )
 
                         for z in range(z_start, z_end):
                             self.blocks[index] = self.mapped_quantizer_index[y, x, z]
@@ -218,12 +231,35 @@ class BlockAdaptiveEncoder:
         fill_bits = (word_bits - (len(self.bitstream)) % word_bits) % word_bits
         self.bitstream += "0" * fill_bits
 
-        with open(output_folder + "/z-output-bitstream.bin", "wb") as file:
+        with open(output_folder + "/z-output-bitstream-enc.bin", "wb") as file:
             self.bitstream.tofile(file)
         with open(output_folder + "/hybrid_initial_accumulator.bin", "wb") as file:
             bitarray().tofile(file)  # Create empty file. To simplify creating scripts compatible with all entropy coder types
 
-        np.savetxt(output_folder + "/ba-encoder-00-blocks.csv", self.blocks.reshape(self.blocks_shape), delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/ba-encoder-01-encoding-results.csv", self.encoding_results, delimiter=",", fmt="%s")
-        np.savetxt(output_folder + "/ba-encoder-02-zero-block-count.csv", self.zero_block_count, delimiter=",", fmt="%d")
-        np.savetxt(output_folder + "/ba-encoder-03-bitstream-readable.csv", self.bitstream_readable, delimiter=",", fmt="%s")
+        if not self.save_intermediates:
+            return
+
+        np.savetxt(
+            output_folder + "/ba-encoder-00-blocks.csv",
+            self.blocks.reshape(self.blocks_shape),
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/ba-encoder-01-encoding-results.csv",
+            self.encoding_results,
+            delimiter=",",
+            fmt="%s",
+        )
+        np.savetxt(
+            output_folder + "/ba-encoder-02-zero-block-count.csv",
+            self.zero_block_count,
+            delimiter=",",
+            fmt="%d",
+        )
+        np.savetxt(
+            output_folder + "/ba-encoder-03-bitstream-readable.csv",
+            self.bitstream_readable,
+            delimiter=",",
+            fmt="%s",
+        )
